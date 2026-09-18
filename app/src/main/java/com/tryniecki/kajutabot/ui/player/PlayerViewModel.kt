@@ -1,0 +1,361 @@
+package com.tryniecki.kajutabot.ui.player
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.tryniecki.kajutabot.AppContainer
+import com.tryniecki.kajutabot.api.client.KajutaBotApiErrors
+import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
+import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
+import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
+import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
+import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
+import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
+import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
+import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
+import com.tryniecki.kajutabot.ui.userMessageForError
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import retrofit2.HttpException
+
+data class PlayerUiState(
+    val guilds: List<DiscordGuildResponse> = emptyList(),
+    val voiceChannels: List<DiscordVoiceChannelResponse> = emptyList(),
+    val selectedGuildId: String? = null,
+    val selectedVoiceChannelId: String? = null,
+    val queue: QueueSnapshotResponse? = null,
+    val searchQuery: String = "",
+    val searchResults: List<SearchItemResponse> = emptyList(),
+    val isLoadingGuilds: Boolean = false,
+    val isLoadingQueue: Boolean = false,
+    val isSearching: Boolean = false,
+    val isMutating: Boolean = false,
+    val showGuildPicker: Boolean = false,
+    val error: String? = null,
+    val info: String? = null,
+) {
+    val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
+    val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
+    val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
+}
+
+class PlayerViewModel(
+    private val container: AppContainer,
+) : ViewModel() {
+    private val sessionManager = container.sessionManager
+    private val selection = container.selectionStore
+
+    private val _ui = MutableStateFlow(
+        PlayerUiState(
+            selectedGuildId = selection.guildId,
+            selectedVoiceChannelId = selection.voiceChannelId,
+        ),
+    )
+    val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
+
+    private var searchJob: Job? = null
+
+    init {
+        refreshGuilds()
+    }
+
+    fun setSearchQuery(query: String) {
+        _ui.update { it.copy(searchQuery = query) }
+    }
+
+    fun setShowPicker(show: Boolean) {
+        _ui.update { it.copy(showGuildPicker = show) }
+    }
+
+    fun dismissMessage() {
+        _ui.update { it.copy(error = null, info = null) }
+    }
+
+    fun refreshGuilds() {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoadingGuilds = true, error = null) }
+            try {
+                val guilds = sessionManager.withApi { it.getMyGuilds() }
+                var selGuild = selection.guildId
+                var selChannel = selection.voiceChannelId
+                if (selGuild != null && guilds.none { g -> g.id == selGuild }) {
+                    selGuild = null
+                    selChannel = null
+                    selection.guildId = null
+                    selection.voiceChannelId = null
+                }
+                if (selGuild == null && guilds.size == 1) {
+                    selGuild = guilds.first().id
+                    selection.guildId = selGuild
+                }
+                _ui.update {
+                    it.copy(
+                        guilds = guilds,
+                        selectedGuildId = selGuild,
+                        selectedVoiceChannelId = selChannel,
+                        isLoadingGuilds = false,
+                    )
+                }
+                if (selGuild != null) {
+                    refreshChannels(selGuild, preserveChannel = selChannel)
+                }
+            } catch (e: Exception) {
+                _ui.update { it.copy(isLoadingGuilds = false, error = userMessageForError(e)) }
+            }
+        }
+    }
+
+    fun selectGuild(guildId: String) {
+        selection.guildId = guildId
+        selection.voiceChannelId = null
+        _ui.update {
+            it.copy(
+                selectedGuildId = guildId,
+                selectedVoiceChannelId = null,
+                queue = null,
+                searchResults = emptyList(),
+                showGuildPicker = false,
+            )
+        }
+        refreshChannels(guildId, preserveChannel = null)
+    }
+
+    fun selectChannel(channelId: String) {
+        selection.voiceChannelId = channelId
+        _ui.update { it.copy(selectedVoiceChannelId = channelId, showGuildPicker = false, error = null) }
+        _ui.value.selectedGuildId?.let { refreshQueue(it) }
+    }
+
+    fun refreshChannels(guildId: String, preserveChannel: String?) {
+        viewModelScope.launch {
+            try {
+                val channels = sessionManager.withApi { it.getVoiceChannels(guildId) }
+                var selChannel = preserveChannel
+                if (selChannel != null && channels.none { c -> c.id == selChannel }) {
+                    selChannel = null
+                    selection.voiceChannelId = null
+                }
+                _ui.update {
+                    it.copy(
+                        voiceChannels = channels.sortedBy { c -> c.position },
+                        selectedVoiceChannelId = selChannel,
+                    )
+                }
+                refreshQueue(guildId)
+            } catch (e: Exception) {
+                _ui.update { it.copy(error = userMessageForError(e)) }
+            }
+        }
+    }
+
+    fun refreshQueue(guildId: String) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isLoadingQueue = true) }
+            try {
+                val snapshot = sessionManager.withApi { it.getQueue(guildId) }
+                _ui.update { it.copy(queue = snapshot, isLoadingQueue = false, error = null) }
+            } catch (e: Exception) {
+                _ui.update { it.copy(isLoadingQueue = false, error = userMessageForError(e)) }
+            }
+        }
+    }
+
+    fun pollTick() {
+        val guildId = _ui.value.selectedGuildId ?: return
+        viewModelScope.launch {
+            try {
+                val snapshot = sessionManager.withApi { it.getQueue(guildId) }
+                _ui.update { it.copy(queue = snapshot) }
+            } catch (_: Exception) {
+                // Silent on poll; errors surface on explicit actions.
+            }
+        }
+    }
+
+    fun search(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) {
+            _ui.update { it.copy(searchResults = emptyList(), isSearching = false) }
+            return
+        }
+        if (looksLikeUrl(trimmed)) {
+            _ui.update { it.copy(searchResults = emptyList(), isSearching = false) }
+            return
+        }
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            _ui.update { it.copy(isSearching = true, error = null) }
+            try {
+                val response = sessionManager.withApi {
+                    it.search(query = trimmed, source = "YouTube", maxResults = 10)
+                }
+                _ui.update { it.copy(searchResults = response.items, isSearching = false) }
+            } catch (e: Exception) {
+                _ui.update { it.copy(isSearching = false, error = userMessageForError(e)) }
+            }
+        }
+    }
+
+    fun submitSmartInput() {
+        val input = _ui.value.searchQuery.trim()
+        if (input.isBlank()) return
+        if (looksLikeUrl(input)) {
+            // Extract first URL if pasted with extra text.
+            val url = URL_REGEX.find(input)?.value ?: input
+            enqueueInputs(listOf(url))
+        } else {
+            search(input)
+        }
+    }
+
+    fun enqueueSearchResult(item: SearchItemResponse) {
+        enqueueInputs(listOf(item.input))
+    }
+
+    fun enqueueSharedUrl(url: String) {
+        _ui.update { it.copy(searchQuery = url) }
+        enqueueInputs(listOf(url))
+    }
+
+    fun enqueueInputs(inputs: List<String>) {
+        val guildId = _ui.value.selectedGuildId
+        val channelId = _ui.value.selectedVoiceChannelId
+        if (guildId == null || channelId == null) {
+            _ui.update {
+                it.copy(
+                    showGuildPicker = true,
+                    error = "Wybierz serwer i kanał głosowy, aby dodać utwór.",
+                )
+            }
+            return
+        }
+        viewModelScope.launch {
+            _ui.update { it.copy(isMutating = true, error = null, info = null) }
+            try {
+                val version = _ui.value.queue?.version
+                val response = sessionManager.withApi {
+                    it.enqueue(guildId, EnqueueRequest(channelId, inputs, version))
+                }
+                _ui.update {
+                    it.copy(
+                        queue = response.snapshot,
+                        isMutating = false,
+                        searchQuery = "",
+                        searchResults = emptyList(),
+                    )
+                }
+            } catch (e: Exception) {
+                handleMutationError(e)
+            }
+        }
+    }
+
+    fun skip() {
+        mutate { api, version ->
+            val guildId = _ui.value.selectedGuildId ?: return@mutate null
+            api.skip(guildId, SkipQueueRequest(expectedVersion = version))
+        }
+    }
+
+    fun stop() {
+        mutate { api, version ->
+            val guildId = _ui.value.selectedGuildId ?: return@mutate null
+            api.stop(guildId, QueueMutationRequest(expectedVersion = version))
+        }
+    }
+
+    fun setRepeat(enabled: Boolean) {
+        mutate { api, version ->
+            val guildId = _ui.value.selectedGuildId ?: return@mutate null
+            api.setRepeat(guildId, SetQueueRepeatRequest(enabled, version))
+        }
+    }
+
+    fun removeEntry(entryId: String) {
+        viewModelScope.launch {
+            val guildId = _ui.value.selectedGuildId ?: return@launch
+            _ui.update { it.copy(isMutating = true, error = null) }
+            try {
+                val version = _ui.value.queue?.version
+                val response = sessionManager.withApi {
+                    it.removeQueueEntry(guildId, entryId, version)
+                }
+                _ui.update { it.copy(queue = response.snapshot, isMutating = false) }
+            } catch (e: Exception) {
+                handleMutationError(e)
+            }
+        }
+    }
+
+    fun clearQueue() {
+        mutate { api, version ->
+            val guildId = _ui.value.selectedGuildId ?: return@mutate null
+            api.clearPendingQueue(guildId, version)
+        }
+    }
+
+    private fun mutate(
+        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse?,
+    ) {
+        viewModelScope.launch {
+            _ui.update { it.copy(isMutating = true, error = null) }
+            try {
+                val version = _ui.value.queue?.version
+                val response = sessionManager.withApi { call(it, version) } ?: run {
+                    _ui.update { it.copy(isMutating = false) }
+                    return@launch
+                }
+                _ui.update { it.copy(queue = response.snapshot, isMutating = false) }
+            } catch (e: Exception) {
+                handleMutationError(e)
+            }
+        }
+    }
+
+    private suspend fun handleMutationError(e: Exception) {
+        if (e is HttpException) {
+            val problem = try {
+                KajutaBotApiErrors.problemDetailsOf(e)
+            } catch (_: Exception) {
+                null
+            }
+            if (problem?.errorCode == KajutaBotApiErrors.QUEUE_VERSION_CONFLICT || e.code() == 409) {
+                val guildId = _ui.value.selectedGuildId
+                if (guildId != null) {
+                    try {
+                        val fresh = sessionManager.withApi { it.getQueue(guildId) }
+                        _ui.update {
+                            it.copy(
+                                queue = fresh,
+                                isMutating = false,
+                                error = "Kolejka zmieniła się w międzyczasie. Odświeżono stan.",
+                            )
+                        }
+                        return
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+        _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
+    }
+
+    companion object {
+        private val URL_REGEX = Regex("""https?://[^\s]+""")
+
+        fun looksLikeUrl(input: String): Boolean =
+            input.startsWith("http://", ignoreCase = true) ||
+                input.startsWith("https://", ignoreCase = true)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            return PlayerViewModel(container) as T
+        }
+    }
+}

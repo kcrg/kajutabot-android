@@ -6,56 +6,73 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import retrofit2.create
+
+internal val KajutaBotJson = Json {
+    ignoreUnknownKeys = true
+    explicitNulls = false
+}
 
 object KajutaBotApiClientFactory {
-    const val API_KEY_HEADER = "X-KajutaBot-Api-Key"
-
-    private val json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = false
-    }
+    const val AUTHORIZATION_HEADER = "Authorization"
 
     /**
-     * Creates the Retrofit API implementation.
+     * Creates the authenticated user API. Adds `Authorization: Bearer <token>` when available.
      *
-     * [apiKeyProvider] is intentionally injected instead of reading Android storage here so this
-     * module stays independent from Android. Do not ship the Control API full-access key in the APK.
+     * [accessTokenProvider] is a plain lambda so this module stays independent from Android.
      */
     fun create(
         baseUrl: String,
-        apiKeyProvider: () -> String? = { null },
+        accessTokenProvider: () -> String? = { null },
     ): KajutaBotApi {
         val normalizedBaseUrl = normalizeBaseUrl(baseUrl)
 
-        val authInterceptor = Interceptor { chain ->
-            val apiKey = apiKeyProvider()
-            val request = if (apiKey.isNullOrBlank()) {
+        val bearerInterceptor = Interceptor { chain ->
+            val token = accessTokenProvider()?.takeIf { it.isNotBlank() }
+            val request = if (token == null) {
                 chain.request()
             } else {
                 chain.request()
                     .newBuilder()
-                    .header(API_KEY_HEADER, apiKey)
+                    .header(AUTHORIZATION_HEADER, "Bearer $token")
                     .build()
             }
-
             chain.proceed(request)
         }
 
         val httpClient = OkHttpClient.Builder()
-            .addInterceptor(authInterceptor)
+            .addInterceptor(bearerInterceptor)
             .build()
 
         return Retrofit.Builder()
             .baseUrl(normalizedBaseUrl)
             .client(httpClient)
             .addConverterFactory(
-                json.asConverterFactory("application/json".toMediaType()),
+                KajutaBotJson.asConverterFactory("application/json".toMediaType()),
             )
             .build()
-            .create(KajutaBotApi::class.java)
+            .create<KajutaBotApi>()
     }
 
-    private fun normalizeBaseUrl(baseUrl: String): String {
+    /**
+     * Creates the anonymous auth API (exchange + refresh) without any Bearer interceptor,
+     * so refresh can never attach a stale token or recurse.
+     */
+    fun createAuth(baseUrl: String): KajutaBotAuthApi {
+        val normalizedBaseUrl = normalizeBaseUrl(baseUrl)
+        val httpClient = OkHttpClient.Builder().build()
+
+        return Retrofit.Builder()
+            .baseUrl(normalizedBaseUrl)
+            .client(httpClient)
+            .addConverterFactory(
+                KajutaBotJson.asConverterFactory("application/json".toMediaType()),
+            )
+            .build()
+            .create<KajutaBotAuthApi>()
+    }
+
+    internal fun normalizeBaseUrl(baseUrl: String): String {
         val root = baseUrl.trim().trimEnd('/')
         require(root.isNotEmpty()) { "baseUrl cannot be blank." }
         return "$root/api/v1/"

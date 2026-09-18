@@ -3,53 +3,176 @@ package com.tryniecki.kajutabot.ui.favorites
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
+
+@Composable
+fun FavoritesRoute(
+    container: AppContainer,
+    viewModel: FavoritesViewModel = viewModel(factory = FavoritesViewModel.Factory(container)),
+) {
+    val ui by viewModel.ui.collectAsState()
+    FavoritesScreen(
+        ui = ui,
+        onRefresh = viewModel::refresh,
+        onDelete = viewModel::delete,
+        onQueueAll = viewModel::queueAll,
+        onPlaySingle = viewModel::playSingle,
+        onDismiss = viewModel::dismissMessage,
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FavoritesScreen() {
+fun FavoritesScreen(
+    ui: FavoritesUiState,
+    onRefresh: () -> Unit,
+    onDelete: (String) -> Unit,
+    onQueueAll: () -> Unit,
+    onPlaySingle: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Ulubione") }) },
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+        if (ui.isLoading && ui.favorites.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+            return@Scaffold
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = innerPadding.calculateTopPadding() + 8.dp,
+                end = 16.dp,
+                bottom = innerPadding.calculateBottomPadding() + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(
-                painter = painterResource(R.drawable.kb_ic_heart),
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = "Brak ulubionych",
-                modifier = Modifier.padding(top = 16.dp),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Text(
-                text = "Zapisane utwory pojawią się tutaj po podłączeniu API.",
-                modifier = Modifier.padding(top = 6.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (ui.error != null || ui.info != null) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (ui.error != null) {
+                                MaterialTheme.colorScheme.errorContainer
+                            } else {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            },
+                        ),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                ui.error ?: ui.info.orEmpty(),
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            TextButton(onClick = onDismiss) { Text("OK") }
+                        }
+                    }
+                }
+            }
+
+            if (ui.favorites.isEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.kb_ic_heart),
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text("Brak ulubionych", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Zapisane utwory pojawią się tutaj.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedButton(onClick = onRefresh) { Text("Odśwież") }
+                    }
+                }
+            } else {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Zapisane (${ui.favorites.size})",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Button(onClick = onQueueAll, enabled = !ui.isMutating) {
+                            Text("Dodaj wszystkie")
+                        }
+                    }
+                }
+                items(ui.favorites, key = { it.contentUrl }) { fav ->
+                    Card {
+                        ListItem(
+                            headlineContent = { Text(fav.title) },
+                            supportingContent = { Text(fav.contentUrl) },
+                            trailingContent = {
+                                Row {
+                                    TextButton(
+                                        onClick = { onPlaySingle(fav.contentUrl) },
+                                        enabled = !ui.isMutating,
+                                    ) { Text("Graj") }
+                                    TextButton(
+                                        onClick = { onDelete(fav.contentUrl) },
+                                        enabled = !ui.isMutating,
+                                    ) { Text("Usuń") }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
         }
     }
 }

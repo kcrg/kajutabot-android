@@ -1,8 +1,8 @@
 package com.tryniecki.kajutabot.api.client
 
+import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.common.HealthResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
-import com.tryniecki.kajutabot.api.model.discord.DiscordStatusResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest
 import com.tryniecki.kajutabot.api.model.favorites.FavoriteResponse
@@ -27,24 +27,24 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
- * Retrofit contract for the mobile-facing subset of KajutaBot Control API v1.
+ * Retrofit contract for the mobile-facing, user-scoped subset of KajutaBot Control API v1.
  *
  * Paths are relative to a base URL ending with `/api/v1/`.
+ * All calls expect `Authorization: Bearer <access-token>` (added by the factory interceptor).
+ * The mobile client never sends its own discordUserId for self-scoped data; identity comes from JWT.
  */
 interface KajutaBotApi {
     @GET("health")
     suspend fun getHealth(): HealthResponse
 
-    @GET("discord/status")
-    suspend fun getDiscordStatus(): DiscordStatusResponse
+    @POST("auth/logout")
+    suspend fun logout()
 
-    @GET("discord/guilds")
-    suspend fun getGuilds(): List<DiscordGuildResponse>
+    @GET("auth/me")
+    suspend fun getMe(): AuthUserResponse
 
-    @GET("discord/users/{discordUserId}/guilds")
-    suspend fun getGuildsForUser(
-        @Path("discordUserId") discordUserId: String,
-    ): List<DiscordGuildResponse>
+    @GET("users/me/guilds")
+    suspend fun getMyGuilds(): List<DiscordGuildResponse>
 
     @GET("discord/guilds/{guildId}/voice-channels")
     suspend fun getVoiceChannels(
@@ -124,26 +124,21 @@ interface KajutaBotApi {
         @Query("maxResults") maxResults: Int,
     ): SearchResponse
 
-    @GET("users/{discordUserId}/favorites")
-    suspend fun getFavorites(
-        @Path("discordUserId") discordUserId: String,
-    ): List<FavoriteResponse>
+    @GET("users/me/favorites")
+    suspend fun getFavorites(): List<FavoriteResponse>
 
-    @POST("users/{discordUserId}/favorites")
+    @POST("users/me/favorites")
     suspend fun addFavorite(
-        @Path("discordUserId") discordUserId: String,
         @Body request: AddFavoriteRequest,
     ): FavoriteResponse
 
-    @DELETE("users/{discordUserId}/favorites")
+    @DELETE("users/me/favorites")
     suspend fun deleteFavorite(
-        @Path("discordUserId") discordUserId: String,
         @Query("contentUrl") contentUrl: String,
     )
 
-    @POST("users/{discordUserId}/favorites/queue")
+    @POST("users/me/favorites/queue")
     suspend fun queueFavorites(
-        @Path("discordUserId") discordUserId: String,
         @Body request: QueueFavoritesRequest,
     ): QueueMutationResponse
 }

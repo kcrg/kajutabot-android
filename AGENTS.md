@@ -59,7 +59,8 @@ The backend source used to define this client is KajutaBot Control API v1. The A
 /api/v1/
 ```
 
-`KajutaBotApiClientFactory.create(baseUrl)` accepts the server root URL and appends `/api/v1/` itself.
+`KajutaBotApiClientFactory.create(baseUrl, accessTokenProvider)` accepts the server root URL and appends `/api/v1/` itself.
+`createAuth(baseUrl)` builds the anonymous `KajutaBotAuthApi` (exchange + refresh) without any Bearer interceptor.
 
 The initial mobile API surface intentionally covers only the features expected by the Android client:
 
@@ -89,15 +90,25 @@ Use `kotlinx.serialization` for JSON. `ignoreUnknownKeys = true` is deliberate s
 
 ## Authentication security
 
-The current Control API protects most mobile-relevant endpoints with the server-side header:
+The mobile app uses user-scoped Bearer auth only:
 
 ```text
-X-KajutaBot-Api-Key
+Login -> Discord OAuth PKCE -> POST /api/v1/auth/discord/exchange
+-> access JWT + rotating refresh token (encrypted in Keystore)
+-> Authorization: Bearer <access-token>
+-> POST /api/v1/auth/refresh (single-flight, anonymous client)
+-> POST /api/v1/auth/logout
 ```
 
-The existing web panel can use this because the key stays on the server. A native Android APK cannot safely contain the full Control API key.
+`KajutaBotApi` is the authenticated user API (`auth/me`, `auth/logout`, `users/me/*`,
+`discord/guilds/{id}/voice-channels`, `guilds/*`, `search`). `KajutaBotAuthApi` is the
+anonymous auth API (`auth/discord/exchange`, `auth/refresh`) and must never receive
+a Bearer token.
 
-Never hardcode or commit the production Control API key in:
+The mobile client never sends its own `discordUserId` for self-scoped data; identity
+comes from the JWT on the backend.
+
+Never hardcode or commit server-side secrets in:
 
 - Kotlin source
 - `BuildConfig`
@@ -107,9 +118,9 @@ Never hardcode or commit the production Control API key in:
 - assets
 - tests
 
-`KajutaBotApiClientFactory` accepts an `apiKeyProvider` only to keep transport configuration isolated and to support local development while the authentication flow is being designed. Before production use, the backend should expose a user-scoped authentication mechanism (for example Discord OAuth followed by a short-lived KajutaBot access token).
+`KajutaBotApiClientFactory` accepts an `accessTokenProvider: () -> String?` only to keep transport configuration isolated while `:api` stays independent from Android storage. It never accepts API keys or secrets.
 
-Do not implement client-side HMAC delegation using the full Control API key; that would still require shipping the secret in the APK.
+Do not implement client-side HMAC delegation using the full Control API key; that would still require shipping the secret in the APK. Do not reintroduce `X-KajutaBot-Api-Key` in the mobile client, not even as a debug fallback.
 
 ## Networking rules
 
