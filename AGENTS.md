@@ -164,3 +164,20 @@ If backend source is available, treat these server contracts/routes as the sourc
 - `KajutaBot.Host.ControlApi/DependencyInjection/KajutaBotControlApiEndpointExtensions.cs`
 
 When changing an API request/response model, verify it against the current backend contract first.
+
+## Current application shell
+
+The app currently has four top-level Material 3 destinations:
+
+- Odtwarzacz
+- Moje Audio
+- Ulubione
+- Więcej
+
+Keep top-level navigation native and simple. `NavigationBar` is the phone navigation surface; do not replace it with a custom-drawn tab bar. The screens are currently UI shells and should be connected to real state incrementally.
+
+Theme modes are `LIGHT`, `DARK`, and `NATIVE`. `NATIVE` uses Android dynamic colors (Material You) on Android 12+ and falls back to the KajutaBot palette while following the system light/dark mode on older supported devices.
+
+UI colors for explicit light/dark KajutaBot modes are derived from the web client palette (`#0c0e10`, `#111417`, `#191c20`, `#b59aff`, purple/magenta accent family). Prefer Material 3 color roles over hardcoding these values inside individual Composables.
+
+Tabler is the application icon language. The dependency is `com.composables:icons-tabler-outline-android`. Selected glyphs are exposed to feature screens through app-owned `kb_ic_*` VectorDrawable resources / mappings so UI code does not depend on third-party drawable names. Keep those glyphs visually aligned with Tabler Outline and prefer outline icons unless a selected/filled state has a concrete UX reason.
