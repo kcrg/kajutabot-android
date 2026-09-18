@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.components.TrackArtwork
 
 @Composable
 fun FavoritesRoute(
@@ -155,7 +156,12 @@ fun FavoritesScreen(
                 items(ui.favorites, key = { it.contentUrl }) { fav ->
                     Card {
                         ListItem(
-                            headlineContent = { Text(fav.title) },
+                            leadingContent = {
+                                TrackArtwork(
+                                    imageUrl = fav.thumbnailUrl,
+                                    modifier = Modifier.size(56.dp),
+                                )
+                            },
                             supportingContent = { Text(fav.contentUrl) },
                             trailingContent = {
                                 Row {
@@ -169,7 +175,9 @@ fun FavoritesScreen(
                                     ) { Text("Usuń") }
                                 }
                             },
-                        )
+                        ) {
+                            Text(fav.title)
+                        }
                     }
                 }
             }

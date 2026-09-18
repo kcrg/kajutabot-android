@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModelProvider
 import com.tryniecki.kajutabot.auth.DiscordOAuth
+import com.tryniecki.kajutabot.image.CoilSetup
 import com.tryniecki.kajutabot.ui.KajutaBotApp
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.theme.KajutaBotTheme
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        CoilSetup.init(this)
 
         container = AppContainer(this)
         appViewModel = ViewModelProvider(

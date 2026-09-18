@@ -15,8 +15,11 @@ import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.ui.userMessageForError
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -57,6 +60,9 @@ class PlayerViewModel(
     )
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
 
+    private val _trackAdded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val trackAdded: SharedFlow<Unit> = _trackAdded.asSharedFlow()
+
     private var searchJob: Job? = null
 
     init {
@@ -73,6 +79,19 @@ class PlayerViewModel(
 
     fun dismissMessage() {
         _ui.update { it.copy(error = null, info = null) }
+    }
+
+    fun clearAddTrack() {
+        searchJob?.cancel()
+        _ui.update {
+            it.copy(
+                searchQuery = "",
+                searchResults = emptyList(),
+                isSearching = false,
+                error = null,
+                info = null,
+            )
+        }
     }
 
     fun refreshGuilds() {
@@ -216,11 +235,6 @@ class PlayerViewModel(
         enqueueInputs(listOf(item.input))
     }
 
-    fun enqueueSharedUrl(url: String) {
-        _ui.update { it.copy(searchQuery = url) }
-        enqueueInputs(listOf(url))
-    }
-
     fun enqueueInputs(inputs: List<String>) {
         val guildId = _ui.value.selectedGuildId
         val channelId = _ui.value.selectedVoiceChannelId
@@ -248,6 +262,7 @@ class PlayerViewModel(
                         searchResults = emptyList(),
                     )
                 }
+                _trackAdded.tryEmit(Unit)
             } catch (e: Exception) {
                 handleMutationError(e)
             }
@@ -272,6 +287,36 @@ class PlayerViewModel(
         mutate { api, version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             api.setRepeat(guildId, SetQueueRepeatRequest(enabled, version))
+        }
+    }
+
+    fun toggleRadio() {
+        val queue = _ui.value.queue ?: return
+        when (val action = decideRadioToggle(queue, _ui.value.selectedVoiceChannelId)) {
+            RadioToggleAction.MissingVoiceChannel -> _ui.update {
+                it.copy(error = "Najpierw wybierz serwer i kanał głosowy.")
+            }
+            is RadioToggleAction.Disable -> mutate { api, _ ->
+                val guildId = _ui.value.selectedGuildId ?: return@mutate null
+                api.disableRadio(guildId, action.expectedVersion)
+            }
+            is RadioToggleAction.Enable -> {
+                val guildId = _ui.value.selectedGuildId ?: run {
+                    _ui.update { it.copy(error = "Najpierw wybierz serwer i kanał głosowy.") }
+                    return
+                }
+                viewModelScope.launch {
+                    _ui.update { it.copy(isMutating = true, error = null) }
+                    try {
+                        val response = sessionManager.withApi { api ->
+                            api.enableRadio(guildId, action.request)
+                        }
+                        _ui.update { it.copy(queue = response.snapshot, isMutating = false) }
+                    } catch (e: Exception) {
+                        handleMutationError(e)
+                    }
+                }
+            }
         }
     }
 

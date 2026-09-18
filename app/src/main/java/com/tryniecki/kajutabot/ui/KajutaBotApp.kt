@@ -143,7 +143,14 @@ private fun AuthenticatedShell(
                 }
             }
         },
-    ) { _ ->
+    ) { innerPadding ->
+        // Keep screens (including the Player FAB) above the bottom NavigationBar.
+        // Only the bottom is forwarded: screens own their TopAppBars.
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = innerPadding.calculateBottomPadding()),
+        ) {
         when (currentDestination) {
             AppDestination.PLAYER -> PlayerRoute(
                 container = container,
@@ -151,12 +158,13 @@ private fun AuthenticatedShell(
             )
             AppDestination.MY_AUDIO -> MyAudioScreen()
             AppDestination.FAVORITES -> FavoritesRoute(container = container)
-            AppDestination.MORE -> MoreScreen(
+            AppDestination.            MORE -> MoreScreen(
                 container = container,
                 appViewModel = appViewModel,
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
             )
+        }
         }
     }
 }

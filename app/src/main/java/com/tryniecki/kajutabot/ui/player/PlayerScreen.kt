@@ -1,7 +1,6 @@
 package com.tryniecki.kajutabot.ui.player
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,20 +17,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,6 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -53,6 +54,8 @@ import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.ui.app.AppViewModel
+import com.tryniecki.kajutabot.ui.components.GuildAvatar
+import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import kotlinx.coroutines.delay
 
 @Composable
@@ -64,6 +67,7 @@ fun PlayerRoute(
     val ui by viewModel.ui.collectAsState()
     val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsState()
     val guildId = ui.selectedGuildId
+    var isAddTrackOpen by rememberSaveable { mutableStateOf(false) }
 
     // Lifecycle-aware polling: only while Player route is composed.
     LaunchedEffect(guildId) {
@@ -74,39 +78,63 @@ fun PlayerRoute(
         }
     }
 
-    PlayerScreen(
-        ui = ui,
-        pendingSharedUrl = pendingSharedUrl,
-        onSearchQueryChange = viewModel::setSearchQuery,
-        onSearchSubmit = viewModel::submitSmartInput,
-        onSearchResultClick = viewModel::enqueueSearchResult,
-        onPickerOpen = { viewModel.setShowPicker(true) },
-        onPickerDismiss = { viewModel.setShowPicker(false) },
-        onGuildSelect = viewModel::selectGuild,
-        onChannelSelect = viewModel::selectChannel,
-        onSkip = viewModel::skip,
-        onStop = viewModel::stop,
-        onRepeatToggle = { viewModel.setRepeat(!(ui.queue?.isRepeatEnabled == true)) },
-        onRemoveEntry = viewModel::removeEntry,
-        onClearQueue = viewModel::clearQueue,
-        onRefresh = viewModel::refreshGuilds,
-        onDismissMessage = viewModel::dismissMessage,
-        onAddSharedUrl = { url ->
-            viewModel.enqueueSharedUrl(url)
+    // Shared URL -> prefill the add-track modal and open it.
+    LaunchedEffect(pendingSharedUrl) {
+        val url = pendingSharedUrl
+        if (url != null) {
+            viewModel.setSearchQuery(url)
+            isAddTrackOpen = true
             appViewModel.clearPendingSharedUrl()
-        },
-        onDismissSharedUrl = { appViewModel.clearPendingSharedUrl() },
-    )
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.trackAdded.collect {
+            if (isAddTrackOpen) isAddTrackOpen = false
+        }
+    }
+
+    BackHandler(enabled = isAddTrackOpen) {
+        viewModel.clearAddTrack()
+        isAddTrackOpen = false
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        PlayerScreen(
+            ui = ui,
+            onPickerOpen = { viewModel.setShowPicker(true) },
+            onPickerDismiss = { viewModel.setShowPicker(false) },
+            onGuildSelect = viewModel::selectGuild,
+            onChannelSelect = viewModel::selectChannel,
+            onSkip = viewModel::skip,
+            onStop = viewModel::stop,
+            onRepeatToggle = { viewModel.setRepeat(!(ui.queue?.isRepeatEnabled == true)) },
+            onRadioToggle = viewModel::toggleRadio,
+            onRemoveEntry = viewModel::removeEntry,
+            onClearQueue = viewModel::clearQueue,
+            onDismissMessage = viewModel::dismissMessage,
+            onAddTrackOpen = { isAddTrackOpen = true },
+        )
+        if (isAddTrackOpen) {
+            AddTrackScreen(
+                ui = ui,
+                onClose = {
+                    viewModel.clearAddTrack()
+                    isAddTrackOpen = false
+                },
+                onQueryChange = viewModel::setSearchQuery,
+                onSubmit = viewModel::submitSmartInput,
+                onResultClick = viewModel::enqueueSearchResult,
+                onDismissMessage = viewModel::dismissMessage,
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     ui: PlayerUiState,
-    pendingSharedUrl: String?,
-    onSearchQueryChange: (String) -> Unit,
-    onSearchSubmit: () -> Unit,
-    onSearchResultClick: (com.tryniecki.kajutabot.api.model.search.SearchItemResponse) -> Unit,
     onPickerOpen: () -> Unit,
     onPickerDismiss: () -> Unit,
     onGuildSelect: (String) -> Unit,
@@ -114,15 +142,22 @@ fun PlayerScreen(
     onSkip: () -> Unit,
     onStop: () -> Unit,
     onRepeatToggle: () -> Unit,
+    onRadioToggle: () -> Unit,
     onRemoveEntry: (String) -> Unit,
     onClearQueue: () -> Unit,
-    onRefresh: () -> Unit,
     onDismissMessage: () -> Unit,
-    onAddSharedUrl: (String) -> Unit,
-    onDismissSharedUrl: () -> Unit,
+    onAddTrackOpen: () -> Unit,
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Odtwarzacz") }) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = onAddTrackOpen) {
+                Icon(
+                    painter = painterResource(R.drawable.kb_ic_plus),
+                    contentDescription = "Dodaj utwór",
+                )
+            }
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -146,49 +181,13 @@ fun PlayerScreen(
                     onClick = onPickerOpen,
                     label = { Text(label) },
                     leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.kb_ic_server),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
+                        GuildAvatar(
+                            iconUrl = ui.selectedGuild?.iconUrl,
+                            modifier = Modifier.size(20.dp),
+                            iconSize = 14.dp,
                         )
                     },
                 )
-            }
-
-            if (pendingSharedUrl != null) {
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        ),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text("Udostępniono link", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                pendingSharedUrl,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = { onAddSharedUrl(pendingSharedUrl) },
-                                    enabled = ui.hasSelection && !ui.isMutating,
-                                ) { Text("Dodaj do kolejki") }
-                                TextButton(onClick = onDismissSharedUrl) { Text("Odrzuć") }
-                            }
-                            if (!ui.hasSelection) {
-                                Text(
-                                    "Najpierw wybierz serwer i kanał.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        }
-                    }
-                }
             }
 
             if (ui.error != null || ui.info != null) {
@@ -229,59 +228,8 @@ fun PlayerScreen(
                         onSkip = onSkip,
                         onStop = onStop,
                         onRepeatToggle = onRepeatToggle,
+                        onRadioToggle = onRadioToggle,
                     )
-                }
-            }
-
-            item {
-                OutlinedTextField(
-                    value = ui.searchQuery,
-                    onValueChange = onSearchQueryChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.kb_ic_search),
-                            contentDescription = null,
-                        )
-                    },
-                    trailingIcon = {
-                        if (ui.isSearching) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        }
-                    },
-                    placeholder = { Text("Wklej link lub wyszukaj utwór") },
-                    label = { Text("Dodaj do kolejki") },
-                )
-                Spacer(Modifier.size(8.dp))
-                Button(
-                    onClick = onSearchSubmit,
-                    enabled = !ui.isMutating && ui.searchQuery.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Dodaj / Szukaj") }
-            }
-
-            if (ui.searchResults.isNotEmpty()) {
-                item {
-                    Text(
-                        "Wyniki wyszukiwania",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                items(ui.searchResults, key = { it.input }) { item ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSearchResultClick(item) },
-                    ) {
-                        ListItem(
-                            headlineContent = {
-                                Text(item.track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            },
-                            supportingContent = { Text(item.metricCaption) },
-                        )
-                    }
                 }
             }
 
@@ -317,11 +265,10 @@ fun PlayerScreen(
                 items(pending, key = { it.entryId }) { entry ->
                     Card {
                         ListItem(
-                            headlineContent = {
-                                Text(
-                                    "${entry.position}. ${entry.track.title}",
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
+                            leadingContent = {
+                                TrackArtwork(
+                                    imageUrl = entry.track.thumbnailUrl,
+                                    modifier = Modifier.size(56.dp),
                                 )
                             },
                             supportingContent = { Text(formatDuration(entry.track.durationMilliseconds)) },
@@ -331,7 +278,13 @@ fun PlayerScreen(
                                     enabled = !ui.isMutating,
                                 ) { Text("Usuń") }
                             },
-                        )
+                        ) {
+                            Text(
+                                "${entry.position}. ${entry.track.title}",
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
@@ -358,7 +311,10 @@ private fun NowPlayingCard(
     onSkip: () -> Unit,
     onStop: () -> Unit,
     onRepeatToggle: () -> Unit,
+    onRadioToggle: () -> Unit,
 ) {
+    val repeatEnabled = queue?.isRepeatEnabled == true
+    val radioEnabled = queue?.radio?.isEnabled == true
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -368,23 +324,15 @@ private fun NowPlayingCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Box(
+            TrackArtwork(
+                imageUrl = queue?.nowPlaying?.thumbnailUrl,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        shape = RoundedCornerShape(12.dp),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.kb_ic_music),
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                    .aspectRatio(16f / 9f),
+                shape = RoundedCornerShape(12.dp),
+                brokenIconSize = 48.dp,
+                showMissingLabel = true,
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
@@ -407,8 +355,8 @@ private fun NowPlayingCard(
                             nowPlaying == null -> "Kolejka oczekuje na utwory"
                             else -> buildString {
                                 append(formatDuration(nowPlaying.durationMilliseconds))
-                                if (queue.radio.isEnabled) append(" • Radio włączone")
-                                if (queue.isRepeatEnabled) append(" • Powtarzanie")
+                                if (radioEnabled) append(" • Radio włączone")
+                                if (repeatEnabled) append(" • Powtarzanie")
                             }
                         }
                     },
@@ -424,13 +372,18 @@ private fun NowPlayingCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(onClick = onStop, enabled = !isMutating && queue?.nowPlaying != null) {
-                    Text("Stop")
+                OutlinedIconButton(
+                    onClick = onStop,
+                    enabled = !isMutating && queue?.nowPlaying != null,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.kb_ic_player_stop),
+                        contentDescription = "Zatrzymaj",
+                    )
                 }
-                Spacer(Modifier.size(8.dp))
                 FilledIconButton(
                     onClick = onSkip,
                     enabled = !isMutating && queue?.nowPlaying != null,
@@ -441,13 +394,34 @@ private fun NowPlayingCard(
                         contentDescription = "Pomiń",
                     )
                 }
-                Spacer(Modifier.size(8.dp))
-                FilterChip(
-                    selected = queue?.isRepeatEnabled == true,
-                    onClick = onRepeatToggle,
+                FilledTonalIconToggleButton(
+                    checked = repeatEnabled,
+                    onCheckedChange = { onRepeatToggle() },
                     enabled = !isMutating && queue != null,
-                    label = { Text("Repeat") },
-                )
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.kb_ic_repeat),
+                        contentDescription = if (repeatEnabled) {
+                            "Wyłącz powtarzanie"
+                        } else {
+                            "Włącz powtarzanie"
+                        },
+                    )
+                }
+                FilledTonalIconToggleButton(
+                    checked = radioEnabled,
+                    onCheckedChange = { onRadioToggle() },
+                    enabled = !isMutating && queue != null,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.kb_ic_radio),
+                        contentDescription = if (radioEnabled) {
+                            "Wyłącz radio"
+                        } else {
+                            "Włącz radio"
+                        },
+                    )
+                }
             }
         }
     }
@@ -475,7 +449,7 @@ private fun EmptyQueueCard() {
             )
             Text("Kolejka jest pusta", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Utwory dodane z wyszukiwarki pojawią się tutaj.",
+                "Użyj przycisku +, aby dodać utwory.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -531,7 +505,7 @@ private fun GuildChannelDialog(
     )
 }
 
-private fun formatDuration(ms: Long): String {
+internal fun formatDuration(ms: Long): String {
     if (ms <= 0) return "—"
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
