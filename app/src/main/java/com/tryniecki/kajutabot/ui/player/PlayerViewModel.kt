@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import retrofit2.HttpException
 
 data class PlayerUiState(
@@ -64,6 +66,13 @@ class PlayerViewModel(
     val trackAdded: SharedFlow<Unit> = _trackAdded.asSharedFlow()
 
     private var searchJob: Job? = null
+
+    /**
+     * Serializes all queue GETs (regular poll, expected-end refresh, explicit
+     * refresh, conflict refetch) so two fetches never run in parallel and the
+     * expected-end one-shot can't overlap the interval poll.
+     */
+    private val queueFetchMutex = Mutex()
 
     init {
         refreshGuilds()
@@ -175,24 +184,55 @@ class PlayerViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isLoadingQueue = true) }
             try {
-                val snapshot = sessionManager.withApi { it.getQueue(guildId) }
-                _ui.update { it.copy(queue = snapshot, isLoadingQueue = false, error = null) }
+                val snapshot = fetchQueueSnapshot(guildId)
+                val applied = applyQueueSnapshot(snapshot)
+                _ui.update {
+                    it.copy(
+                        isLoadingQueue = false,
+                        error = if (applied) null else it.error,
+                    )
+                }
             } catch (e: Exception) {
                 _ui.update { it.copy(isLoadingQueue = false, error = userMessageForError(e)) }
             }
         }
     }
 
-    fun pollTick() {
+    /**
+     * Single queue fetch. Suspending — the Compose polling loop awaits it, so the
+     * next tick only starts after the request completes (request → delay → request).
+     * Silent on failure; explicit actions surface their own errors.
+     */
+    suspend fun pollQueueOnce() {
         val guildId = _ui.value.selectedGuildId ?: return
-        viewModelScope.launch {
-            try {
-                val snapshot = sessionManager.withApi { it.getQueue(guildId) }
-                _ui.update { it.copy(queue = snapshot) }
-            } catch (_: Exception) {
-                // Silent on poll; errors surface on explicit actions.
+        try {
+            applyQueueSnapshot(fetchQueueSnapshot(guildId))
+        } catch (_: Exception) {
+            // Silent on poll; errors surface on explicit actions.
+        }
+    }
+
+    private suspend fun fetchQueueSnapshot(guildId: String): QueueSnapshotResponse =
+        queueFetchMutex.withLock {
+            sessionManager.withApi { it.getQueue(guildId) }
+        }
+
+    /**
+     * Applies a snapshot unless it is stale: a snapshot of another guild, or with
+     * a version older than the one already shown, never overwrites UI state.
+     * Returns whether the snapshot was applied.
+     */
+    private fun applyQueueSnapshot(snapshot: QueueSnapshotResponse): Boolean {
+        var applied = false
+        _ui.update { current ->
+            if (shouldApplyQueueSnapshot(current.queue, snapshot, current.selectedGuildId)) {
+                applied = true
+                current.copy(queue = snapshot)
+            } else {
+                current
             }
         }
+        return applied
     }
 
     fun search(query: String) {
@@ -254,14 +294,10 @@ class PlayerViewModel(
                 val response = sessionManager.withApi {
                     it.enqueue(guildId, EnqueueRequest(channelId, inputs, version))
                 }
-                _ui.update {
-                    it.copy(
-                        queue = response.snapshot,
-                        isMutating = false,
-                        searchQuery = "",
-                        searchResults = emptyList(),
-                    )
-                }
+                applyQueueSnapshot(response.snapshot)
+                // Query/results stay intact so the modal exit animation renders stable
+                // content; PlayerRoute clears them after the modal closes.
+                _ui.update { it.copy(isMutating = false) }
                 _trackAdded.tryEmit(Unit)
             } catch (e: Exception) {
                 handleMutationError(e)
@@ -311,7 +347,8 @@ class PlayerViewModel(
                         val response = sessionManager.withApi { api ->
                             api.enableRadio(guildId, action.request)
                         }
-                        _ui.update { it.copy(queue = response.snapshot, isMutating = false) }
+                        applyQueueSnapshot(response.snapshot)
+                        _ui.update { it.copy(isMutating = false) }
                     } catch (e: Exception) {
                         handleMutationError(e)
                     }
@@ -329,7 +366,8 @@ class PlayerViewModel(
                 val response = sessionManager.withApi {
                     it.removeQueueEntry(guildId, entryId, version)
                 }
-                _ui.update { it.copy(queue = response.snapshot, isMutating = false) }
+                applyQueueSnapshot(response.snapshot)
+                _ui.update { it.copy(isMutating = false) }
             } catch (e: Exception) {
                 handleMutationError(e)
             }
@@ -354,7 +392,8 @@ class PlayerViewModel(
                     _ui.update { it.copy(isMutating = false) }
                     return@launch
                 }
-                _ui.update { it.copy(queue = response.snapshot, isMutating = false) }
+                applyQueueSnapshot(response.snapshot)
+                _ui.update { it.copy(isMutating = false) }
             } catch (e: Exception) {
                 handleMutationError(e)
             }
@@ -372,12 +411,16 @@ class PlayerViewModel(
                 val guildId = _ui.value.selectedGuildId
                 if (guildId != null) {
                     try {
-                        val fresh = sessionManager.withApi { it.getQueue(guildId) }
+                        val fresh = fetchQueueSnapshot(guildId)
+                        val applied = applyQueueSnapshot(fresh)
                         _ui.update {
                             it.copy(
-                                queue = fresh,
                                 isMutating = false,
-                                error = "Kolejka zmieniła się w międzyczasie. Odświeżono stan.",
+                                error = if (applied) {
+                                    "Kolejka zmieniła się w międzyczasie. Odświeżono stan."
+                                } else {
+                                    it.error
+                                },
                             )
                         }
                         return

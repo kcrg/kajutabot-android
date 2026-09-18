@@ -46,6 +46,7 @@ fun TrackArtwork(
     shape: Shape = RoundedCornerShape(8.dp),
     brokenIconSize: Dp = 24.dp,
     showMissingLabel: Boolean = false,
+    backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
 ) {
     val source = remember(imageUrl) { resolveArtworkSource(imageUrl) }
     var loadFailed by remember(imageUrl) { mutableStateOf(false) }
@@ -53,7 +54,7 @@ fun TrackArtwork(
     Box(
         modifier = modifier
             .clip(shape)
-            .background(Color.Black),
+            .background(backgroundColor),
         contentAlignment = Alignment.Center,
     ) {
         when {

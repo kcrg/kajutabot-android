@@ -34,6 +34,18 @@ class AppViewModel(
     private val _pendingSharedUrl = MutableStateFlow<String?>(null)
     val pendingSharedUrl: StateFlow<String?> = _pendingSharedUrl.asStateFlow()
 
+    /**
+     * Full-screen AddTrack modal visibility. Lives here (not in PlayerRoute) so
+     * the shell can hide the bottom NavigationBar while the modal is open.
+     * Player state itself stays in PlayerRoute/PlayerViewModel and is preserved.
+     */
+    private val _isAddTrackOpen = MutableStateFlow(false)
+    val isAddTrackOpen: StateFlow<Boolean> = _isAddTrackOpen.asStateFlow()
+
+    fun setAddTrackOpen(open: Boolean) {
+        _isAddTrackOpen.value = open
+    }
+
     init {
         viewModelScope.launch {
             container.sessionManager.restore()

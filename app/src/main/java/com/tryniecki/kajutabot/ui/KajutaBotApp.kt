@@ -1,5 +1,10 @@
 package com.tryniecki.kajutabot.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +50,7 @@ fun KajutaBotApp(
     val authState by appViewModel.authState.collectAsState()
     val isSigningIn by appViewModel.isSigningIn.collectAsState()
     val currentDestination by appViewModel.currentDestination.collectAsState()
+    val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsState()
     val openCustomTab = rememberOpenCustomTab()
 
     LaunchedEffect(appViewModel) {
@@ -69,6 +75,7 @@ fun KajutaBotApp(
             container = container,
             appViewModel = appViewModel,
             currentDestination = currentDestination,
+            isAddTrackOpen = isAddTrackOpen,
             themeMode = themeMode,
             onThemeModeChange = onThemeModeChange,
         )
@@ -121,25 +128,29 @@ private fun AuthenticatedShell(
     container: AppContainer,
     appViewModel: AppViewModel,
     currentDestination: AppDestination,
+    isAddTrackOpen: Boolean,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            NavigationBar {
-                AppDestination.entries.forEach { destination ->
-                    NavigationBarItem(
-                        selected = currentDestination == destination,
-                        onClick = { appViewModel.onDestinationChange(destination) },
-                        icon = {
-                            Icon(
-                                painter = painterResource(destination.icon),
-                                contentDescription = destination.label,
-                            )
-                        },
-                        label = { Text(destination.label) },
-                    )
+            // Full-screen AddTrack modal: no tabs reachable underneath.
+            if (!isAddTrackOpen) {
+                NavigationBar {
+                    AppDestination.entries.forEach { destination ->
+                        NavigationBarItem(
+                            selected = currentDestination == destination,
+                            onClick = { appViewModel.onDestinationChange(destination) },
+                            icon = {
+                                Icon(
+                                    painter = painterResource(destination.icon),
+                                    contentDescription = destination.label,
+                                )
+                            },
+                            label = { Text(destination.label) },
+                        )
+                    }
                 }
             }
         },
@@ -151,7 +162,16 @@ private fun AuthenticatedShell(
                 .fillMaxSize()
                 .padding(bottom = innerPadding.calculateBottomPadding()),
         ) {
-        when (currentDestination) {
+        // Short Material-like fade-through on destination change.
+        // Only the content animates; the NavigationBar itself stays put.
+        AnimatedContent(
+            targetState = currentDestination,
+            transitionSpec = {
+                fadeIn(tween(140)) togetherWith fadeOut(tween(90))
+            },
+            label = "destination",
+        ) { destination ->
+        when (destination) {
             AppDestination.PLAYER -> PlayerRoute(
                 container = container,
                 appViewModel = appViewModel,
@@ -164,6 +184,7 @@ private fun AuthenticatedShell(
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
             )
+        }
         }
         }
     }

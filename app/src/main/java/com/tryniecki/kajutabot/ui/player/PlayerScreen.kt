@@ -1,6 +1,19 @@
 package com.tryniecki.kajutabot.ui.player
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,15 +51,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
@@ -56,7 +74,15 @@ import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import java.time.Instant
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private const val ADD_TRACK_ENTER_MS = 180
+private const val ADD_TRACK_EXIT_MS = 150
+private const val ADD_TRACK_CLEAR_DELAY_MS = 200L
+private const val TRACK_CHANGE_MS = 180
+private const val TRACK_CHANGE_EXIT_MS = 140
 
 @Composable
 fun PlayerRoute(
@@ -66,15 +92,45 @@ fun PlayerRoute(
 ) {
     val ui by viewModel.ui.collectAsState()
     val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsState()
+    val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsState()
     val guildId = ui.selectedGuildId
-    var isAddTrackOpen by rememberSaveable { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Lifecycle-aware polling: only while Player route is composed.
-    LaunchedEffect(guildId) {
+    val playbackKey = ui.queue?.nowPlaying?.let { track ->
+        playbackIdentity(track, ui.queue?.nowPlayingStartedAt)
+    }
+
+    // Truly lifecycle-aware polling: the loop only runs while STARTED, so no
+    // requests happen in the background. Entering the foreground polls
+    // immediately, then on the interval. Guild/playback change restarts it.
+    // A one-shot expected-end refresh fires ~300 ms after the current track
+    // should end; both paths share the ViewModel single-flight queue fetch.
+    LaunchedEffect(guildId, playbackKey) {
         if (guildId == null) return@LaunchedEffect
-        while (true) {
-            delay(2500)
-            viewModel.pollTick()
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.pollQueueOnce()
+            val remaining = viewModel.ui.value.queue?.let { snapshot ->
+                val track = snapshot.nowPlaying ?: return@let null
+                remainingMs(
+                    snapshot.nowPlayingStartedAt,
+                    track.durationMilliseconds,
+                    Instant.now().toEpochMilli(),
+                )
+            }
+            val endRefresh = remaining?.let { ms ->
+                launch {
+                    delay(ms.coerceAtLeast(0) + EXPECTED_END_GRACE_MS)
+                    viewModel.pollQueueOnce()
+                }
+            }
+            try {
+                while (true) {
+                    delay(POLL_INTERVAL_MS)
+                    viewModel.pollQueueOnce()
+                }
+            } finally {
+                endRefresh?.cancel()
+            }
         }
     }
 
@@ -83,20 +139,32 @@ fun PlayerRoute(
         val url = pendingSharedUrl
         if (url != null) {
             viewModel.setSearchQuery(url)
-            isAddTrackOpen = true
+            appViewModel.setAddTrackOpen(true)
             appViewModel.clearPendingSharedUrl()
         }
     }
 
     LaunchedEffect(Unit) {
         viewModel.trackAdded.collect {
-            if (isAddTrackOpen) isAddTrackOpen = false
+            appViewModel.setAddTrackOpen(false)
         }
     }
 
     BackHandler(enabled = isAddTrackOpen) {
-        viewModel.clearAddTrack()
-        isAddTrackOpen = false
+        appViewModel.setAddTrackOpen(false)
+    }
+
+    // Deferred modal cleanup: clear query/results only after the exit transition
+    // finished, so closing never flashes an empty screen mid-animation.
+    var modalWasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(isAddTrackOpen) {
+        if (isAddTrackOpen) {
+            modalWasOpen = true
+        } else if (modalWasOpen) {
+            modalWasOpen = false
+            delay(ADD_TRACK_CLEAR_DELAY_MS)
+            viewModel.clearAddTrack()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -113,15 +181,20 @@ fun PlayerRoute(
             onRemoveEntry = viewModel::removeEntry,
             onClearQueue = viewModel::clearQueue,
             onDismissMessage = viewModel::dismissMessage,
-            onAddTrackOpen = { isAddTrackOpen = true },
+            onAddTrackOpen = { appViewModel.setAddTrackOpen(true) },
         )
-        if (isAddTrackOpen) {
+        AnimatedVisibility(
+            visible = isAddTrackOpen,
+            enter = slideInVertically(
+                animationSpec = tween(ADD_TRACK_ENTER_MS),
+            ) { it } + fadeIn(tween(ADD_TRACK_ENTER_MS)),
+            exit = slideOutVertically(
+                animationSpec = tween(ADD_TRACK_EXIT_MS),
+            ) { it } + fadeOut(tween(ADD_TRACK_EXIT_MS)),
+        ) {
             AddTrackScreen(
                 ui = ui,
-                onClose = {
-                    viewModel.clearAddTrack()
-                    isAddTrackOpen = false
-                },
+                onClose = { appViewModel.setAddTrackOpen(false) },
                 onQueryChange = viewModel::setSearchQuery,
                 onSubmit = viewModel::submitSmartInput,
                 onResultClick = viewModel::enqueueSearchResult,
@@ -263,7 +336,13 @@ fun PlayerScreen(
                 item { EmptyQueueCard() }
             } else {
                 items(pending, key = { it.entryId }) { entry ->
-                    Card {
+                    Card(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = tween(120),
+                            fadeOutSpec = tween(120),
+                            placementSpec = tween(150),
+                        ),
+                    ) {
                         ListItem(
                             leadingContent = {
                                 TrackArtwork(
@@ -324,51 +403,73 @@ private fun NowPlayingCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            TrackArtwork(
-                imageUrl = queue?.nowPlaying?.thumbnailUrl,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f),
-                shape = RoundedCornerShape(12.dp),
-                brokenIconSize = 48.dp,
-                showMissingLabel = true,
-            )
+            // Artwork, title, meta and progress transition as one unit keyed by
+            // playback identity (track + start moment), so a repeated track counts
+            // as a new playback and never animates 95% -> 2% on one progress bar.
+            AnimatedContent(
+                targetState = nowPlayingSlide(queue),
+                transitionSpec = {
+                    (fadeIn(tween(TRACK_CHANGE_MS)) +
+                        slideInHorizontally(tween(TRACK_CHANGE_MS)) { (it * 0.08f).toInt() }) togetherWith
+                        (fadeOut(tween(TRACK_CHANGE_EXIT_MS)) +
+                            slideOutHorizontally(tween(TRACK_CHANGE_EXIT_MS)) { -(it * 0.08f).toInt() })
+                },
+                label = "nowPlaying",
+            ) { slide ->
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    TrackArtwork(
+                        imageUrl = slide.thumbnailUrl,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f),
+                        shape = RoundedCornerShape(12.dp),
+                        brokenIconSize = 48.dp,
+                        showMissingLabel = true,
+                        backgroundColor = Color.Black,
+                    )
 
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            "TERAZ ODTWARZANE",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = slide.title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = slide.hint,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    if (slide.hasTrack) {
+                        PlaybackProgressIndicator(
+                            playbackKey = slide.identity,
+                            startedAtRaw = slide.startedAt,
+                            durationMs = slide.durationMs,
+                        )
+                    }
+                }
+            }
+
+            // Live flags update outside the track transition.
+            val flags = buildList {
+                if (radioEnabled) add("Radio włączone")
+                if (repeatEnabled) add("Powtarzanie")
+            }
+            if (queue?.nowPlaying != null && flags.isNotEmpty()) {
                 Text(
-                    "TERAZ ODTWARZANE",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = queue?.nowPlaying?.title ?: "Nic nie gra",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = run {
-                        val nowPlaying = queue?.nowPlaying
-                        when {
-                            queue == null -> "Połącz aplikację z serwerem i wybierz kanał głosowy"
-                            nowPlaying == null -> "Kolejka oczekuje na utwory"
-                            else -> buildString {
-                                append(formatDuration(nowPlaying.durationMilliseconds))
-                                if (radioEnabled) append(" • Radio włączone")
-                                if (repeatEnabled) append(" • Powtarzanie")
-                            }
-                        }
-                    },
+                    text = flags.joinToString(" • "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            LinearWavyProgressIndicator(
-                progress = { 0.85f },
-                modifier = Modifier.fillMaxWidth(),
-            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -426,6 +527,65 @@ private fun NowPlayingCard(
         }
     }
 }
+
+/**
+ * Local playback progress: anchored once per playback identity from wall clock,
+ * then advanced on the monotonic clock with a small local ticker. Never touches
+ * [PlayerUiState], so the rest of the screen doesn't recompose 5x per second.
+ */
+@Composable
+private fun PlaybackProgressIndicator(
+    playbackKey: String,
+    startedAtRaw: String?,
+    durationMs: Long,
+) {
+    val anchor = remember(playbackKey) {
+        PlaybackProgressAnchor(
+            positionAtAnchorMs = initialPositionMs(
+                startedAtRaw,
+                durationMs,
+                Instant.now().toEpochMilli(),
+            ),
+            elapsedRealtimeAnchorMs = SystemClock.elapsedRealtime(),
+        )
+    }
+    var nowElapsedRealtime by remember(playbackKey) {
+        mutableLongStateOf(anchor.elapsedRealtimeAnchorMs)
+    }
+    LaunchedEffect(playbackKey) {
+        while (true) {
+            delay(PROGRESS_TICK_MS)
+            nowElapsedRealtime = SystemClock.elapsedRealtime()
+        }
+    }
+    val positionMs = anchor.positionAtAnchorMs?.let {
+        currentPositionMs(it, anchor.elapsedRealtimeAnchorMs, nowElapsedRealtime, durationMs)
+    }
+    val fraction = if (positionMs == null) 0f else progressFraction(positionMs, durationMs)
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = tween(durationMillis = PROGRESS_TICK_MS.toInt(), easing = LinearEasing),
+        label = "playbackProgress",
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        LinearWavyProgressIndicator(
+            progress = { animatedFraction },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            text = "${formatPlaybackElapsed(positionMs)} / ${formatPlaybackTotal(durationMs)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun formatPlaybackElapsed(positionMs: Long?): String =
+    if (positionMs == null) "--:--" else formatDuration(positionMs)
+
+private fun formatPlaybackTotal(durationMs: Long): String =
+    if (durationMs <= 0) "--:--" else formatDuration(durationMs)
 
 @Composable
 private fun EmptyQueueCard() {
