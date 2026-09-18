@@ -21,6 +21,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -184,10 +186,9 @@ private fun NowPlayingCard() {
                 )
             }
 
-            Slider(
-                value = 0f,
-                onValueChange = { },
-                enabled = false,
+            LinearWavyProgressIndicator(
+                progress = {0.85f},
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Row(
