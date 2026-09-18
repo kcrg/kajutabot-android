@@ -1,6 +1,10 @@
 package com.tryniecki.kajutabot.ui.more
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import androidx.activity.compose.BackHandler
+import androidx.browser.customtabs.CustomTabColorSchemeParams
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,10 +32,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.navigation.MoreDestination
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
@@ -40,9 +49,13 @@ fun MoreScreen(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
 ) {
-    var destination by rememberSaveable { mutableStateOf(MoreDestination.ROOT) }
+    var destination by rememberSaveable {
+        mutableStateOf(MoreDestination.ROOT)
+    }
 
-    BackHandler(enabled = destination != MoreDestination.ROOT) {
+    BackHandler(
+        enabled = destination != MoreDestination.ROOT,
+    ) {
         destination = MoreDestination.ROOT
     }
 
@@ -50,16 +63,24 @@ fun MoreScreen(
         MoreDestination.ROOT -> MoreRootScreen(
             themeMode = themeMode,
             onThemeModeChange = onThemeModeChange,
-            onOpenLibraries = { destination = MoreDestination.LIBRARIES },
-            onOpenContact = { destination = MoreDestination.CONTACT },
+            onOpenLibraries = {
+                destination = MoreDestination.LIBRARIES
+            },
+            onOpenContact = {
+                destination = MoreDestination.CONTACT
+            },
         )
 
         MoreDestination.LIBRARIES -> LibrariesScreen(
-            onBack = { destination = MoreDestination.ROOT },
+            onBack = {
+                destination = MoreDestination.ROOT
+            },
         )
 
         MoreDestination.CONTACT -> ContactScreen(
-            onBack = { destination = MoreDestination.ROOT },
+            onBack = {
+                destination = MoreDestination.ROOT
+            },
         )
     }
 }
@@ -73,7 +94,13 @@ private fun MoreRootScreen(
     onOpenContact: () -> Unit,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Więcej") }) },
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text("Więcej")
+                },
+            )
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -85,7 +112,10 @@ private fun MoreRootScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { SectionTitle("Wygląd") }
+            item {
+                SectionTitle("Wygląd")
+            }
+
             item {
                 Column(
                     modifier = Modifier
@@ -97,6 +127,7 @@ private fun MoreRootScreen(
                         text = "Motyw",
                         style = MaterialTheme.typography.titleMedium,
                     )
+
                     Text(
                         text = "Natywny używa kolorów Material You na Androidzie 12+ i trybu systemowego.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -109,7 +140,9 @@ private fun MoreRootScreen(
                         ThemeMode.entries.forEachIndexed { index, mode ->
                             SegmentedButton(
                                 selected = themeMode == mode,
-                                onClick = { onThemeModeChange(mode) },
+                                onClick = {
+                                    onThemeModeChange(mode)
+                                },
                                 shape = SegmentedButtonDefaults.itemShape(
                                     index = index,
                                     count = ThemeMode.entries.size,
@@ -122,8 +155,16 @@ private fun MoreRootScreen(
                 }
             }
 
-            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
-            item { SectionTitle("O aplikacji") }
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+
+            item {
+                SectionTitle("O aplikacji")
+            }
+
             item {
                 SettingsRow(
                     icon = R.drawable.kb_ic_info_circle,
@@ -132,6 +173,7 @@ private fun MoreRootScreen(
                     onClick = onOpenLibraries,
                 )
             }
+
             item {
                 SettingsRow(
                     icon = R.drawable.kb_ic_mail,
@@ -149,16 +191,45 @@ private fun LibrariesScreen(
     onBack: () -> Unit,
 ) {
     val libraries = listOf(
-        LibraryInfo("Jetpack Compose", "Deklaratywny UI Androida", "Apache 2.0"),
-        LibraryInfo("Material 3", "Natywne komponenty i system motywów", "Apache 2.0"),
-        LibraryInfo("Tabler Icons", "Ikony interfejsu", "MIT"),
-        LibraryInfo("Retrofit", "Klient REST", "Apache 2.0"),
-        LibraryInfo("OkHttp", "Transport HTTP", "Apache 2.0"),
-        LibraryInfo("kotlinx.serialization", "Serializacja JSON", "Apache 2.0"),
+        LibraryInfo(
+            name = "Jetpack Compose",
+            description = "Deklaratywny UI Androida",
+            license = "Apache 2.0",
+        ),
+        LibraryInfo(
+            name = "Material 3",
+            description = "Natywne komponenty i system motywów",
+            license = "Apache 2.0",
+        ),
+        LibraryInfo(
+            name = "Tabler Icons",
+            description = "Ikony interfejsu",
+            license = "MIT",
+        ),
+        LibraryInfo(
+            name = "Retrofit",
+            description = "Klient REST",
+            license = "Apache 2.0",
+        ),
+        LibraryInfo(
+            name = "OkHttp",
+            description = "Transport HTTP",
+            license = "Apache 2.0",
+        ),
+        LibraryInfo(
+            name = "kotlinx.serialization",
+            description = "Serializacja JSON",
+            license = "Apache 2.0",
+        ),
     )
 
     Scaffold(
-        topBar = { BackTopBar(title = "Użyte biblioteki", onBack = onBack) },
+        topBar = {
+            BackTopBar(
+                title = "Użyte biblioteki",
+                onBack = onBack,
+            )
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -167,14 +238,25 @@ private fun LibrariesScreen(
                 bottom = innerPadding.calculateBottomPadding() + 16.dp,
             ),
         ) {
-            items(libraries.size) { index ->
-                val library = libraries[index]
+            items(
+                items = libraries,
+                key = { it.name },
+            ) { library ->
                 ListItem(
-                    headlineContent = { Text(library.name) },
-                    supportingContent = { Text(library.description) },
-                    trailingContent = { Text(library.license) },
+                    headlineContent = {
+                        Text(library.name)
+                    },
+                    supportingContent = {
+                        Text(library.description)
+                    },
+                    trailingContent = {
+                        Text(library.license)
+                    },
                 )
-                if (index != libraries.lastIndex) HorizontalDivider()
+
+                if (library != libraries.last()) {
+                    HorizontalDivider()
+                }
             }
         }
     }
@@ -184,10 +266,31 @@ private fun LibrariesScreen(
 private fun ContactScreen(
     onBack: () -> Unit,
 ) {
+    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
 
+    val colorScheme = MaterialTheme.colorScheme
+
+    val customTabColors =
+        CustomTabColorSchemeParams.Builder()
+            .setToolbarColor(
+                colorScheme.surfaceContainer.toArgb(),
+            )
+            .setNavigationBarColor(
+                colorScheme.surface.toArgb(),
+            )
+            .setNavigationBarDividerColor(
+                colorScheme.outlineVariant.toArgb(),
+            )
+            .build()
+
     Scaffold(
-        topBar = { BackTopBar(title = "Kontakt", onBack = onBack) },
+        topBar = {
+            BackTopBar(
+                title = "Kontakt",
+                onBack = onBack,
+            )
+        },
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -195,24 +298,39 @@ private fun ContactScreen(
                 .padding(innerPadding),
         ) {
             ListItem(
-                headlineContent = { Text("Kacper Tryniecki") },
-                supportingContent = { Text("Autor KajutaBot") },
+                headlineContent = {
+                    Text("Kacper Tryniecki")
+                },
+                supportingContent = {
+                    Text("Autor KajutaBot")
+                },
             )
+
             HorizontalDivider()
+
             SettingsRow(
                 icon = R.drawable.kb_ic_mail,
                 title = "kacper@tryniecki.com",
                 subtitle = "E-mail",
-                onClick = { uriHandler.openUri("mailto:kacper@tryniecki.com") },
+                onClick = {
+                    uriHandler.openUri(
+                        "mailto:kacper@tryniecki.com",
+                    )
+                },
             )
+
             SettingsRow(
                 icon = R.drawable.kb_ic_brand_github,
                 title = "github.com/kcrg",
                 subtitle = "GitHub",
-                onClick =
-                    {
-                        uriHandler.openUri("https://github.com/kcrg")
-                    },
+                onClick = {
+                    openCustomTab(
+                        context = context,
+                        uriHandler = uriHandler,
+                        url = "https://github.com/kcrg",
+                        colors = customTabColors,
+                    )
+                },
             )
         }
     }
@@ -225,11 +343,17 @@ private fun BackTopBar(
     onBack: () -> Unit,
 ) {
     TopAppBar(
-        title = { Text(title) },
+        title = {
+            Text(title)
+        },
         navigationIcon = {
-            IconButton(onClick = onBack) {
+            IconButton(
+                onClick = onBack,
+            ) {
                 Icon(
-                    painter = painterResource(R.drawable.kb_ic_arrow_left),
+                    painter = painterResource(
+                        R.drawable.kb_ic_arrow_left,
+                    ),
                     contentDescription = "Wstecz",
                 )
             }
@@ -238,13 +362,17 @@ private fun BackTopBar(
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+private fun SectionTitle(
+    text: String,
+) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier.padding(
+            top = 8.dp,
+        ),
     )
 }
 
@@ -256,7 +384,9 @@ private fun SettingsRow(
     onClick: () -> Unit,
 ) {
     ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.clickable(
+            onClick = onClick,
+        ),
         leadingContent = {
             Icon(
                 painter = painterResource(icon),
@@ -264,16 +394,45 @@ private fun SettingsRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
-        headlineContent = { Text(title) },
-        supportingContent = { Text(subtitle) },
+        headlineContent = {
+            Text(title)
+        },
+        supportingContent = {
+            Text(subtitle)
+        },
         trailingContent = {
             Icon(
-                painter = painterResource(R.drawable.kb_ic_chevron_right),
+                painter = painterResource(
+                    R.drawable.kb_ic_chevron_right,
+                ),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
     )
+}
+
+private fun openCustomTab(
+    context: Context,
+    uriHandler: UriHandler,
+    url: String,
+    colors: CustomTabColorSchemeParams,
+) {
+    val customTabsIntent =
+        CustomTabsIntent.Builder()
+            .setDefaultColorSchemeParams(colors)
+            .setShowTitle(true)
+            .setShareState(CustomTabsIntent.SHARE_STATE_ON)
+            .build()
+
+    try {
+        customTabsIntent.launchUrl(
+            context,
+            url.toUri(),
+        )
+    } catch (_: ActivityNotFoundException) {
+        uriHandler.openUri(url)
+    }
 }
 
 private data class LibraryInfo(
