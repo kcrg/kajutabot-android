@@ -1,10 +1,8 @@
 package com.tryniecki.kajutabot.ui.player
 
-import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,7 +11,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +36,6 @@ import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
@@ -51,7 +47,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,11 +57,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
@@ -74,9 +64,7 @@ import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
-import java.time.Instant
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 private const val ADD_TRACK_ENTER_MS = 180
 private const val ADD_TRACK_EXIT_MS = 150
@@ -86,53 +74,12 @@ private const val TRACK_CHANGE_EXIT_MS = 140
 
 @Composable
 fun PlayerRoute(
-    container: AppContainer,
     appViewModel: AppViewModel,
-    viewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory(container)),
+    viewModel: PlayerViewModel,
 ) {
     val ui by viewModel.ui.collectAsState()
     val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsState()
     val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsState()
-    val guildId = ui.selectedGuildId
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    val playbackKey = ui.queue?.nowPlaying?.let { track ->
-        playbackIdentity(track, ui.queue?.nowPlayingStartedAt)
-    }
-
-    // Truly lifecycle-aware polling: the loop only runs while STARTED, so no
-    // requests happen in the background. Entering the foreground polls
-    // immediately, then on the interval. Guild/playback change restarts it.
-    // A one-shot expected-end refresh fires ~300 ms after the current track
-    // should end; both paths share the ViewModel single-flight queue fetch.
-    LaunchedEffect(guildId, playbackKey) {
-        if (guildId == null) return@LaunchedEffect
-        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            viewModel.pollQueueOnce()
-            val remaining = viewModel.ui.value.queue?.let { snapshot ->
-                val track = snapshot.nowPlaying ?: return@let null
-                remainingMs(
-                    snapshot.nowPlayingStartedAt,
-                    track.durationMilliseconds,
-                    Instant.now().toEpochMilli(),
-                )
-            }
-            val endRefresh = remaining?.let { ms ->
-                launch {
-                    delay(ms.coerceAtLeast(0) + EXPECTED_END_GRACE_MS)
-                    viewModel.pollQueueOnce()
-                }
-            }
-            try {
-                while (true) {
-                    delay(POLL_INTERVAL_MS)
-                    viewModel.pollQueueOnce()
-                }
-            } finally {
-                endRefresh?.cancel()
-            }
-        }
-    }
 
     // Shared URL -> prefill the add-track modal and open it.
     LaunchedEffect(pendingSharedUrl) {
@@ -527,65 +474,6 @@ private fun NowPlayingCard(
         }
     }
 }
-
-/**
- * Local playback progress: anchored once per playback identity from wall clock,
- * then advanced on the monotonic clock with a small local ticker. Never touches
- * [PlayerUiState], so the rest of the screen doesn't recompose 5x per second.
- */
-@Composable
-private fun PlaybackProgressIndicator(
-    playbackKey: String,
-    startedAtRaw: String?,
-    durationMs: Long,
-) {
-    val anchor = remember(playbackKey) {
-        PlaybackProgressAnchor(
-            positionAtAnchorMs = initialPositionMs(
-                startedAtRaw,
-                durationMs,
-                Instant.now().toEpochMilli(),
-            ),
-            elapsedRealtimeAnchorMs = SystemClock.elapsedRealtime(),
-        )
-    }
-    var nowElapsedRealtime by remember(playbackKey) {
-        mutableLongStateOf(anchor.elapsedRealtimeAnchorMs)
-    }
-    LaunchedEffect(playbackKey) {
-        while (true) {
-            delay(PROGRESS_TICK_MS)
-            nowElapsedRealtime = SystemClock.elapsedRealtime()
-        }
-    }
-    val positionMs = anchor.positionAtAnchorMs?.let {
-        currentPositionMs(it, anchor.elapsedRealtimeAnchorMs, nowElapsedRealtime, durationMs)
-    }
-    val fraction = if (positionMs == null) 0f else progressFraction(positionMs, durationMs)
-    val animatedFraction by animateFloatAsState(
-        targetValue = fraction,
-        animationSpec = tween(durationMillis = PROGRESS_TICK_MS.toInt(), easing = LinearEasing),
-        label = "playbackProgress",
-    )
-
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        LinearWavyProgressIndicator(
-            progress = { animatedFraction },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            text = "${formatPlaybackElapsed(positionMs)} / ${formatPlaybackTotal(durationMs)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-private fun formatPlaybackElapsed(positionMs: Long?): String =
-    if (positionMs == null) "--:--" else formatDuration(positionMs)
-
-private fun formatPlaybackTotal(durationMs: Long): String =
-    if (durationMs <= 0) "--:--" else formatDuration(durationMs)
 
 @Composable
 private fun EmptyQueueCard() {
