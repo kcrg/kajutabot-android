@@ -46,6 +46,7 @@ import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.auth.LoginScreen
 import com.tryniecki.kajutabot.ui.favorites.FavoritesRoute
+import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.more.MoreScreen
 import com.tryniecki.kajutabot.ui.myaudio.MyAudioScreen
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
@@ -167,10 +168,14 @@ private fun AuthenticatedShell(
     val playerViewModel: PlayerViewModel = viewModel(
         factory = PlayerViewModel.Factory(container),
     )
+    val favoritesViewModel: FavoritesViewModel = viewModel(
+        factory = FavoritesViewModel.Factory(container),
+    )
     // Narrow slices: the shell only needs the mini-player state, the error
     // line and the polling keys — typing in AddTrack search must not
     // recompose the shell or the MiniPlayer.
     val miniPlayerState by playerViewModel.miniPlayerState.collectAsStateWithLifecycle()
+    val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
     val playerError by playerViewModel.playerError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val motion = MaterialTheme.motionScheme
@@ -229,7 +234,11 @@ private fun AuthenticatedShell(
                         lastMiniPlayerState?.let { state ->
                             MiniPlayer(
                                 slide = state.slide,
+                                track = state.track,
                                 isMutating = state.isMutating,
+                                isFavorite = favoritesViewModel.isFavorite(state.track),
+                                favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
+                                onToggleFavorite = favoritesViewModel::toggle,
                                 onOpenPlayer = { appViewModel.onDestinationChange(AppDestination.PLAYER) },
                                 onSkip = playerViewModel::skip,
                             )
@@ -277,9 +286,10 @@ private fun AuthenticatedShell(
             AppDestination.PLAYER -> PlayerRoute(
                 appViewModel = appViewModel,
                 viewModel = playerViewModel,
+                favoritesViewModel = favoritesViewModel,
             )
             AppDestination.MY_AUDIO -> MyAudioScreen()
-            AppDestination.FAVORITES -> FavoritesRoute(container = container)
+            AppDestination.FAVORITES -> FavoritesRoute(viewModel = favoritesViewModel)
             AppDestination.MORE -> MoreScreen(
                 container = container,
                 appViewModel = appViewModel,

@@ -9,10 +9,12 @@ import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
+import com.tryniecki.kajutabot.api.model.queue.MoveQueueEntryRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
 import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
+import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.ui.userMessageForError
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -85,6 +87,7 @@ data class AddTrackUiState(
 
 data class MiniPlayerState(
     val slide: NowPlayingSlide,
+    val track: TrackResponse,
     val isMutating: Boolean,
 )
 
@@ -118,9 +121,10 @@ fun PlayerUiState.toAddTrackUiState(): AddTrackUiState = AddTrackUiState(
 
 fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
     val queueSnapshot = queue ?: return null
-    if (queueSnapshot.nowPlaying == null) return null
+    val track = queueSnapshot.nowPlaying ?: return null
     return MiniPlayerState(
         slide = nowPlayingSlide(queueSnapshot),
+        track = track,
         isMutating = isMutating,
     )
 }
@@ -485,7 +489,37 @@ class PlayerViewModel(
                     it.removeQueueEntry(guildId, entryId, version)
                 }
                 applyQueueSnapshot(response.snapshot)
-                _ui.update { it.copy(isMutating = false) }
+                _ui.update {
+                    if (response.operation.succeeded) it.copy(isMutating = false)
+                    else it.copy(isMutating = false, error = response.operation.message ?: "Nie udało się usunąć utworu z kolejki.")
+                }
+            } catch (e: Exception) {
+                handleMutationError(e)
+            }
+        }
+    }
+
+    fun moveEntry(entryId: String, newPosition: Int, expectedVersion: Long) {
+        val snapshot = _ui.value.queue ?: return
+        if (_ui.value.isMutating || snapshot.pendingEntries.none { it.entryId == entryId } ||
+            newPosition !in 1..snapshot.pendingEntries.size
+        ) return
+        viewModelScope.launch {
+            val guildId = _ui.value.selectedGuildId ?: return@launch
+            _ui.update { it.copy(isMutating = true, error = null) }
+            try {
+                val response = sessionManager.withApiForSession(sessionIdentity) {
+                    it.moveQueueEntry(
+                        guildId,
+                        entryId,
+                        MoveQueueEntryRequest(entryId, newPosition, expectedVersion),
+                    )
+                }
+                applyQueueSnapshot(response.snapshot)
+                _ui.update {
+                    if (response.operation.succeeded) it.copy(isMutating = false)
+                    else it.copy(isMutating = false, error = response.operation.message ?: "Nie udało się zmienić pozycji utworu.")
+                }
             } catch (e: Exception) {
                 handleMutationError(e)
             }

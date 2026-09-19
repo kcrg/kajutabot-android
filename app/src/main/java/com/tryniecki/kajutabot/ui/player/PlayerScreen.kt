@@ -10,16 +10,21 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -34,6 +39,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Scaffold
@@ -48,8 +54,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,12 +81,17 @@ import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
+import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
+import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
+import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.theme.KbMotion
 import com.tryniecki.kajutabot.ui.theme.fadeThrough
 import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisX
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 
 private const val ADD_TRACK_CLEAR_DELAY_MS = KbMotion.MODAL_CLEAR_DELAY_MS
@@ -72,11 +100,13 @@ private const val ADD_TRACK_CLEAR_DELAY_MS = KbMotion.MODAL_CLEAR_DELAY_MS
 fun PlayerRoute(
     appViewModel: AppViewModel,
     viewModel: PlayerViewModel,
+    favoritesViewModel: FavoritesViewModel,
 ) {
     val ui by viewModel.playerScreenState.collectAsStateWithLifecycle()
     val addTrackUi by viewModel.addTrackState.collectAsStateWithLifecycle()
     val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsStateWithLifecycle()
     val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsStateWithLifecycle()
+    val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
 
     // Shared URL -> prefill the add-track modal and open it.
     LaunchedEffect(pendingSharedUrl) {
@@ -124,7 +154,11 @@ fun PlayerRoute(
             onRepeatToggle = { viewModel.setRepeat(ui.queue?.isRepeatEnabled != true) },
             onRadioToggle = viewModel::toggleRadio,
             onRemoveEntry = viewModel::removeEntry,
+            onMoveEntry = viewModel::moveEntry,
             onClearQueue = viewModel::clearQueue,
+            isFavorite = favoritesViewModel::isFavorite,
+            onToggleFavorite = favoritesViewModel::toggle,
+            favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
             onDismissMessage = viewModel::dismissMessage,
             onAddTrackOpen = { appViewModel.setAddTrackOpen(true) },
         )
@@ -143,6 +177,9 @@ fun PlayerRoute(
                 onQueryChange = viewModel::setSearchQuery,
                 onSubmit = viewModel::submitSmartInput,
                 onResultClick = viewModel::enqueueSearchResult,
+                isFavorite = favoritesViewModel::isFavorite,
+                onToggleFavorite = favoritesViewModel::toggle,
+                favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
                 onDismissMessage = viewModel::dismissMessage,
             )
         }
@@ -162,11 +199,28 @@ fun PlayerScreen(
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,
     onRemoveEntry: (String) -> Unit,
+    onMoveEntry: (String, Int, Long) -> Unit,
     onClearQueue: () -> Unit,
+    isFavorite: (TrackResponse) -> Boolean,
+    onToggleFavorite: (TrackResponse) -> Unit,
+    favoritesBusy: Boolean,
     onDismissMessage: () -> Unit,
     onAddTrackOpen: () -> Unit,
 ) {
     val motion = MaterialTheme.motionScheme
+    var confirmStop by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    var draggingEntryId by remember { mutableStateOf<String?>(null) }
+    var dragOffsetPx by remember { mutableStateOf(0f) }
+    var dragTargetIndex by remember { mutableStateOf(-1) }
+    var dragExpectedVersion by remember { mutableStateOf<Long?>(null) }
+    var previewOrder by remember(ui.queue?.guildId, ui.queue?.version) {
+        mutableStateOf<List<QueueEntryResponse>?>(null)
+    }
+    LaunchedEffect(ui.error) {
+        if (ui.error != null) previewOrder = null
+    }
     Scaffold(
         //topBar = { TopAppBar(title = { Text("Odtwarzacz") }) },
         floatingActionButton = {
@@ -180,6 +234,7 @@ fun PlayerScreen(
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(
                 start = 16.dp,
                 top = innerPadding.calculateTopPadding() + 8.dp,
@@ -245,7 +300,10 @@ fun PlayerScreen(
                         queue = ui.queue,
                         isMutating = ui.isMutating,
                         onSkip = onSkip,
-                        onStop = onStop,
+                        onStop = { confirmStop = true },
+                        isFavorite = isFavorite,
+                        onToggleFavorite = onToggleFavorite,
+                        favoritesBusy = favoritesBusy,
                         onRepeatToggle = onRepeatToggle,
                         onRadioToggle = onRadioToggle,
                     )
@@ -264,14 +322,18 @@ fun PlayerScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                     if (!ui.queue?.pendingEntries.isNullOrEmpty()) {
-                        TextButton(onClick = onClearQueue, enabled = !ui.isMutating) {
-                            Text("Wyczyść")
+                        IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
+                            Icon(
+                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_x_outline),
+                                contentDescription = "Wyczyść kolejkę",
+                                tint = MaterialTheme.colorScheme.error,
+                            )
                         }
                     }
                 }
             }
 
-            val pending = ui.queue?.pendingEntries.orEmpty()
+            val pending = previewOrder ?: ui.queue?.pendingEntries.orEmpty()
             if (ui.isLoadingQueue && ui.queue == null) {
                 item {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -282,38 +344,151 @@ fun PlayerScreen(
                 item { EmptyQueueCard() }
             } else {
                 items(pending, key = { it.entryId }) { entry ->
+                    val dragged = draggingEntryId == entry.entryId
+                    val target = dragTargetIndex == pending.indexOfFirst { it.entryId == entry.entryId }
                     Card(
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = motion.fastEffectsSpec(),
-                            fadeOutSpec = motion.fastEffectsSpec(),
-                            placementSpec = motion.fastSpatialSpec(),
+                        modifier = Modifier
+                            .zIndex(if (dragged) 1f else 0f)
+                            .graphicsLayer { translationY = if (dragged) dragOffsetPx else 0f }
+                            .shadow(if (dragged) 8.dp else 0.dp, RoundedCornerShape(12.dp))
+                            .animateItem(
+                                fadeInSpec = motion.fastEffectsSpec(),
+                                fadeOutSpec = motion.fastEffectsSpec(),
+                                placementSpec = motion.fastSpatialSpec(),
+                            ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (target && !dragged) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainer,
                         ),
                     ) {
                         ListItem(
                             verticalAlignment = Alignment.CenterVertically,
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             leadingContent = {
-                                TrackArtwork(
-                                    imageUrl = entry.track.thumbnailUrl,
-                                    modifier = Modifier.size(64.dp),
-                                )
-                            },
-                            supportingContent = { Text(formatDuration(entry.track.durationMilliseconds)) },
-                            trailingContent = {
-                                IconButton(
-                                    onClick = { onRemoveEntry(entry.entryId) },
-                                    enabled = !ui.isMutating,
-                                ) {
-                                    Icon(
-                                        painter = painterResource(
-                                            com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline,
-                                        ),
-                                        contentDescription = "Usuń z ulubionych",
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .offset(x = -8.dp)
+                                            .testTag("queue-drag-${entry.entryId}")
+                                            .semantics {
+                                                contentDescription = "Przeciągnij, aby zmienić pozycję utworu ${entry.track.title}"
+                                                val index = pending.indexOfFirst { it.entryId == entry.entryId }
+                                                customActions = listOf(
+                                                    CustomAccessibilityAction("Przenieś w górę") {
+                                                        if (index > 0 && !ui.isMutating && ui.queue != null) {
+                                                            onMoveEntry(entry.entryId, index, ui.queue.version)
+                                                            true
+                                                        } else false
+                                                    },
+                                                    CustomAccessibilityAction("Przenieś w dół") {
+                                                        if (index in 0 until pending.lastIndex && !ui.isMutating && ui.queue != null) {
+                                                            onMoveEntry(entry.entryId, index + 2, ui.queue.version)
+                                                            true
+                                                        } else false
+                                                    },
+                                                )
+                                            }
+                                            .pointerInput(entry.entryId, pending.size, ui.queue?.version, ui.isMutating) {
+                                                if (ui.isMutating || pending.size < 2) return@pointerInput
+                                                detectDragGesturesAfterLongPress(
+                                                    onDragStart = {
+                                                        draggingEntryId = entry.entryId
+                                                        dragOffsetPx = 0f
+                                                        dragTargetIndex = pending.indexOfFirst { it.entryId == entry.entryId }
+                                                        dragExpectedVersion = ui.queue?.version
+                                                    },
+                                                    onDrag = { change, amount ->
+                                                        change.consume()
+                                                        dragOffsetPx += amount.y
+                                                        val source = listState.layoutInfo.visibleItemsInfo
+                                                            .firstOrNull { it.key == entry.entryId }
+                                                            ?: return@detectDragGesturesAfterLongPress
+                                                        val center = source.offset + source.size / 2f + dragOffsetPx
+                                                        val closest = listState.layoutInfo.visibleItemsInfo
+                                                            .filter { info -> pending.any { it.entryId == info.key } }
+                                                            .minByOrNull { info ->
+                                                                kotlin.math.abs(center - (info.offset + info.size / 2f))
+                                                            }
+                                                        if (closest != null) {
+                                                            dragTargetIndex = pending.indexOfFirst { it.entryId == closest.key }
+                                                        }
+                                                    },
+                                                    onDragEnd = {
+                                                        val sourceIndex = pending.indexOfFirst { it.entryId == entry.entryId }
+                                                        val newIndex = dragTargetIndex
+                                                        val version = dragExpectedVersion
+                                                        if (sourceIndex >= 0 && newIndex >= 0 && sourceIndex != newIndex && version != null) {
+                                                            previewOrder = pending.toMutableList().apply {
+                                                                add(newIndex, removeAt(sourceIndex))
+                                                            }
+                                                            onMoveEntry(entry.entryId, newIndex + 1, version)
+                                                        }
+                                                        draggingEntryId = null
+                                                        dragOffsetPx = 0f
+                                                        dragTargetIndex = -1
+                                                        dragExpectedVersion = null
+                                                    },
+                                                    onDragCancel = {
+                                                        draggingEntryId = null
+                                                        dragOffsetPx = 0f
+                                                        dragTargetIndex = -1
+                                                        dragExpectedVersion = null
+                                                    },
+                                                )
+                                            },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_grip_vertical_outline),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                            Text(
+                                                text = "${pending.indexOfFirst { it.entryId == entry.entryId } + 1}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    }
+                                    TrackArtwork(
+                                        imageUrl = entry.track.thumbnailUrl,
+                                        modifier = Modifier.size(56.dp),
                                     )
+                                }
+                            },
+                            supportingContent = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(formatDuration(entry.track.durationMilliseconds))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        FavoriteTrackButton(
+                                            track = entry.track,
+                                            checked = isFavorite(entry.track),
+                                            enabled = !favoritesBusy,
+                                            onToggle = onToggleFavorite,
+                                        )
+                                        IconButton(
+                                            onClick = { onRemoveEntry(entry.entryId) },
+                                            enabled = !ui.isMutating,
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline),
+                                                contentDescription = "Usuń z kolejki",
+                                                tint = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
+                                    }
                                 }
                             },
                         ) {
                             Text(
-                                "${entry.position}. ${entry.track.title}",
+                                entry.track.title,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -334,6 +509,32 @@ fun PlayerScreen(
                 onDismiss = onPickerDismiss,
             )
         }
+        if (confirmStop) {
+            AlertDialog(
+                onDismissRequest = { confirmStop = false },
+                title = { Text("Zatrzymać odtwarzanie?") },
+                text = { Text("Utwór zostanie przerwany, a bot opuści kanał głosowy.") },
+                confirmButton = {
+                    TextButton(onClick = { confirmStop = false; onStop() }, enabled = !ui.isMutating) {
+                        Text("Zatrzymaj", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = { TextButton(onClick = { confirmStop = false }) { Text("Anuluj") } },
+            )
+        }
+        if (confirmClear) {
+            AlertDialog(
+                onDismissRequest = { confirmClear = false },
+                title = { Text("Wyczyścić kolejkę?") },
+                text = { Text("Wszystkie oczekujące utwory zostaną usunięte. Aktualny utwór będzie grał dalej.") },
+                confirmButton = {
+                    TextButton(onClick = { confirmClear = false; onClearQueue() }, enabled = !ui.isMutating) {
+                        Text("Wyczyść", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Anuluj") } },
+            )
+        }
     }
 }
 
@@ -343,6 +544,9 @@ private fun NowPlayingCard(
     isMutating: Boolean,
     onSkip: () -> Unit,
     onStop: () -> Unit,
+    isFavorite: (TrackResponse) -> Boolean,
+    onToggleFavorite: (TrackResponse) -> Unit,
+    favoritesBusy: Boolean,
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,
 ) {
@@ -384,16 +588,7 @@ private fun NowPlayingCard(
                 label = "nowPlaying",
             ) { slide ->
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    TrackArtwork(
-                        imageUrl = slide.thumbnailUrl,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f),
-                        shape = RoundedCornerShape(12.dp),
-                        brokenIconSize = 48.dp,
-                        showMissingLabel = true,
-                        backgroundColor = Color.Black,
-                    )
+                    NowPlayingArtwork(slide)
 
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
@@ -453,6 +648,7 @@ private fun NowPlayingCard(
                     Icon(
                         painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_stop_outline),
                         contentDescription = "Zatrzymaj",
+                        tint = MaterialTheme.colorScheme.error,
                     )
                 }
                 FilledIconButton(
@@ -493,8 +689,147 @@ private fun NowPlayingCard(
                         },
                     )
                 }
+                queue?.nowPlaying?.let { track ->
+                    FavoriteTrackButton(
+                        track = track,
+                        checked = isFavorite(track),
+                        enabled = !favoritesBusy,
+                        onToggle = onToggleFavorite,
+                    )
+                }
             }
         }
+    }
+}
+@Composable
+private fun NowPlayingArtwork(slide: NowPlayingSlide) {
+    val accent = remember(slide.artworkAccentColor) {
+        slide.artworkAccentColor
+            ?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) }
+            ?.let { Color(0xFF000000L or it.substring(1).toLong(16)) }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (slide.hasTrack && slide.thumbnailUrl != null) {
+            if (accent != null) {
+                AccentArtworkGlow(
+                    accent = accent,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .align(Alignment.Center),
+                )
+            } else {
+                ImageArtworkGlow(
+                    imageUrl = slide.thumbnailUrl,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .align(Alignment.Center),
+                )
+            }
+        }
+
+        TrackArtwork(
+            imageUrl = slide.thumbnailUrl,
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(12.dp),
+            brokenIconSize = 48.dp,
+            showMissingLabel = true,
+            backgroundColor = Color.Black,
+        )
+    }
+}
+
+@Composable
+private fun AccentArtworkGlow(
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        // Główny ambient wychodzący poza artwork ze wszystkich stron.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 14.dp)
+                .blur(
+                    radius = 44.dp,
+                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                )
+                .background(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.00f to accent.copy(alpha = 0.42f),
+                            0.42f to accent.copy(alpha = 0.26f),
+                            0.72f to accent.copy(alpha = 0.10f),
+                            1.00f to Color.Transparent,
+                        ),
+                    ),
+                ),
+        )
+
+        // Lekko mocniejsze światło w dolnej połowie.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.82f)
+                .fillMaxHeight(0.62f)
+                .align(Alignment.BottomCenter)
+                .offset(y = 12.dp)
+                .blur(
+                    radius = 34.dp,
+                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                )
+                .background(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.00f to accent.copy(alpha = 0.38f),
+                            0.55f to accent.copy(alpha = 0.16f),
+                            1.00f to Color.Transparent,
+                        ),
+                    ),
+                ),
+        )
+    }
+}
+
+@Composable
+private fun ImageArtworkGlow(
+    imageUrl: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 18.dp, vertical = 12.dp)
+                .blur(
+                    radius = 46.dp,
+                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                )
+                .alpha(0.40f),
+        )
+
+        // Druga, słabsza warstwa daje bardziej miękkie wygaszenie.
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxWidth(0.88f)
+                .fillMaxHeight(0.78f)
+                .align(Alignment.Center)
+                .blur(
+                    radius = 60.dp,
+                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                )
+                .alpha(0.18f),
+        )
     }
 }
 
@@ -520,7 +855,7 @@ private fun EmptyQueueCard() {
             )
             Text("Kolejka jest pusta", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Użyj przycisku +, aby dodać utwory.",
+                "Użyj przycisku wyszukiwania, aby dodać utwory.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

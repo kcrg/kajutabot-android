@@ -19,6 +19,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,7 +32,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
 import com.tryniecki.kajutabot.ui.theme.KbMotion
 import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisX
@@ -59,14 +62,18 @@ fun shouldShowMiniPlayer(
 /**
  * Compact global player bar docked directly above the bottom NavigationBar.
  *
- * Presentational only: it reads the shared [PlayerUiState] and forwards Skip
- * to [PlayerViewModel.skip]. No own polling, no own queue fetch — progress
+ * Presentational only: it reads the shared player and favorites state and forwards actions.
+ * No own polling or queue fetch — progress
  * reuses [rememberPlaybackProgress]. Fixed height, single-line title.
  */
 @Composable
 fun MiniPlayer(
     slide: NowPlayingSlide,
+    track: TrackResponse,
     isMutating: Boolean,
+    isFavorite: Boolean,
+    favoritesBusy: Boolean,
+    onToggleFavorite: (TrackResponse) -> Unit,
     onOpenPlayer: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
@@ -158,6 +165,12 @@ fun MiniPlayer(
                     }
                 }
 
+                FavoriteTrackButton(
+                    track = track,
+                    checked = isFavorite,
+                    enabled = !favoritesBusy,
+                    onToggle = onToggleFavorite,
+                )
                 IconButton(
                     onClick = onSkip,
                     enabled = !isMutating,
@@ -168,6 +181,7 @@ fun MiniPlayer(
                                 .tabler_ic_player_skip_forward_outline,
                         ),
                         contentDescription = "Pomiń utwór",
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
             }

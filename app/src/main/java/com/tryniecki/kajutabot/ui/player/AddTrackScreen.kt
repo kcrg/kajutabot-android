@@ -37,7 +37,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
+import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 
 /**
  * Full-screen modal "add track" page shown above the player.
@@ -52,6 +54,9 @@ fun AddTrackScreen(
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onResultClick: (SearchItemResponse) -> Unit,
+    isFavorite: (TrackResponse) -> Boolean,
+    onToggleFavorite: (TrackResponse) -> Unit,
+    favoritesBusy: Boolean,
     onDismissMessage: () -> Unit,
 ) {
     val trimmed = ui.searchQuery.trim()
@@ -181,6 +186,14 @@ fun AddTrackScreen(
                                     )
                                 },
                                 supportingContent = { Text(item.metricCaption) },
+                                trailingContent = {
+                                    FavoriteTrackButton(
+                                        track = item.track,
+                                        checked = isFavorite(item.track),
+                                        enabled = !favoritesBusy,
+                                        onToggle = onToggleFavorite,
+                                    )
+                                },
                             ) {
                                 Text(
                                     item.track.title,

@@ -96,6 +96,7 @@ class PlayerStateProjectionTest {
         assertEquals(true, state?.isMutating)
         assertEquals(true, state?.slide?.hasTrack)
         assertEquals("Track", state?.slide?.title)
+        assertEquals("Track", state?.track?.title)
     }
 
     @Test

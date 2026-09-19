@@ -101,6 +101,7 @@ data class NowPlayingSlide(
     val title: String,
     val hint: String,
     val thumbnailUrl: String?,
+    val artworkAccentColor: String?,
     val durationMs: Long,
     val startedAt: String?,
 )
@@ -118,6 +119,7 @@ fun nowPlayingSlide(queue: QueueSnapshotResponse?): NowPlayingSlide {
                 "Kolejka oczekuje na utwory"
             },
             thumbnailUrl = null,
+            artworkAccentColor = null,
             durationMs = 0,
             startedAt = null,
         )
@@ -128,6 +130,7 @@ fun nowPlayingSlide(queue: QueueSnapshotResponse?): NowPlayingSlide {
         title = track.title,
         hint = formatDuration(track.durationMilliseconds),
         thumbnailUrl = track.thumbnailUrl,
+        artworkAccentColor = track.artworkAccentColor,
         durationMs = track.durationMilliseconds,
         startedAt = queue.nowPlayingStartedAt,
     )

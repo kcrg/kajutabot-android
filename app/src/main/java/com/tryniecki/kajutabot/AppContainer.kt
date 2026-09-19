@@ -13,6 +13,7 @@ import com.tryniecki.kajutabot.auth.SecureSessionStore
 import com.tryniecki.kajutabot.auth.SessionManager
 import com.tryniecki.kajutabot.auth.SessionStore
 import com.tryniecki.kajutabot.prefs.GuildSelectionStore
+import com.tryniecki.kajutabot.prefs.FavoritesPreferences
 
 /**
  * Minimal process-lifetime composition root owned by KajutaBotApplication.
@@ -30,6 +31,7 @@ class AppContainer(context: Context) {
     val pendingStore: PendingOAuthStore = PendingOAuthStore(appContext)
     val pendingStorage: OAuthPendingStorage = PendingOAuthStoreAdapter(pendingStore)
     val selectionStore = GuildSelectionStore(appContext)
+    val favoritesPreferences = FavoritesPreferences(appContext)
     val pkceGenerator = PkceGenerator()
 
     val authApi: KajutaBotAuthApi =
