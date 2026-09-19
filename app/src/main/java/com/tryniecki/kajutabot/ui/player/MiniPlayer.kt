@@ -73,24 +73,36 @@ fun MiniPlayer(
 ) {
     val motion = MaterialTheme.motionScheme
 
+    val progress = rememberPlaybackProgress(
+        playbackKey = slide.identity,
+        startedAtRaw = slide.startedAt,
+        durationMs = slide.durationMs,
+    )
+
+    val animatedFraction by animateFloatAsState(
+        targetValue = progress.fraction,
+        animationSpec = tween(
+            durationMillis = PROGRESS_TICK_MS.toInt(),
+            easing = LinearEasing,
+        ),
+        label = "miniProgress",
+    )
+
     Surface(
         tonalElevation = 2.dp,
         modifier = modifier
             .fillMaxWidth()
             .height(MINI_PLAYER_HEIGHT_DP.dp),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            HorizontalDivider()
+        Column(
+            modifier = Modifier.fillMaxSize(),
+        ) {
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Track body: artwork + title + time + thin progress, animated
-                // as one unit on playback identity with the same shared-axis
-                // language as the full player, only faster and subtler.
-                // The Skip button beside it never animates and never navigates.
                 AnimatedContent(
                     targetState = slide,
                     modifier = Modifier
@@ -105,73 +117,67 @@ fun MiniPlayer(
                     },
                     label = "miniPlayer",
                 ) { current ->
-                    val progress = rememberPlaybackProgress(
-                        playbackKey = current.identity,
-                        startedAtRaw = current.startedAt,
-                        durationMs = current.durationMs,
-                    )
-                    val animatedFraction by animateFloatAsState(
-                        targetValue = progress.fraction,
-                        animationSpec = tween(
-                            durationMillis = PROGRESS_TICK_MS.toInt(),
-                            easing = LinearEasing,
-                        ),
-                        label = "miniProgress",
-                    )
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .clickable(
-                                    role = Role.Button,
-                                    onClickLabel = "Otwórz odtwarzacz",
-                                    onClick = onOpenPlayer,
-                                )
-                                .padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TrackArtwork(
-                                imageUrl = current.thumbnailUrl,
-                                modifier = Modifier.size(48.dp),
-                                brokenIconSize = 20.dp,
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                role = Role.Button,
+                                onClickLabel = "Otwórz odtwarzacz",
+                                onClick = onOpenPlayer,
                             )
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = current.title,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = "${formatPlaybackElapsed(progress.positionMs)} / " +
-                                        formatPlaybackTotal(current.durationMs),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                        LinearProgressIndicator(
-                            progress = { animatedFraction },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(3.dp),
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TrackArtwork(
+                            imageUrl = current.thumbnailUrl,
+                            modifier = Modifier.size(48.dp),
+                            brokenIconSize = 20.dp,
                         )
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = current.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+
+                            Text(
+                                text = "${formatPlaybackElapsed(progress.positionMs)} / " +
+                                        formatPlaybackTotal(current.durationMs),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
+
                 IconButton(
                     onClick = onSkip,
                     enabled = !isMutating,
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.kb_ic_player_skip_forward),
+                        painter = painterResource(
+                            com.composables.icons.tabler.outline.R.drawable
+                                .tabler_ic_player_skip_forward_outline,
+                        ),
                         contentDescription = "Pomiń utwór",
                     )
                 }
             }
+
+            LinearProgressIndicator(
+                progress = { animatedFraction },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp),
+            )
         }
     }
 }

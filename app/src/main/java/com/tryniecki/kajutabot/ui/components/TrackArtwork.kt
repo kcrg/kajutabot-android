@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,7 +87,7 @@ private fun BrokenArtwork(
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
     ) {
         Icon(
-            painter = painterResource(R.drawable.kb_ic_photo_off),
+            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_file_music_outline),
             contentDescription = null,
             modifier = Modifier.size(iconSize),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -132,7 +133,7 @@ fun GuildAvatar(
             )
         } else {
             Icon(
-                painter = painterResource(R.drawable.kb_ic_server),
+                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_server_outline),
                 contentDescription = null,
                 modifier = Modifier.size(iconSize),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,

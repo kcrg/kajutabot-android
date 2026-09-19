@@ -17,6 +17,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -64,7 +65,7 @@ fun FavoritesScreen(
     onDismiss: () -> Unit,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Ulubione") }) },
+        //topBar = { TopAppBar(title = { Text("Ulubione") }) },
     ) { innerPadding ->
         val motion = MaterialTheme.motionScheme
         // Gentle fade between the initial loading state and content only —
@@ -136,7 +137,7 @@ fun FavoritesScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.kb_ic_heart),
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_heart_outline),
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.primary,
@@ -175,27 +176,42 @@ fun FavoritesScreen(
                         ),
                     ) {
                         ListItem(
+                            verticalAlignment = Alignment.CenterVertically,
                             leadingContent = {
                                 TrackArtwork(
                                     imageUrl = fav.thumbnailUrl,
-                                    modifier = Modifier.size(56.dp),
+                                    modifier = Modifier.size(64.dp),
                                 )
                             },
-                            supportingContent = { Text(fav.contentUrl) },
                             trailingContent = {
                                 Row {
-                                    TextButton(
+                                    IconButton(
                                         onClick = { onPlaySingle(fav.contentUrl) },
                                         enabled = !ui.isMutating,
-                                    ) { Text("Graj") }
-                                    TextButton(
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(
+                                                com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline,
+                                            ),
+                                            contentDescription = "Dodaj do kolejki",
+                                        )
+                                    }
+
+                                    IconButton(
                                         onClick = { onDelete(fav.contentUrl) },
                                         enabled = !ui.isMutating,
-                                    ) { Text("Usuń") }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(
+                                                com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline,
+                                            ),
+                                            contentDescription = "Usuń z ulubionych",
+                                        )
+                                    }
                                 }
                             },
                         ) {
-                            Text(fav.title)
+                            Text(fav.title, maxLines = 2)
                         }
                     }
                 }

@@ -41,7 +41,7 @@ fun MyAudioScreen() {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Moje Audio") }) },
+        //topBar = { TopAppBar(title = { Text("Moje Audio") }) },
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -55,7 +55,7 @@ fun MyAudioScreen() {
                     text = { Text("Przesłane") },
                     icon = {
                         Icon(
-                            painter = painterResource(R.drawable.kb_ic_upload),
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_upload_outline),
                             contentDescription = null,
                         )
                     },
@@ -66,7 +66,7 @@ fun MyAudioScreen() {
                     text = { Text("Jellyfin") },
                     icon = {
                         Icon(
-                            painter = painterResource(R.drawable.kb_ic_server),
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_server_outline),
                             contentDescription = null,
                         )
                     },
@@ -108,7 +108,7 @@ fun MyAudioScreen() {
                 ) {
                     Icon(
                         painter = painterResource(
-                            if (tab == 0) R.drawable.kb_ic_upload else R.drawable.kb_ic_server,
+                            if (tab == 0) com.composables.icons.tabler.outline.R.drawable.tabler_ic_upload_outline else com.composables.icons.tabler.outline.R.drawable.tabler_ic_server_outline,
                         ),
                         contentDescription = null,
                         modifier = Modifier.size(36.dp),

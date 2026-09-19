@@ -42,7 +42,7 @@ fun LoginScreen(
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(
-                painter = painterResource(R.drawable.kb_ic_music),
+                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_music_outline),
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.primary,

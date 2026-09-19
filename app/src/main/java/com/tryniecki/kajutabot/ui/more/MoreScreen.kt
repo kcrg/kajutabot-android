@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -26,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -43,10 +46,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
@@ -127,7 +134,7 @@ private fun MoreRootScreen(
     var logoutError by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Więcej") }) },
+        //topBar = { TopAppBar(title = { Text("Więcej") }) },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -143,6 +150,7 @@ private fun MoreRootScreen(
 
             item {
                 val user = (authState as? AuthState.SignedIn)?.user
+
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -152,35 +160,55 @@ private fun MoreRootScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            user?.displayName ?: "—",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            if (user != null) "@${user.username}" else "Niezalogowany",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (logoutError != null) {
-                            Text(
-                                logoutError.orEmpty(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
+                            AsyncImage(
+                                model = user?.avatarUrl,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(MaterialTheme.shapes.medium),
+                                contentScale = ContentScale.Crop,
+                            )
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                Text(
+                                    text = user?.displayName ?: "-",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+
+                                Text(
+                                    text = if (user != null) {
+                                        "@${user.username}"
+                                    } else {
+                                        "Niezalogowany"
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+
                             Button(
                                 onClick = {
                                     isLoggingOut = true
                                     logoutError = null
+
                                     appViewModel.logout { result ->
                                         isLoggingOut = false
+
                                         if (result is LogoutResult.NeedsRetry) {
                                             logoutError = result.message
                                         }
@@ -190,24 +218,44 @@ private fun MoreRootScreen(
                             ) {
                                 if (isLoggingOut) {
                                     CircularProgressIndicator(
-                                        modifier = Modifier.padding(end = 8.dp),
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
                                     )
+                                } else {
+                                    Text("Wyloguj")
                                 }
-                                Text("Wyloguj")
                             }
-                            if (logoutError != null) {
+                        }
+
+                        if (logoutError != null) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = logoutError.orEmpty(),
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+
                                 OutlinedButton(
                                     onClick = {
                                         logoutError = null
                                         isLoggingOut = true
+
                                         appViewModel.logout { result ->
                                             isLoggingOut = false
+
                                             if (result is LogoutResult.NeedsRetry) {
                                                 logoutError = result.message
                                             }
                                         }
                                     },
-                                ) { Text("Ponów") }
+                                ) {
+                                    Text("Ponów")
+                                }
                             }
                         }
                     }
@@ -215,7 +263,7 @@ private fun MoreRootScreen(
             }
 
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-            item { SectionTitle("Wygląd") }
+            item { SectionTitle("Motyw") }
 
             item {
                 Column(
@@ -224,12 +272,6 @@ private fun MoreRootScreen(
                         .padding(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("Motyw", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Natywny używa kolorów Material You na Androidzie 12+ i trybu systemowego.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         ThemeMode.entries.forEachIndexed { index, mode ->
                             SegmentedButton(
@@ -250,7 +292,7 @@ private fun MoreRootScreen(
 
             item {
                 SettingsRow(
-                    icon = R.drawable.kb_ic_info_circle,
+                    icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_info_circle_outline,
                     title = "Użyte biblioteki",
                     subtitle = "Licencje i komponenty open source",
                     onClick = onOpenLibraries,
@@ -258,7 +300,7 @@ private fun MoreRootScreen(
             }
             item {
                 SettingsRow(
-                    icon = R.drawable.kb_ic_mail,
+                    icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_mail_outline,
                     title = "Kontakt",
                     subtitle = "Kacper Tryniecki",
                     onClick = onOpenContact,
@@ -280,9 +322,15 @@ private fun LibrariesScreen(onBack: () -> Unit) {
         ) {
             items(LIBRARIES, key = { it.name }) { library ->
                 ListItem(
-                    headlineContent = { Text(library.name) },
-                    supportingContent = { Text(library.description) },
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier,
+                    leadingContent = null,
                     trailingContent = { Text(library.license) },
+                    overlineContent = null,
+                    supportingContent = { Text(library.description) },
+                    colors = ListItemDefaults.colors(),
+                    elevation = ListItemDefaults.elevation(ListItemDefaults.Elevation),
+                    content = { Text(library.name) },
                 )
                 if (library != LIBRARIES.last()) HorizontalDivider()
             }
@@ -295,8 +343,15 @@ private fun ContactScreen(container: AppContainer, onBack: () -> Unit) {
     Scaffold(topBar = { BackTopBar(title = "Kontakt", onBack = onBack) }) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             ListItem(
-                headlineContent = { Text("Kacper Tryniecki") },
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier,
+                leadingContent = null,
+                trailingContent = null,
+                overlineContent = null,
                 supportingContent = { Text("Autor KajutaBot") },
+                colors = ListItemDefaults.colors(),
+                elevation = ListItemDefaults.elevation(ListItemDefaults.Elevation),
+                content = { Text("Kacper Tryniecki") },
             )
             HorizontalDivider()
             ContactLinks()
@@ -310,13 +365,13 @@ private fun ContactLinks() {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val colors = rememberCustomTabColors()
     SettingsRow(
-        icon = R.drawable.kb_ic_mail,
+        icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_mail_outline,
         title = "kacper@tryniecki.com",
         subtitle = "E-mail",
         onClick = { uriHandler.openUri("mailto:kacper@tryniecki.com") },
     )
     SettingsRow(
-        icon = R.drawable.kb_ic_brand_github,
+        icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_github_outline,
         title = "github.com/kcrg",
         subtitle = "GitHub",
         onClick = {
@@ -332,7 +387,7 @@ private fun BackTopBar(title: String, onBack: () -> Unit) {
         title = { Text(title) },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(painter = painterResource(R.drawable.kb_ic_arrow_left), contentDescription = "Wstecz")
+                Icon(painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_left_outline), contentDescription = "Wstecz")
             }
         },
     )
@@ -352,23 +407,27 @@ private fun SectionTitle(text: String) {
 @Composable
 private fun SettingsRow(icon: Int, title: String, subtitle: String, onClick: () -> Unit) {
     ListItem(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
-            Icon(
-                painter = painterResource(icon),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        headlineContent = { Text(title) },
-        supportingContent = { Text(subtitle) },
+                Icon(
+                    painter = painterResource(icon),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
         trailingContent = {
-            Icon(
-                painter = painterResource(R.drawable.kb_ic_chevron_right),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
+                Icon(
+                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_chevron_right_outline),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+        overlineContent = null,
+        supportingContent = { Text(subtitle) },
+        colors = ListItemDefaults.colors(),
+        elevation = ListItemDefaults.elevation(ListItemDefaults.Elevation),
+        content = { Text(title) },
     )
 }
 

@@ -65,7 +65,7 @@ fun AddTrackScreen(
                     navigationIcon = {
                         IconButton(onClick = onClose) {
                             Icon(
-                                painter = painterResource(R.drawable.kb_ic_x),
+                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_x_outline),
                                 contentDescription = "Zamknij",
                             )
                         }
@@ -91,7 +91,7 @@ fun AddTrackScreen(
                         singleLine = true,
                         leadingIcon = {
                             Icon(
-                                painter = painterResource(R.drawable.kb_ic_search),
+                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
                                 contentDescription = null,
                             )
                         },
@@ -173,10 +173,11 @@ fun AddTrackScreen(
                                 ),
                         ) {
                             ListItem(
+                                verticalAlignment = Alignment.CenterVertically,
                                 leadingContent = {
                                     TrackArtwork(
                                         imageUrl = item.track.thumbnailUrl,
-                                        modifier = Modifier.size(72.dp),
+                                        modifier = Modifier.size(64.dp),
                                     )
                                 },
                                 supportingContent = { Text(item.metricCaption) },

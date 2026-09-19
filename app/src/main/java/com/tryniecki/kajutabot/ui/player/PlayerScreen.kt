@@ -32,6 +32,7 @@ import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
@@ -120,7 +121,7 @@ fun PlayerRoute(
             onChannelSelect = viewModel::selectChannel,
             onSkip = viewModel::skip,
             onStop = viewModel::stop,
-            onRepeatToggle = { viewModel.setRepeat(!(ui.queue?.isRepeatEnabled == true)) },
+            onRepeatToggle = { viewModel.setRepeat(ui.queue?.isRepeatEnabled != true) },
             onRadioToggle = viewModel::toggleRadio,
             onRemoveEntry = viewModel::removeEntry,
             onClearQueue = viewModel::clearQueue,
@@ -167,11 +168,11 @@ fun PlayerScreen(
 ) {
     val motion = MaterialTheme.motionScheme
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Odtwarzacz") }) },
+        //topBar = { TopAppBar(title = { Text("Odtwarzacz") }) },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddTrackOpen) {
                 Icon(
-                    painter = painterResource(R.drawable.kb_ic_plus),
+                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
                     contentDescription = "Dodaj utwór",
                 )
             }
@@ -289,18 +290,26 @@ fun PlayerScreen(
                         ),
                     ) {
                         ListItem(
+                            verticalAlignment = Alignment.CenterVertically,
                             leadingContent = {
                                 TrackArtwork(
                                     imageUrl = entry.track.thumbnailUrl,
-                                    modifier = Modifier.size(56.dp),
+                                    modifier = Modifier.size(64.dp),
                                 )
                             },
                             supportingContent = { Text(formatDuration(entry.track.durationMilliseconds)) },
                             trailingContent = {
-                                TextButton(
+                                IconButton(
                                     onClick = { onRemoveEntry(entry.entryId) },
                                     enabled = !ui.isMutating,
-                                ) { Text("Usuń") }
+                                ) {
+                                    Icon(
+                                        painter = painterResource(
+                                            com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline,
+                                        ),
+                                        contentDescription = "Usuń z ulubionych",
+                                    )
+                                }
                             },
                         ) {
                             Text(
@@ -403,11 +412,6 @@ private fun NowPlayingCard(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(
-                            text = slide.hint,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
 
                     if (slide.hasTrack) {
@@ -447,7 +451,7 @@ private fun NowPlayingCard(
                     enabled = !isMutating && queue?.nowPlaying != null,
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.kb_ic_player_stop),
+                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_stop_outline),
                         contentDescription = "Zatrzymaj",
                     )
                 }
@@ -457,7 +461,7 @@ private fun NowPlayingCard(
                     modifier = Modifier.size(56.dp),
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.kb_ic_player_skip_forward),
+                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_skip_forward_outline),
                         contentDescription = "Pomiń",
                     )
                 }
@@ -467,7 +471,7 @@ private fun NowPlayingCard(
                     enabled = !isMutating && queue != null,
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.kb_ic_repeat),
+                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_repeat_outline),
                         contentDescription = if (repeatEnabled) {
                             "Wyłącz powtarzanie"
                         } else {
@@ -481,7 +485,7 @@ private fun NowPlayingCard(
                     enabled = !isMutating && queue != null,
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.kb_ic_radio),
+                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline),
                         contentDescription = if (radioEnabled) {
                             "Wyłącz radio"
                         } else {
@@ -509,7 +513,7 @@ private fun EmptyQueueCard() {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(
-                painter = painterResource(R.drawable.kb_ic_playlist),
+                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_list_outline),
                 contentDescription = null,
                 modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
