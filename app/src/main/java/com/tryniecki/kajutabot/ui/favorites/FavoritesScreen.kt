@@ -1,48 +1,52 @@
 package com.tryniecki.kajutabot.ui.favorites
 
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.tryniecki.kajutabot.AppContainer
-import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
-import com.tryniecki.kajutabot.ui.theme.fadeThrough
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
-fun FavoritesRoute(
-    container: AppContainer,
-    viewModel: FavoritesViewModel = viewModel(factory = FavoritesViewModel.Factory(container)),
-) {
+fun FavoritesRoute(viewModel: FavoritesViewModel) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     FavoritesScreen(
         ui = ui,
@@ -50,11 +54,12 @@ fun FavoritesRoute(
         onDelete = viewModel::delete,
         onQueueAll = viewModel::queueAll,
         onPlaySingle = viewModel::playSingle,
+        onAddByUrl = viewModel::addByUrl,
+        onShuffleChange = viewModel::setShuffle,
         onDismiss = viewModel::dismissMessage,
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesScreen(
     ui: FavoritesUiState,
@@ -62,35 +67,15 @@ fun FavoritesScreen(
     onDelete: (String) -> Unit,
     onQueueAll: () -> Unit,
     onPlaySingle: (String) -> Unit,
+    onAddByUrl: (String) -> Unit,
+    onShuffleChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    Scaffold(
-        //topBar = { TopAppBar(title = { Text("Ulubione") }) },
-    ) { innerPadding ->
-        val motion = MaterialTheme.motionScheme
-        // Gentle fade between the initial loading state and content only —
-        // steady list updates (delete/refresh with items present) don't animate.
-        AnimatedContent(
-            targetState = ui.isLoading && ui.favorites.isEmpty(),
-            transitionSpec = {
-                fadeThrough(
-                    enterSpec = motion.defaultEffectsSpec(),
-                    exitSpec = motion.fastEffectsSpec(),
-                )
-            },
-            label = "favoritesContent",
-        ) { loading ->
-        if (loading) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                CircularProgressIndicator()
-            }
-        } else {
+    var addDialogOpen by remember { mutableStateOf(false) }
+    var newUrl by remember { mutableStateOf("") }
+    val openUrl = rememberOpenCustomTab()
+
+    Scaffold { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -101,38 +86,47 @@ fun FavoritesScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Ulubione (${ui.favorites.size})", style = MaterialTheme.typography.titleLarge)
+                    FilledTonalIconButton(onClick = { addDialogOpen = true }, enabled = !ui.isMutating) {
+                        Icon(
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_plus_outline),
+                            contentDescription = "Dodaj ulubiony przez link",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
             if (ui.error != null || ui.info != null) {
                 item {
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = if (ui.error != null) {
-                                MaterialTheme.colorScheme.errorContainer
-                            } else {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            },
+                            containerColor = if (ui.error != null) MaterialTheme.colorScheme.errorContainer
+                            else MaterialTheme.colorScheme.secondaryContainer,
                         ),
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                ui.error ?: ui.info.orEmpty(),
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(ui.error ?: ui.info.orEmpty(), modifier = Modifier.weight(1f))
                             TextButton(onClick = onDismiss) { Text("OK") }
                         }
                     }
                 }
             }
-
-            if (ui.favorites.isEmpty()) {
+            if (ui.isLoading && ui.favorites.isEmpty()) {
+                item {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else if (ui.favorites.isEmpty()) {
                 item {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -143,11 +137,7 @@ fun FavoritesScreen(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                         Text("Brak ulubionych", style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            "Zapisane utwory pojawią się tutaj.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Text("Zapisz utwór sercem lub dodaj go przez link.")
                         OutlinedButton(onClick = onRefresh) { Text("Odśwież") }
                     }
                 }
@@ -155,12 +145,21 @@ fun FavoritesScreen(
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "Zapisane (${ui.favorites.size})",
-                            style = MaterialTheme.typography.titleMedium,
+                        FilterChip(
+                            selected = ui.shuffle,
+                            enabled = !ui.isMutating,
+                            onClick = { onShuffleChange(!ui.shuffle) },
+                            label = { Text("Losowo") },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrows_shuffle_outline),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            },
                         )
                         Button(onClick = onQueueAll, enabled = !ui.isMutating) {
                             Text("Dodaj wszystkie")
@@ -168,56 +167,84 @@ fun FavoritesScreen(
                     }
                 }
                 items(ui.favorites, key = { it.contentUrl }) { fav ->
-                    Card(
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = motion.fastEffectsSpec(),
-                            fadeOutSpec = motion.fastEffectsSpec(),
-                            placementSpec = motion.fastSpatialSpec(),
-                        ),
-                    ) {
+                    Card {
                         ListItem(
-                            verticalAlignment = Alignment.CenterVertically,
                             leadingContent = {
                                 TrackArtwork(
                                     imageUrl = fav.thumbnailUrl,
+                                    fallbackImageUrl = favoriteArtworkFallbackUrl(fav.contentUrl),
                                     modifier = Modifier.size(64.dp),
                                 )
                             },
+                            supportingContent = {
+                                val date = runCatching {
+                                    OffsetDateTime.parse(fav.addedAt).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
+                                        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                                }.getOrDefault(fav.addedAt)
+                                Text("Zapisano $date")
+                            },
                             trailingContent = {
-                                Row {
-                                    IconButton(
-                                        onClick = { onPlaySingle(fav.contentUrl) },
-                                        enabled = !ui.isMutating,
-                                    ) {
+                                Row(
+                                    modifier = Modifier.height(64.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    IconButton(onClick = { onPlaySingle(fav.contentUrl) }, enabled = !ui.isMutating) {
                                         Icon(
-                                            painter = painterResource(
-                                                com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline,
-                                            ),
+                                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
                                             contentDescription = "Dodaj do kolejki",
+                                            tint = MaterialTheme.colorScheme.primary,
                                         )
                                     }
-
-                                    IconButton(
-                                        onClick = { onDelete(fav.contentUrl) },
-                                        enabled = !ui.isMutating,
-                                    ) {
+                                    IconButton(onClick = { onDelete(fav.contentUrl) }, enabled = !ui.isMutating) {
                                         Icon(
-                                            painter = painterResource(
-                                                com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline,
-                                            ),
+                                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline),
                                             contentDescription = "Usuń z ulubionych",
+                                            tint = MaterialTheme.colorScheme.error,
                                         )
                                     }
                                 }
                             },
                         ) {
-                            Text(fav.title, maxLines = 2)
+                            val canOpen = fav.contentUrl.startsWith("https://") || fav.contentUrl.startsWith("http://")
+                            Text(
+                                text = fav.title.ifBlank { fav.contentUrl },
+                                modifier = if (canOpen) Modifier.clickable { openUrl(fav.contentUrl) } else Modifier,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
                         }
                     }
                 }
             }
         }
-        }
-        }
+    }
+
+    if (addDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { addDialogOpen = false },
+            title = { Text("Dodaj ulubiony przez link") },
+            text = {
+                OutlinedTextField(
+                    value = newUrl,
+                    onValueChange = { newUrl = it },
+                    label = { Text("Adres utworu") },
+                    placeholder = { Text("https://www.youtube.com/watch?v=…") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = newUrl.isNotBlank() && !ui.isMutating,
+                    onClick = {
+                        onAddByUrl(newUrl)
+                        newUrl = ""
+                        addDialogOpen = false
+                    },
+                ) { Text("Zapisz") }
+            },
+            dismissButton = { TextButton(onClick = { addDialogOpen = false }) { Text("Anuluj") } },
+        )
     }
 }
