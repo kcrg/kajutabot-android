@@ -1,12 +1,6 @@
 package com.tryniecki.kajutabot.ui.player
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,107 +77,68 @@ import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
-import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
-import com.tryniecki.kajutabot.ui.theme.KbMotion
 import com.tryniecki.kajutabot.ui.theme.fadeThrough
 import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisX
 import coil3.compose.AsyncImage
-import kotlinx.coroutines.delay
-
-private const val ADD_TRACK_CLEAR_DELAY_MS = KbMotion.MODAL_CLEAR_DELAY_MS
 
 @Composable
 fun PlayerRoute(
-    appViewModel: AppViewModel,
     viewModel: PlayerViewModel,
     favoritesViewModel: FavoritesViewModel,
+    onAddTrackOpen: () -> Unit,
 ) {
     val ui by viewModel.playerScreenState.collectAsStateWithLifecycle()
-    val addTrackUi by viewModel.addTrackState.collectAsStateWithLifecycle()
-    val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsStateWithLifecycle()
-    val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsStateWithLifecycle()
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
 
-    // Shared URL -> prefill the add-track modal and open it.
-    LaunchedEffect(pendingSharedUrl) {
-        val url = pendingSharedUrl
-        if (url != null) {
-            viewModel.setSearchQuery(url)
-            appViewModel.setAddTrackOpen(true)
-            appViewModel.clearPendingSharedUrl()
-        }
+    PlayerScreen(
+        ui = ui,
+        onPickerOpen = { viewModel.setShowPicker(true) },
+        onPickerDismiss = { viewModel.setShowPicker(false) },
+        onGuildSelect = viewModel::selectGuild,
+        onChannelSelect = viewModel::selectChannel,
+        onSkip = viewModel::skip,
+        onStop = viewModel::stop,
+        onRepeatToggle = { viewModel.setRepeat(ui.queue?.isRepeatEnabled != true) },
+        onRadioToggle = viewModel::toggleRadio,
+        onRemoveEntry = viewModel::removeEntry,
+        onMoveEntry = viewModel::moveEntry,
+        onClearQueue = viewModel::clearQueue,
+        isFavorite = favoritesViewModel::isFavorite,
+        onToggleFavorite = favoritesViewModel::toggle,
+        favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
+        onDismissMessage = viewModel::dismissMessage,
+        onAddTrackOpen = onAddTrackOpen,
+    )
+}
+
+@Composable
+fun AddTrackRoute(
+    viewModel: PlayerViewModel,
+    favoritesViewModel: FavoritesViewModel,
+    onClose: () -> Unit,
+) {
+    val ui by viewModel.addTrackState.collectAsStateWithLifecycle()
+    val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel) {
+        viewModel.trackAdded.collect { onClose() }
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.trackAdded.collect {
-            appViewModel.setAddTrackOpen(false)
-        }
-    }
-
-    BackHandler(enabled = isAddTrackOpen) {
-        appViewModel.setAddTrackOpen(false)
-    }
-
-    // Deferred modal cleanup: clear query/results only after the exit transition
-    // finished, so closing never flashes an empty screen mid-animation.
-    var modalWasOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(isAddTrackOpen) {
-        if (isAddTrackOpen) {
-            modalWasOpen = true
-        } else if (modalWasOpen) {
-            modalWasOpen = false
-            delay(ADD_TRACK_CLEAR_DELAY_MS)
-            viewModel.clearAddTrack()
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        val motion = MaterialTheme.motionScheme
-        PlayerScreen(
-            ui = ui,
-            onPickerOpen = { viewModel.setShowPicker(true) },
-            onPickerDismiss = { viewModel.setShowPicker(false) },
-            onGuildSelect = viewModel::selectGuild,
-            onChannelSelect = viewModel::selectChannel,
-            onSkip = viewModel::skip,
-            onStop = viewModel::stop,
-            onRepeatToggle = { viewModel.setRepeat(ui.queue?.isRepeatEnabled != true) },
-            onRadioToggle = viewModel::toggleRadio,
-            onRemoveEntry = viewModel::removeEntry,
-            onMoveEntry = viewModel::moveEntry,
-            onClearQueue = viewModel::clearQueue,
-            isFavorite = favoritesViewModel::isFavorite,
-            onToggleFavorite = favoritesViewModel::toggle,
-            favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
-            onDismissMessage = viewModel::dismissMessage,
-            onAddTrackOpen = { appViewModel.setAddTrackOpen(true) },
-        )
-        AnimatedVisibility(
-            visible = isAddTrackOpen,
-            enter = slideInVertically(
-                animationSpec = motion.slowSpatialSpec(),
-            ) { it } + fadeIn(motion.defaultEffectsSpec()),
-            exit = slideOutVertically(
-                animationSpec = motion.fastSpatialSpec(),
-            ) { it } + fadeOut(motion.fastEffectsSpec()),
-        ) {
-            AddTrackScreen(
-                ui = addTrackUi,
-                onClose = { appViewModel.setAddTrackOpen(false) },
-                onQueryChange = viewModel::setSearchQuery,
-                onSubmit = viewModel::submitSmartInput,
-                onResultClick = viewModel::enqueueSearchResult,
-                isFavorite = favoritesViewModel::isFavorite,
-                onToggleFavorite = favoritesViewModel::toggle,
-                favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
-                onDismissMessage = viewModel::dismissMessage,
-            )
-        }
-    }
+    AddTrackScreen(
+        ui = ui,
+        onClose = onClose,
+        onQueryChange = viewModel::setSearchQuery,
+        onSubmit = viewModel::submitSmartInput,
+        onResultClick = viewModel::enqueueSearchResult,
+        isFavorite = favoritesViewModel::isFavorite,
+        onToggleFavorite = favoritesViewModel::toggle,
+        favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
+        onDismissMessage = viewModel::dismissMessage,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

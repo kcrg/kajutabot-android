@@ -1,6 +1,5 @@
 package com.tryniecki.kajutabot.ui
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -26,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,6 +39,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavHostController
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
@@ -49,9 +57,12 @@ import com.tryniecki.kajutabot.ui.app.resolveAuthenticatedGate
 import com.tryniecki.kajutabot.ui.auth.LoginScreen
 import com.tryniecki.kajutabot.ui.favorites.FavoritesRoute
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
-import com.tryniecki.kajutabot.ui.more.MoreScreen
+import com.tryniecki.kajutabot.ui.more.ContactScreen
+import com.tryniecki.kajutabot.ui.more.LibrariesScreen
+import com.tryniecki.kajutabot.ui.more.MoreRootScreen
 import com.tryniecki.kajutabot.ui.myaudio.MyAudioScreen
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
+import com.tryniecki.kajutabot.ui.navigation.AppRoute
 import com.tryniecki.kajutabot.ui.onboarding.AccessCheckingScreen
 import com.tryniecki.kajutabot.ui.onboarding.AccessErrorScreen
 import com.tryniecki.kajutabot.ui.onboarding.NoAccessScreen
@@ -62,11 +73,12 @@ import com.tryniecki.kajutabot.ui.player.MiniPlayerState
 import com.tryniecki.kajutabot.ui.player.POLL_INTERVAL_MS
 import com.tryniecki.kajutabot.ui.player.PlayerRoute
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
+import com.tryniecki.kajutabot.ui.player.AddTrackRoute
 import com.tryniecki.kajutabot.ui.player.playbackIdentity
 import com.tryniecki.kajutabot.ui.player.remainingMs
 import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
-import com.tryniecki.kajutabot.ui.theme.fadeThrough
+import com.tryniecki.kajutabot.ui.theme.KbMotion
 import java.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -81,8 +93,6 @@ fun KajutaBotApp(
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
     val sessionIdentity by appViewModel.sessionIdentity.collectAsStateWithLifecycle()
     val isSigningIn by appViewModel.isSigningIn.collectAsStateWithLifecycle()
-    val currentDestination by appViewModel.currentDestination.collectAsStateWithLifecycle()
-    val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsStateWithLifecycle()
     val openCustomTab = rememberOpenCustomTab()
 
     LaunchedEffect(appViewModel) {
@@ -104,16 +114,16 @@ fun KajutaBotApp(
             onRetry = { appViewModel.retryRestore() },
         )
         is AuthState.SignedIn -> sessionIdentity?.let { identity ->
-            CompositionLocalProvider(LocalViewModelStoreOwner provides appViewModel.ownerForSession(identity)) {
-                AuthenticatedShell(
-                    container = container,
-                    appViewModel = appViewModel,
-                    discordUserId = state.user.discordUserId,
-                    currentDestination = currentDestination,
-                    isAddTrackOpen = isAddTrackOpen,
-                    themeMode = themeMode,
-                    onThemeModeChange = onThemeModeChange,
-                )
+            key(identity) {
+                CompositionLocalProvider(LocalViewModelStoreOwner provides appViewModel.ownerForSession(identity)) {
+                    AuthenticatedShell(
+                        container = container,
+                        appViewModel = appViewModel,
+                        discordUserId = state.user.discordUserId,
+                        themeMode = themeMode,
+                        onThemeModeChange = onThemeModeChange,
+                    )
+                }
             }
         } ?: RestoringScreen()
     }
@@ -165,8 +175,6 @@ private fun AuthenticatedShell(
     container: AppContainer,
     appViewModel: AppViewModel,
     discordUserId: String,
-    currentDestination: AppDestination,
-    isAddTrackOpen: Boolean,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
 ) {
@@ -176,6 +184,7 @@ private fun AuthenticatedShell(
     val playerViewModel: PlayerViewModel = viewModel(
         factory = PlayerViewModel.Factory(container),
     )
+    val navController = rememberNavController()
     val entryState by playerViewModel.entryState.collectAsStateWithLifecycle()
     var onboardingCompleted by remember(discordUserId) {
         mutableStateOf(container.onboardingPreferences.isCompletedFor(discordUserId))
@@ -230,6 +239,10 @@ private fun AuthenticatedShell(
         AuthenticatedGate.CONTENT -> Unit
     }
 
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination
+    val currentDestination = currentRoute.topLevelDestination()
+    val isAddTrackOpen = currentRoute?.hasRoute<AppRoute.AddTrack>() == true
     val favoritesViewModel: FavoritesViewModel = viewModel(
         factory = FavoritesViewModel.Factory(container),
     )
@@ -239,8 +252,31 @@ private fun AuthenticatedShell(
     val miniPlayerState by playerViewModel.miniPlayerState.collectAsStateWithLifecycle()
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
     val playerError by playerViewModel.playerError.collectAsStateWithLifecycle()
+    val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val motion = MaterialTheme.motionScheme
+
+    LaunchedEffect(pendingSharedUrl) {
+        val url = pendingSharedUrl ?: return@LaunchedEffect
+        playerViewModel.setSearchQuery(url)
+        if (navController.currentDestination?.hasRoute<AppRoute.AddTrack>() != true) {
+            navController.navigateToTopLevel(AppDestination.PLAYER)
+            navController.navigate(AppRoute.AddTrack) { launchSingleTop = true }
+        }
+        appViewModel.clearPendingSharedUrl()
+    }
+
+    // Clear transient search state after the closing transition, including system Back.
+    var addTrackWasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(isAddTrackOpen) {
+        if (isAddTrackOpen) {
+            addTrackWasOpen = true
+        } else if (addTrackWasOpen) {
+            addTrackWasOpen = false
+            delay(KbMotion.MODAL_CLEAR_DELAY_MS)
+            playerViewModel.clearAddTrack()
+        }
+    }
 
     // Retain the last content for the exit transition: visibility and state
     // go null in the same frame when the track ends.
@@ -301,7 +337,7 @@ private fun AuthenticatedShell(
                                 isFavorite = favoritesViewModel.isFavorite(state.track),
                                 favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
                                 onToggleFavorite = favoritesViewModel::toggle,
-                                onOpenPlayer = { appViewModel.onDestinationChange(AppDestination.PLAYER) },
+                                onOpenPlayer = { navController.navigateToTopLevel(AppDestination.PLAYER) },
                                 onSkip = playerViewModel::skip,
                             )
                         }
@@ -310,7 +346,15 @@ private fun AuthenticatedShell(
                         AppDestination.entries.forEach { destination ->
                             NavigationBarItem(
                                 selected = currentDestination == destination,
-                                onClick = { appViewModel.onDestinationChange(destination) },
+                                onClick = {
+                                    if (currentDestination == destination) {
+                                        if (destination == AppDestination.MORE) {
+                                            navController.popBackStack(AppRoute.More, inclusive = false)
+                                        }
+                                    } else {
+                                        navController.navigateToTopLevel(destination)
+                                    }
+                                },
                                 icon = {
                                     Icon(
                                         painter = painterResource(destination.icon),
@@ -327,41 +371,64 @@ private fun AuthenticatedShell(
     ) { innerPadding ->
         // Keep screens (including the Player FAB) above the bottom NavigationBar.
         // Only the bottom is forwarded: screens own their TopAppBars.
-        androidx.compose.foundation.layout.Box(
+        NavHost(
+            navController = navController,
+            startDestination = AppRoute.Player,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(bottom = innerPadding.calculateBottomPadding()),
         ) {
-        // True fade-through on destination change: the outgoing screen fades
-        // out first, the incoming one follows. Content only, no travel.
-        AnimatedContent(
-            targetState = currentDestination,
-            transitionSpec = {
-                fadeThrough(
-                    enterSpec = motion.defaultEffectsSpec(),
-                    exitSpec = motion.fastEffectsSpec(),
+            composable<AppRoute.Player> {
+                PlayerRoute(
+                    viewModel = playerViewModel,
+                    favoritesViewModel = favoritesViewModel,
+                    onAddTrackOpen = { navController.navigate(AppRoute.AddTrack) },
                 )
-            },
-            label = "destination",
-        ) { destination ->
-        when (destination) {
-            AppDestination.PLAYER -> PlayerRoute(
-                appViewModel = appViewModel,
-                viewModel = playerViewModel,
-                favoritesViewModel = favoritesViewModel,
-            )
-            AppDestination.MY_AUDIO -> MyAudioScreen()
-            AppDestination.FAVORITES -> FavoritesRoute(viewModel = favoritesViewModel)
-            AppDestination.MORE -> MoreScreen(
-                container = container,
-                appViewModel = appViewModel,
-                themeMode = themeMode,
-                onThemeModeChange = onThemeModeChange,
-                onOpenOnboarding = { manualOnboardingRequested = true },
-            )
+            }
+            composable<AppRoute.MyAudio> { MyAudioScreen() }
+            composable<AppRoute.Favorites> { FavoritesRoute(viewModel = favoritesViewModel) }
+            composable<AppRoute.More> {
+                MoreRootScreen(
+                    container = container,
+                    appViewModel = appViewModel,
+                    themeMode = themeMode,
+                    onThemeModeChange = onThemeModeChange,
+                    onOpenOnboarding = { manualOnboardingRequested = true },
+                    onOpenLibraries = { navController.navigate(AppRoute.Libraries) },
+                    onOpenContact = { navController.navigate(AppRoute.Contact) },
+                )
+            }
+            composable<AppRoute.Libraries> {
+                LibrariesScreen(onBack = { navController.popBackStack() })
+            }
+            composable<AppRoute.Contact> {
+                ContactScreen(container = container, onBack = { navController.popBackStack() })
+            }
+            composable<AppRoute.AddTrack> {
+                AddTrackRoute(
+                    viewModel = playerViewModel,
+                    favoritesViewModel = favoritesViewModel,
+                    onClose = { navController.popBackStack() },
+                )
+            }
         }
-        }
-        }
+    }
+}
+
+private fun NavDestination?.topLevelDestination(): AppDestination = when {
+    this?.hasRoute<AppRoute.MyAudio>() == true -> AppDestination.MY_AUDIO
+    this?.hasRoute<AppRoute.Favorites>() == true -> AppDestination.FAVORITES
+    this?.hasRoute<AppRoute.More>() == true ||
+        this?.hasRoute<AppRoute.Libraries>() == true ||
+        this?.hasRoute<AppRoute.Contact>() == true -> AppDestination.MORE
+    else -> AppDestination.PLAYER
+}
+
+private fun NavHostController.navigateToTopLevel(destination: AppDestination) {
+    navigate(destination.route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }
 

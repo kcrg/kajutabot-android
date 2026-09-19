@@ -8,7 +8,6 @@ import com.tryniecki.kajutabot.auth.AuthState
 import com.tryniecki.kajutabot.auth.LogoutResult
 import com.tryniecki.kajutabot.auth.OAuthCallbackResult
 import com.tryniecki.kajutabot.auth.OAuthStartResult
-import com.tryniecki.kajutabot.ui.navigation.AppDestination
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,8 +33,6 @@ class AppViewModel(
     }
 
     private fun resetSessionUi() {
-        _currentDestination.value = AppDestination.PLAYER
-        _isAddTrackOpen.value = false
         _pendingSharedUrl.value = null
     }
 
@@ -49,23 +46,8 @@ class AppViewModel(
     private val _openUrl = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val openUrl: SharedFlow<String> = _openUrl.asSharedFlow()
 
-    private val _currentDestination = MutableStateFlow(AppDestination.PLAYER)
-    val currentDestination: StateFlow<AppDestination> = _currentDestination.asStateFlow()
-
     private val _pendingSharedUrl = MutableStateFlow<String?>(null)
     val pendingSharedUrl: StateFlow<String?> = _pendingSharedUrl.asStateFlow()
-
-    /**
-     * Full-screen AddTrack modal visibility. Lives here (not in PlayerRoute) so
-     * the shell can hide the bottom NavigationBar while the modal is open.
-     * Player state itself stays in PlayerRoute/PlayerViewModel and is preserved.
-     */
-    private val _isAddTrackOpen = MutableStateFlow(false)
-    val isAddTrackOpen: StateFlow<Boolean> = _isAddTrackOpen.asStateFlow()
-
-    fun setAddTrackOpen(open: Boolean) {
-        _isAddTrackOpen.value = open
-    }
 
     init {
         viewModelScope.launch {
@@ -84,27 +66,10 @@ class AppViewModel(
         super.onCleared()
     }
 
-    fun onDestinationChange(destination: AppDestination) {
-        _currentDestination.value = destination
-    }
-
-    fun goToPlayer() {
-        _currentDestination.value = AppDestination.PLAYER
-    }
-
     fun onSharedUrl(url: String?) {
         if (url.isNullOrBlank()) return
         _pendingSharedUrl.value = url
-        _currentDestination.value = AppDestination.PLAYER
     }
-
-    fun consumePendingSharedUrl(): String? {
-        val url = _pendingSharedUrl.value
-        _pendingSharedUrl.value = null
-        return url
-    }
-
-    fun peekPendingSharedUrl(): String? = _pendingSharedUrl.value
 
     fun clearPendingSharedUrl() {
         _pendingSharedUrl.value = null

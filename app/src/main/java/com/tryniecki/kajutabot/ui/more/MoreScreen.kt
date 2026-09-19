@@ -1,12 +1,5 @@
 package com.tryniecki.kajutabot.ui.more
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,7 +35,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,69 +53,10 @@ import com.tryniecki.kajutabot.auth.LogoutResult
 import com.tryniecki.kajutabot.browser.openCustomTab
 import com.tryniecki.kajutabot.browser.rememberCustomTabColors
 import com.tryniecki.kajutabot.ui.app.AppViewModel
-import com.tryniecki.kajutabot.ui.navigation.MoreDestination
-import com.tryniecki.kajutabot.ui.theme.KbMotion
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 
 @Composable
-fun MoreScreen(
-    container: AppContainer,
-    appViewModel: AppViewModel,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
-    onOpenOnboarding: () -> Unit,
-) {
-    var destination by rememberSaveable {
-        mutableStateOf(MoreDestination.ROOT)
-    }
-
-    BackHandler(
-        enabled = destination != MoreDestination.ROOT,
-    ) {
-        destination = MoreDestination.ROOT
-    }
-
-    // Hierarchical navigation: forward pushes content in from the right,
-    // Back reverses the direction. Shared-axis X, no full-screen travel.
-    val motion = MaterialTheme.motionScheme
-    AnimatedContent(
-        targetState = destination,
-        transitionSpec = {
-            val forward = targetState != MoreDestination.ROOT
-            val direction = if (forward) 1 else -1
-            (fadeIn(motion.defaultEffectsSpec()) +
-                slideInHorizontally(motion.defaultSpatialSpec()) {
-                    direction * (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
-                }) togetherWith
-                (fadeOut(motion.defaultEffectsSpec()) +
-                    slideOutHorizontally(motion.defaultSpatialSpec()) {
-                        -direction * (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
-                    })
-        },
-        label = "moreDestination",
-    ) { current ->
-    when (current) {
-        MoreDestination.ROOT -> MoreRootScreen(
-            container = container,
-            appViewModel = appViewModel,
-            themeMode = themeMode,
-            onThemeModeChange = onThemeModeChange,
-            onOpenOnboarding = onOpenOnboarding,
-            onOpenLibraries = { destination = MoreDestination.LIBRARIES },
-            onOpenContact = { destination = MoreDestination.CONTACT },
-        )
-        MoreDestination.LIBRARIES -> LibrariesScreen(onBack = { destination = MoreDestination.ROOT })
-        MoreDestination.CONTACT -> ContactScreen(
-            container = container,
-            onBack = { destination = MoreDestination.ROOT },
-        )
-    }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MoreRootScreen(
+fun MoreRootScreen(
     container: AppContainer,
     appViewModel: AppViewModel,
     themeMode: ThemeMode,
@@ -326,7 +259,7 @@ private fun MoreRootScreen(
 }
 
 @Composable
-private fun LibrariesScreen(onBack: () -> Unit) {
+fun LibrariesScreen(onBack: () -> Unit) {
     Scaffold(topBar = { BackTopBar(title = "Użyte biblioteki", onBack = onBack) }) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -354,7 +287,7 @@ private fun LibrariesScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun ContactScreen(container: AppContainer, onBack: () -> Unit) {
+fun ContactScreen(container: AppContainer, onBack: () -> Unit) {
     Scaffold(topBar = { BackTopBar(title = "Kontakt", onBack = onBack) }) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             ListItem(

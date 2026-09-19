@@ -487,8 +487,8 @@ class PlayerViewModel(
                     it.enqueue(guildId, EnqueueRequest(channelId, inputs, version))
                 }
                 applyQueueSnapshot(response.snapshot)
-                // Query/results stay intact so the modal exit animation renders stable
-                // content; PlayerRoute clears them after the modal closes.
+                // Query/results stay intact so the AddTrack exit transition renders stable
+                // content; the shell clears them after the AddTrack route closes.
                 _ui.update { it.copy(isMutating = false) }
                 _trackAdded.tryEmit(Unit)
             } catch (e: Exception) {
