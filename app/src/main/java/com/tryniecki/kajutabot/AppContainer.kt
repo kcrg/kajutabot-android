@@ -15,6 +15,14 @@ import com.tryniecki.kajutabot.auth.SessionStore
 import com.tryniecki.kajutabot.prefs.GuildSelectionStore
 import com.tryniecki.kajutabot.prefs.OnboardingPreferences
 import com.tryniecki.kajutabot.prefs.FavoritesPreferences
+import com.tryniecki.kajutabot.ui.app.SessionViewModelScope
+import com.tryniecki.kajutabot.ui.app.SessionViewModelOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Minimal process-lifetime composition root owned by KajutaBotApplication.
@@ -59,4 +67,28 @@ class AppContainer(context: Context) {
         appConfig = appConfig,
         pkceGenerator = pkceGenerator,
     )
+
+    private val _mediaServiceActive = MutableStateFlow(false)
+    val mediaServiceActive = _mediaServiceActive.asStateFlow()
+    fun setMediaServiceActive(active: Boolean) {
+        _mediaServiceActive.value = active
+    }
+
+    // The authenticated store is shared by Activity and MediaSessionService.
+    // It survives Activity destruction, but is cleared as soon as the user session ends.
+    private val sessionScope = SessionViewModelScope {
+        clearApiCache()
+        selectionStore.clear()
+    }
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    init {
+        appScope.launch {
+            sessionManager.sessionIdentity.collect { identity ->
+                if (identity == null) sessionScope.end() else sessionScope.ownerFor(identity)
+            }
+        }
+    }
+
+    fun ownerForSession(identity: Long): SessionViewModelOwner = sessionScope.ownerFor(identity)
 }

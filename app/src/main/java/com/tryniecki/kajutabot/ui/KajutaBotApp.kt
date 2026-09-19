@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -50,6 +51,7 @@ import androidx.navigation.compose.rememberNavController
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
+import com.tryniecki.kajutabot.media.RemotePlaybackService
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.app.AuthenticatedGate
@@ -67,21 +69,16 @@ import com.tryniecki.kajutabot.ui.onboarding.AccessCheckingScreen
 import com.tryniecki.kajutabot.ui.onboarding.AccessErrorScreen
 import com.tryniecki.kajutabot.ui.onboarding.NoAccessScreen
 import com.tryniecki.kajutabot.ui.onboarding.OnboardingScreen
-import com.tryniecki.kajutabot.ui.player.EXPECTED_END_GRACE_MS
 import com.tryniecki.kajutabot.ui.player.MiniPlayer
 import com.tryniecki.kajutabot.ui.player.MiniPlayerState
-import com.tryniecki.kajutabot.ui.player.POLL_INTERVAL_MS
 import com.tryniecki.kajutabot.ui.player.PlayerRoute
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.AddTrackRoute
-import com.tryniecki.kajutabot.ui.player.playbackIdentity
-import com.tryniecki.kajutabot.ui.player.remainingMs
+import com.tryniecki.kajutabot.ui.player.pollSelectedQueue
 import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import com.tryniecki.kajutabot.ui.theme.KbMotion
-import java.time.Instant
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @Composable
 fun KajutaBotApp(
@@ -250,6 +247,8 @@ private fun AuthenticatedShell(
     // line and the polling keys — typing in AddTrack search must not
     // recompose the shell or the MiniPlayer.
     val miniPlayerState by playerViewModel.miniPlayerState.collectAsStateWithLifecycle()
+    val mediaServiceActive by container.mediaServiceActive.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
     val playerError by playerViewModel.playerError.collectAsStateWithLifecycle()
     val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsStateWithLifecycle()
@@ -304,7 +303,12 @@ private fun AuthenticatedShell(
     // The single queue polling loop: runs while STARTED regardless of the
     // active tab, so the MiniPlayer always has fresh state. No polling lives
     // in individual screens anymore.
-    PlayerPollingEffect(playerViewModel)
+    PlayerPollingEffect(playerViewModel, mediaServiceActive)
+    LaunchedEffect(miniPlayerState != null, mediaServiceActive) {
+        if (miniPlayerState != null && !mediaServiceActive) {
+            RemotePlaybackService.start(context)
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -433,42 +437,16 @@ private fun NavHostController.navigateToTopLevel(destination: AppDestination) {
 }
 
 /**
- * The one and only queue polling loop. Active while the app is STARTED and a
- * guild is selected, on any tab. Entering the foreground polls immediately;
- * a one-shot expected-end refresh fires shortly after the current track
- * should end. Both paths share the ViewModel single-flight queue fetch.
+ * The UI polls while foregrounded unless the MediaSessionService owns polling.
  */
 @Composable
-private fun PlayerPollingEffect(viewModel: PlayerViewModel) {
-    val keys by viewModel.pollingKeys.collectAsStateWithLifecycle()
+private fun PlayerPollingEffect(viewModel: PlayerViewModel, mediaServiceActive: Boolean) {
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(keys.guildId, keys.playbackKey) {
-        val guildId = keys.guildId ?: return@LaunchedEffect
+    LaunchedEffect(mediaServiceActive, lifecycleOwner) {
+        if (mediaServiceActive) return@LaunchedEffect
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            viewModel.pollQueueOnce()
-            val remaining = viewModel.ui.value.queue?.let { snapshot ->
-                val track = snapshot.nowPlaying ?: return@let null
-                remainingMs(
-                    snapshot.nowPlayingStartedAt,
-                    track.durationMilliseconds,
-                    Instant.now().toEpochMilli(),
-                )
-            }
-            val endRefresh = remaining?.let { ms ->
-                launch {
-                    delay(ms.coerceAtLeast(0) + EXPECTED_END_GRACE_MS)
-                    viewModel.pollQueueOnce()
-                }
-            }
-            try {
-                while (true) {
-                    delay(POLL_INTERVAL_MS)
-                    viewModel.pollQueueOnce()
-                }
-            } finally {
-                endRefresh?.cancel()
-            }
+            pollSelectedQueue(viewModel)
         }
     }
 }

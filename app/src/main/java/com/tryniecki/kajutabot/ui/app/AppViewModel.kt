@@ -22,22 +22,12 @@ class AppViewModel(
     val authState: StateFlow<AuthState> = container.sessionManager.authState
     val sessionIdentity: StateFlow<Long?> = container.sessionManager.sessionIdentity
 
-    private val sessionScope = SessionViewModelScope {
-        container.clearApiCache()
-        container.selectionStore.clear()
-        resetSessionUi()
-    }
-
     fun ownerForSession(identity: Long): SessionViewModelOwner {
-        return sessionScope.ownerFor(identity)
+        return container.ownerForSession(identity)
     }
 
     private fun resetSessionUi() {
         _pendingSharedUrl.value = null
-    }
-
-    private fun clearSessionUi() {
-        sessionScope.end()
     }
 
     private val _isSigningIn = MutableStateFlow(false)
@@ -51,19 +41,15 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
+            var previousIdentity: Long? = null
             sessionIdentity.collect { identity ->
-                if (identity == null) clearSessionUi()
-                else ownerForSession(identity)
+                if (previousIdentity != null && identity != previousIdentity) resetSessionUi()
+                previousIdentity = identity
             }
         }
         viewModelScope.launch {
             container.sessionManager.restore()
         }
-    }
-
-    override fun onCleared() {
-        sessionScope.end()
-        super.onCleared()
     }
 
     fun onSharedUrl(url: String?) {
@@ -101,7 +87,6 @@ class AppViewModel(
         viewModelScope.launch {
             val result = container.sessionManager.logout()
             if (result is LogoutResult.SignedOut || result is LogoutResult.LocalOnly) {
-                clearSessionUi()
                 container.selectionStore.clear()
                 resetSessionUi()
             }

@@ -97,6 +97,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.viewmodel)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.media3.session)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.coil3.compose)
     implementation(libs.coil3.network.okhttp)
