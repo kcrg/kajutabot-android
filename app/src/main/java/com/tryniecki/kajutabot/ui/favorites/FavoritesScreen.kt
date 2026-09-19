@@ -79,9 +79,9 @@ fun FavoritesScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = 16.dp,
+                start = 12.dp,
                 top = innerPadding.calculateTopPadding() + 8.dp,
-                end = 16.dp,
+                end = 12.dp,
                 bottom = innerPadding.calculateBottomPadding() + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -169,6 +169,12 @@ fun FavoritesScreen(
                 items(ui.favorites, key = { it.contentUrl }) { fav ->
                     Card {
                         ListItem(
+                            contentPadding = PaddingValues(
+                                start = 12.dp,
+                                top = 8.dp,
+                                end = 8.dp,
+                                bottom = 8.dp,
+                            ),
                             leadingContent = {
                                 TrackArtwork(
                                     imageUrl = fav.thumbnailUrl,

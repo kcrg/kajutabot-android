@@ -382,10 +382,18 @@ private fun SettingsRow(icon: Int, title: String, subtitle: String, onClick: () 
 private data class LibraryInfo(val name: String, val description: String, val license: String)
 
 private val LIBRARIES = listOf(
-    LibraryInfo("Jetpack Compose", "Deklaratywny UI Androida", "Apache 2.0"),
-    LibraryInfo("Material 3", "Natywne komponenty i system motywów", "Apache 2.0"),
+    LibraryInfo("Jetpack Compose", "Budowa deklaratywnego interfejsu i animacji", "Apache 2.0"),
+    LibraryInfo("Material 3", "Komponenty, motywy i schemat ruchu interfejsu", "Apache 2.0"),
+    LibraryInfo("AndroidX Activity", "Integracja Compose z aktywnością i obsługa gestu wstecz", "Apache 2.0"),
+    LibraryInfo("Navigation Compose", "Nawigacja między ekranami i stos powrotu", "Apache 2.0"),
+    LibraryInfo("AndroidX Lifecycle", "ViewModel i obserwacja stanu zgodna z cyklem życia", "Apache 2.0"),
+    LibraryInfo("AndroidX Core KTX", "Funkcje pomocnicze dla platformy Android", "Apache 2.0"),
+    LibraryInfo("AndroidX Media3", "Sesja multimedialna i systemowe sterowanie botem", "Apache 2.0"),
+    LibraryInfo("AndroidX Browser", "Logowanie i otwieranie linków przez Custom Tabs", "Apache 2.0"),
+    LibraryInfo("Coil 3", "Ładowanie miniatur utworów i awatarów", "Apache 2.0"),
     LibraryInfo("Tabler Icons", "Ikony interfejsu", "MIT"),
-    LibraryInfo("Retrofit", "Klient REST", "Apache 2.0"),
-    LibraryInfo("OkHttp", "Transport HTTP", "Apache 2.0"),
-    LibraryInfo("kotlinx.serialization", "Serializacja JSON", "Apache 2.0"),
+    LibraryInfo("Kotlin Coroutines", "Operacje asynchroniczne i przepływy stanu", "Apache 2.0"),
+    LibraryInfo("Retrofit", "Wywołania KajutaBot Control API", "Apache 2.0"),
+    LibraryInfo("OkHttp", "Połączenia HTTP dla API i obrazów", "Apache 2.0"),
+    LibraryInfo("kotlinx.serialization", "Odczyt i zapis danych JSON", "Apache 2.0"),
 )
