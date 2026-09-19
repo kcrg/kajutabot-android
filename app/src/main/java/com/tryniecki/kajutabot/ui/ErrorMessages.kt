@@ -3,12 +3,16 @@ package com.tryniecki.kajutabot.ui
 import com.tryniecki.kajutabot.api.client.KajutaBotApiErrors
 import com.tryniecki.kajutabot.auth.SessionSignedOutException
 import com.tryniecki.kajutabot.auth.TransientSessionException
+import com.tryniecki.kajutabot.auth.ContractSessionException
+import com.tryniecki.kajutabot.auth.PersistenceSessionException
 import retrofit2.HttpException
 import java.io.IOException
 
 fun userMessageForError(e: Throwable?): String {
     if (e is SessionSignedOutException) return "Sesja wygasła. Zaloguj się ponownie."
     if (e is TransientSessionException) return e.message ?: "Brak połączenia. Spróbuj ponownie."
+    if (e is ContractSessionException) return e.message ?: "Nieprawidłowa odpowiedź serwera."
+    if (e is PersistenceSessionException) return e.message ?: "Nie można zapisać sesji."
     if (e is IOException) return "Brak połączenia z serwerem. Spróbuj ponownie."
     if (e is HttpException) {
         if (e.code() == 429) {

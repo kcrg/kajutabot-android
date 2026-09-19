@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         CoilSetup.init(this)
 
-        container = AppContainer(this)
+        container = (application as KajutaBotApplication).container
         appViewModel = ViewModelProvider(
             this,
             AppViewModel.Factory(container),

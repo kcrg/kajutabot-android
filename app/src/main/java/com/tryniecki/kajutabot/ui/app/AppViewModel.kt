@@ -21,6 +21,27 @@ class AppViewModel(
     private val container: AppContainer,
 ) : ViewModel() {
     val authState: StateFlow<AuthState> = container.sessionManager.authState
+    val sessionIdentity: StateFlow<Long?> = container.sessionManager.sessionIdentity
+
+    private val sessionScope = SessionViewModelScope {
+        container.clearApiCache()
+        container.selectionStore.clear()
+        resetSessionUi()
+    }
+
+    fun ownerForSession(identity: Long): SessionViewModelOwner {
+        return sessionScope.ownerFor(identity)
+    }
+
+    private fun resetSessionUi() {
+        _currentDestination.value = AppDestination.PLAYER
+        _isAddTrackOpen.value = false
+        _pendingSharedUrl.value = null
+    }
+
+    private fun clearSessionUi() {
+        sessionScope.end()
+    }
 
     private val _isSigningIn = MutableStateFlow(false)
     val isSigningIn: StateFlow<Boolean> = _isSigningIn.asStateFlow()
@@ -48,8 +69,19 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
+            sessionIdentity.collect { identity ->
+                if (identity == null) clearSessionUi()
+                else ownerForSession(identity)
+            }
+        }
+        viewModelScope.launch {
             container.sessionManager.restore()
         }
+    }
+
+    override fun onCleared() {
+        sessionScope.end()
+        super.onCleared()
     }
 
     fun onDestinationChange(destination: AppDestination) {
@@ -103,6 +135,11 @@ class AppViewModel(
     fun logout(onResult: (LogoutResult) -> Unit = {}) {
         viewModelScope.launch {
             val result = container.sessionManager.logout()
+            if (result is LogoutResult.SignedOut || result is LogoutResult.LocalOnly) {
+                clearSessionUi()
+                container.selectionStore.clear()
+                resetSessionUi()
+            }
             onResult(result)
         }
     }

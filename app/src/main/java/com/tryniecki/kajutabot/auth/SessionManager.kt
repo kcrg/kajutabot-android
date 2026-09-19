@@ -9,16 +9,22 @@ import com.tryniecki.kajutabot.api.model.auth.RefreshUserSessionRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import retrofit2.HttpException
 import java.io.IOException
 import java.time.Instant
 import java.time.OffsetDateTime
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 
 class SessionSignedOutException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 class TransientSessionException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class ContractSessionException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class PersistenceSessionException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 sealed interface OAuthStartResult {
     data class Ready(val url: String) : OAuthStartResult
@@ -33,22 +39,30 @@ sealed interface OAuthCallbackResult {
 
 sealed interface LogoutResult {
     data object SignedOut : LogoutResult
+    data class LocalOnly(val message: String) : LogoutResult
     data class NeedsRetry(val message: String) : LogoutResult
 }
 
 class SessionManager(
     private val authApi: KajutaBotAuthApi,
-    private val apiProvider: () -> KajutaBotApi,
+    private val apiProvider: (String) -> KajutaBotApi,
     private val sessionStore: SessionStore,
     private val pendingStorage: OAuthPendingStorage,
     private val appConfig: AppConfig,
     private val pkceGenerator: PkceGenerator = PkceGenerator(),
     private val clock: () -> Instant = Instant::now,
+    private val refreshScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Restoring)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
-    private val refreshMutex = Mutex()
+    private val _sessionIdentity = MutableStateFlow<Long?>(null)
+    val sessionIdentity: StateFlow<Long?> = _sessionIdentity.asStateFlow()
+
+    private val lock = Any()
+    private var generation = 0L
+    private data class RefreshFlight(val generation: Long, val refreshToken: String, val deferred: Deferred<UserSession>)
+    private var refreshFlight: RefreshFlight? = null
 
     @Volatile
     private var currentSession: UserSession? = null
@@ -58,30 +72,38 @@ class SessionManager(
     fun currentUserSession(): UserSession? = currentSession
 
     suspend fun restore() {
-        _authState.value = AuthState.Restoring
+        val epoch = synchronized(lock) {
+            _authState.value = AuthState.Restoring
+            generation
+        }
         val stored = try {
             sessionStore.load()
-        } catch (_: Exception) {
-            null
-        }
-        if (stored == null) {
-            currentSession = null
-            _authState.value = AuthState.SignedOut()
+        } catch (e: Exception) {
+            synchronized(lock) {
+                if (generation == epoch) _authState.value =
+                    AuthState.RecoverableError("Nie można odczytać bezpiecznego magazynu sesji.")
+            }
             return
         }
-        currentSession = stored
-        if (!isExpiringSoon(stored)) {
-            _authState.value = AuthState.SignedIn(stored.user)
-            return
+        synchronized(lock) {
+            if (generation != epoch) return
+            currentSession = stored
+            _sessionIdentity.value = if (stored == null) null else epoch
+            _authState.value = if (stored == null) AuthState.SignedOut() else AuthState.SignedIn(stored.user)
         }
+        if (stored == null || !isExpiringSoon(stored)) return
         try {
-            refreshLocked(force = false, failedAccessToken = null)
+            ensureFreshToken(force = false, failedAccessToken = null, expectedGeneration = epoch)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: SessionSignedOutException) {
-            // state already set to SignedOut inside refreshLocked
-        } catch (e: TransientSessionException) {
-            _authState.value = AuthState.RecoverableError(
-                e.message ?: "Brak połączenia. Spróbuj ponownie.",
-            )
+            // Invalid refresh already changed the state.
+        } catch (e: Exception) {
+            synchronized(lock) {
+                if (generation == epoch) _authState.value = AuthState.RecoverableError(
+                    e.message ?: "Nie można odnowić sesji.",
+                )
+            }
         }
     }
 
@@ -96,7 +118,15 @@ class SessionManager(
             )
         }
         val pkce = pkceGenerator.generate()
-        pendingStorage.save(pkce.state, pkce.verifier)
+        try {
+            synchronized(lock) {
+                generation++
+                refreshFlight = null
+                pendingStorage.save(pkce.state, pkce.verifier)
+            }
+        } catch (_: Exception) {
+            return OAuthStartResult.Misconfigured("Nie można zapisać próby logowania.")
+        }
         val url = DiscordOAuth.buildAuthorizationUrl(
             clientId = appConfig.discordClientId,
             redirectUri = appConfig.redirectUri,
@@ -112,7 +142,18 @@ class SessionManager(
         error: String?,
     ): OAuthCallbackResult {
         if (error != null) {
-            pendingStorage.clear()
+            val pending = try {
+                pendingStorage.loadValid()
+            } catch (_: Exception) {
+                return OAuthCallbackResult.Failed("Nie można odczytać próby logowania.")
+            }
+            synchronized(lock) {
+                if (pending == null || pending.state != returnedState) {
+                    return OAuthCallbackResult.Ignored("Nowsza próba logowania zastąpiła tę odpowiedź.")
+                }
+                generation++
+                pendingStorage.clear()
+            }
             val message = if (error == "access_denied") {
                 "Logowanie przez Discord zostało anulowane."
             } else {
@@ -124,7 +165,11 @@ class SessionManager(
             return OAuthCallbackResult.Failed(message)
         }
 
-        val pending = pendingStorage.loadValid()
+        val pending = try {
+            pendingStorage.loadValid()
+        } catch (_: Exception) {
+            return OAuthCallbackResult.Failed("Nie można odczytać próby logowania.")
+        }
         if (pending == null) {
             return OAuthCallbackResult.Ignored("Brak aktywnej sesji logowania lub wygasła.")
         }
@@ -141,6 +186,7 @@ class SessionManager(
             return OAuthCallbackResult.Failed(message)
         }
 
+        val epoch = synchronized(lock) { ++generation }
         return try {
             val response = authApi.exchange(
                 DiscordOAuthExchangeRequest(
@@ -150,30 +196,40 @@ class SessionManager(
                 ),
             )
             val session = response.toUserSession()
-            currentSession = session
-            sessionStore.save(session)
-            pendingStorage.clear()
-            _authState.value = AuthState.SignedIn(session.user)
+            synchronized(lock) {
+                if (generation != epoch) return OAuthCallbackResult.Ignored("Nowsza próba logowania zastąpiła tę odpowiedź.")
+                sessionStore.save(session)
+                currentSession = session
+                _sessionIdentity.value = epoch
+                _authState.value = AuthState.SignedIn(session.user)
+                try {
+                    pendingStorage.clear()
+                } catch (_: Exception) {
+                    // The committed session remains valid; stale PKCE data expires by itself.
+                }
+            }
             OAuthCallbackResult.Exchanged
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: HttpException) {
-            pendingStorage.clear()
+            synchronized(lock) { if (generation == epoch) pendingStorage.clear() }
             val problem = KajutaBotApiErrors.problemDetailsOf(e)
             val message = mapExchangeError(problem?.errorCode, e.code())
-            if (_authState.value !is AuthState.SignedIn) {
+            if (generation == epoch && _authState.value !is AuthState.SignedIn) {
                 _authState.value = AuthState.SignedOut(message)
             }
             OAuthCallbackResult.Failed(message)
         } catch (_: IOException) {
-            pendingStorage.clear()
+            synchronized(lock) { if (generation == epoch) pendingStorage.clear() }
             val message = "Brak połączenia z serwerem. Spróbuj ponownie."
-            if (_authState.value !is AuthState.SignedIn) {
+            if (generation == epoch && _authState.value !is AuthState.SignedIn) {
                 _authState.value = AuthState.SignedOut(message)
             }
             OAuthCallbackResult.Failed(message)
         } catch (_: Exception) {
-            pendingStorage.clear()
-            val message = "Logowanie nie powiodło się. Spróbuj ponownie."
-            if (_authState.value !is AuthState.SignedIn) {
+            synchronized(lock) { if (generation == epoch) pendingStorage.clear() }
+            val message = "Nie można zapisać sesji lub przetworzyć odpowiedzi serwera."
+            if (generation == epoch && _authState.value !is AuthState.SignedIn) {
                 _authState.value = AuthState.SignedOut(message)
             }
             OAuthCallbackResult.Failed(message)
@@ -181,112 +237,246 @@ class SessionManager(
     }
 
     suspend fun logout(): LogoutResult {
-        val session = currentSession
-        if (session == null) {
-            sessionStore.clear()
-            _authState.value = AuthState.SignedOut()
-            return LogoutResult.SignedOut
+        // Invalidate every in-flight restore/exchange/refresh before the first suspension.
+        val (epoch, original, oldFlight) = synchronized(lock) {
+            val old = refreshFlight
+            refreshFlight = null
+            Triple(++generation, currentSession, old)
+        }
+        if (original == null) {
+            return try {
+                synchronized(lock) { if (generation == epoch) clearLocalSession() }
+                LogoutResult.LocalOnly("Zakończono tylko lokalną sesję.")
+            } catch (_: Exception) {
+                LogoutResult.NeedsRetry("Nie można usunąć lokalnej sesji.")
+            }
         }
         return try {
-            apiProvider().logout()
-            currentSession = null
-            sessionStore.clear()
-            _authState.value = AuthState.SignedOut()
-            LogoutResult.SignedOut
-        } catch (e: HttpException) {
-            val problem = KajutaBotApiErrors.problemDetailsOf(e)
-            val code = problem?.errorCode
-            if (e.code() == 401 || e.code() == 404 || KajutaBotApiErrors.isInvalidSessionCode(code)) {
-                currentSession = null
-                sessionStore.clear()
-                _authState.value = AuthState.SignedOut()
-                LogoutResult.SignedOut
-            } else {
-                LogoutResult.NeedsRetry("Brak połączenia z serwerem. Sesja pozostała aktywna, spróbuj ponownie.")
+            var session = original
+            if (oldFlight?.generation == epoch - 1 || isExpiringSoon(session)) {
+                session = if (oldFlight?.generation == epoch - 1) {
+                    oldFlight.deferred.await()
+                } else {
+                    requestRefresh(session)
+                }
+                commitLogoutRefresh(epoch, session)
             }
-        } catch (_: IOException) {
-            LogoutResult.NeedsRetry("Brak połączenia z serwerem. Sesja pozostała aktywna, spróbuj ponownie.")
-        } catch (_: Exception) {
-            LogoutResult.NeedsRetry("Wylogowanie nie powiodło się. Spróbuj ponownie.")
+            try {
+                synchronized(lock) { requireGeneration(epoch) }
+                apiProvider(session.accessToken).logout()
+            } catch (e: HttpException) {
+                if (e.code() != 401) throw e
+                // An access-token 401 is not proof that the refresh token was revoked.
+                session = requestRefresh(session)
+                commitLogoutRefresh(epoch, session)
+                apiProvider(session.accessToken).logout()
+            }
+            synchronized(lock) {
+                requireGeneration(epoch)
+                clearLocalSession()
+            }
+            LogoutResult.SignedOut
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: SessionSignedOutException) {
+            return try {
+                synchronized(lock) {
+                    if (generation == epoch) clearLocalSession(
+                        "Zakończono lokalnie; serwer nie potwierdził unieważnienia tokenu odświeżania.",
+                    )
+                }
+                LogoutResult.LocalOnly("Serwer nie potwierdził unieważnienia tokenu odświeżania.")
+            } catch (_: Exception) {
+                LogoutResult.NeedsRetry("Nie można usunąć lokalnej sesji.")
+            }
+        } catch (e: HttpException) {
+            if (e.code() == 401) {
+                try {
+                    synchronized(lock) {
+                        if (generation == epoch) clearLocalSession(
+                            "Zakończono lokalnie; serwer nie potwierdził unieważnienia tokenu odświeżania.",
+                        )
+                    }
+                    LogoutResult.LocalOnly("Serwer nie potwierdził unieważnienia tokenu odświeżania.")
+                } catch (_: Exception) {
+                    LogoutResult.NeedsRetry("Nie można usunąć lokalnej sesji.")
+                }
+            } else {
+                LogoutResult.NeedsRetry("Serwer nie potwierdził wylogowania. Sesja pozostała aktywna.")
+            }
+        } catch (e: Exception) {
+            LogoutResult.NeedsRetry(e.message ?: "Wylogowanie nie powiodło się. Sesja pozostała aktywna.")
         }
     }
 
-    suspend fun <T> withApi(block: suspend (KajutaBotApi) -> T): T {
-        ensureFreshToken(force = false, failedAccessToken = null)
-        val api = apiProvider()
+    private fun commitLogoutRefresh(epoch: Long, session: UserSession) {
+        synchronized(lock) {
+            requireGeneration(epoch)
+            sessionStore.save(session)
+            currentSession = session
+            _authState.value = AuthState.SignedIn(session.user)
+        }
+    }
+
+    private fun clearLocalSession(message: String? = null) {
+        sessionStore.clear()
+        currentSession = null
+        _sessionIdentity.value = null
+        _authState.value = AuthState.SignedOut(message)
+    }
+
+    private fun requireGeneration(epoch: Long) {
+        if (generation != epoch) throw SessionSignedOutException("Sesja zmieniła się podczas operacji.")
+    }
+
+    suspend fun <T> withApi(block: suspend (KajutaBotApi) -> T): T =
+        withApiInternal(expectedIdentity = null, block)
+
+    suspend fun <T> withApiForSession(
+        expectedIdentity: Long,
+        block: suspend (KajutaBotApi) -> T,
+    ): T = withApiInternal(expectedIdentity, block)
+
+    private suspend fun <T> withApiInternal(
+        expectedIdentity: Long?,
+        block: suspend (KajutaBotApi) -> T,
+    ): T {
+        val entryEpoch = synchronized(lock) {
+            if (expectedIdentity != null && _sessionIdentity.value != expectedIdentity) {
+                throw SessionSignedOutException("Sesja zmieniła się przed żądaniem.")
+            }
+            generation
+        }
+        ensureFreshToken(force = false, failedAccessToken = null, expectedGeneration = entryEpoch)
+        val (epoch, identity, fallbackToken) = synchronized(lock) {
+            requireGeneration(entryEpoch)
+            if (expectedIdentity != null && _sessionIdentity.value != expectedIdentity) {
+                throw SessionSignedOutException("Sesja zmieniła się przed żądaniem.")
+            }
+            Triple(generation, _sessionIdentity.value, currentSession?.accessToken)
+        }
+        if (identity == null) throw SessionSignedOutException("Brak aktywnej sesji.")
         try {
-            return block(api)
+            val result = block(apiProvider(fallbackToken ?: throw SessionSignedOutException("Brak tokenu dostępu.")))
+            requireSession(epoch, identity)
+            return result
         } catch (e: HttpException) {
             if (e.code() != 401) throw e
-            val failedToken = currentSession?.accessToken
-            try {
-                ensureFreshToken(force = true, failedAccessToken = failedToken)
-            } catch (signedOut: SessionSignedOutException) {
-                throw signedOut
-            } catch (transient: TransientSessionException) {
-                throw transient
-            }
-            // Single retry, no loop.
-            return block(apiProvider())
+            requireSession(epoch, identity)
+            val actualToken = e.response()?.raw()?.request?.header("Authorization")
+                ?.takeIf { it.startsWith("Bearer ") }?.removePrefix("Bearer ")
+                ?: fallbackToken
+            ensureFreshToken(force = true, failedAccessToken = actualToken, expectedGeneration = epoch)
+            requireSession(epoch, identity)
+            // Only one retry; a second 401 propagates.
+            val result = block(apiProvider(tokenForSession(epoch, identity)))
+            requireSession(epoch, identity)
+            return result
         }
     }
 
-    private suspend fun ensureFreshToken(force: Boolean, failedAccessToken: String?) {
-        val session = currentSession
-            ?: sessionStore.load()?.also { currentSession = it }
-            ?: throw SessionSignedOutException("Brak aktywnej sesji.")
-        if (!force && !isExpiringSoon(session)) return
-        refreshLocked(force = force, failedAccessToken = failedAccessToken)
+    private fun requireSession(epoch: Long, identity: Long) {
+        synchronized(lock) {
+            if (generation != epoch || _sessionIdentity.value != identity) {
+                throw SessionSignedOutException("Sesja zmieniła się podczas żądania.")
+            }
+        }
     }
 
-    private suspend fun refreshLocked(force: Boolean, failedAccessToken: String?) {
-        refreshMutex.withLock {
-            val latest = currentSession
-                ?: sessionStore.load()?.also { currentSession = it }
-                ?: throw SessionSignedOutException("Brak aktywnej sesji.")
-            if (!force) {
-                if (!isExpiringSoon(latest)) return
-            } else {
-                if (failedAccessToken != null && latest.accessToken != failedAccessToken) {
-                    // Another waiter already refreshed.
-                    return
+    private fun tokenForSession(epoch: Long, identity: Long): String = synchronized(lock) {
+        requireSession(epoch, identity)
+        currentSession?.accessToken ?: throw SessionSignedOutException("Brak tokenu dostępu.")
+    }
+
+    private suspend fun ensureFreshToken(
+        force: Boolean,
+        failedAccessToken: String?,
+        expectedGeneration: Long? = null,
+    ) {
+        val flight = synchronized(lock) {
+            if (expectedGeneration != null) requireGeneration(expectedGeneration)
+            val latest = currentSession ?: try {
+                sessionStore.load()?.also {
+                    currentSession = it
+                    _sessionIdentity.value = generation
                 }
+            } catch (e: Exception) {
+                throw PersistenceSessionException("Nie można odczytać bezpiecznego magazynu sesji.", e)
+            } ?: throw SessionSignedOutException("Brak aktywnej sesji.")
+            if (!force && !isExpiringSoon(latest)) return
+            if (force && failedAccessToken != null && latest.accessToken != failedAccessToken) return
+            refreshFlight?.takeIf {
+                it.generation == generation && it.refreshToken == latest.refreshToken
+            } ?: run {
+                val epoch = generation
+                RefreshFlight(
+                    epoch,
+                    latest.refreshToken,
+                    refreshScope.async { performRefresh(latest, epoch) },
+                ).also { refreshFlight = it }
             }
-            val refreshToken = latest.refreshToken
-            try {
-                val response = authApi.refresh(RefreshUserSessionRequest(refreshToken))
-                val newSession = response.toUserSession()
-                currentSession = newSession
-                sessionStore.save(newSession)
-                _authState.value = AuthState.SignedIn(newSession.user)
-            } catch (e: HttpException) {
-                val problem = try {
-                    // problemDetailsOf consumes errorBody once; do it here only.
-                    KajutaBotApiErrors.problemDetailsOf(e)
-                } catch (_: Exception) {
-                    null
+        }
+        flight.deferred.await()
+        synchronized(lock) { requireGeneration(flight.generation) }
+    }
+
+    private suspend fun performRefresh(session: UserSession, epoch: Long): UserSession {
+        try {
+            val refreshed = requestRefresh(session)
+            synchronized(lock) {
+                // Logout may adopt this rotated token to revoke it on the server.
+                // Other old callers still fail their generation check after await.
+                if (generation != epoch) return refreshed
+                try {
+                    sessionStore.save(refreshed)
+                } catch (e: Exception) {
+                    _authState.value = AuthState.RecoverableError("Nie można zapisać odnowionej sesji.")
+                    throw PersistenceSessionException("Nie można zapisać odnowionej sesji.", e)
                 }
-                // Note: problemDetailsOf above already consumed the body for this instance,
-                // so reuse `problem` instead of calling errorCodeOf again.
-                val code = problem?.errorCode
-                if (KajutaBotApiErrors.isInvalidSessionCode(code) || e.code() == 401) {
-                    currentSession = null
-                    try {
-                        sessionStore.clear()
-                    } catch (_: Exception) {
+                currentSession = refreshed
+                _authState.value = AuthState.SignedIn(refreshed.user)
+            }
+            return refreshed
+        } catch (e: HttpException) {
+            val code = KajutaBotApiErrors.problemDetailsOf(e)?.errorCode
+            if (e.code() == 401 || KajutaBotApiErrors.isInvalidSessionCode(code)) {
+                synchronized(lock) {
+                    if (generation == epoch) {
+                        generation++
+                        refreshFlight = null
+                        try {
+                            clearLocalSession("Sesja wygasła. Zaloguj się ponownie.")
+                        } catch (storage: Exception) {
+                            _authState.value = AuthState.RecoverableError("Nie można usunąć wygasłej sesji.")
+                            throw PersistenceSessionException("Nie można usunąć wygasłej sesji.", storage)
+                        }
                     }
-                    _authState.value = AuthState.SignedOut(null)
-                    throw SessionSignedOutException("Sesja wygasła. Zaloguj się ponownie.", e)
                 }
-                throw TransientSessionException("Brak połączenia z serwerem. Spróbuj ponownie.", e)
-            } catch (_: IOException) {
-                throw TransientSessionException("Brak połączenia z serwerem. Spróbuj ponownie.")
+                throw SessionSignedOutException("Sesja wygasła. Zaloguj się ponownie.", e)
+            }
+            throw TransientSessionException("Serwer odmówił odnowienia sesji (HTTP " + e.code() + ").", e)
+        } finally {
+            synchronized(lock) {
+                if (refreshFlight?.generation == epoch &&
+                    refreshFlight?.refreshToken == session.refreshToken
+                ) refreshFlight = null
             }
         }
     }
 
+    private suspend fun requestRefresh(session: UserSession): UserSession = try {
+        authApi.refresh(RefreshUserSessionRequest(session.refreshToken)).toUserSession()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: HttpException) {
+        throw e
+    } catch (e: IOException) {
+        throw TransientSessionException("Brak połączenia z serwerem. Spróbuj ponownie.", e)
+    } catch (e: Exception) {
+        throw ContractSessionException("Nieprawidłowa odpowiedź serwera podczas odnowienia sesji.", e)
+    }
     private fun isExpiringSoon(session: UserSession): Boolean {
-        val expiresAt = parseInstant(session.accessTokenExpiresAtUtc) ?: return false
+        val expiresAt = parseInstant(session.accessTokenExpiresAtUtc) ?: return true
         // Proactive refresh 30s before expiry.
         return !expiresAt.isAfter(clock().plusSeconds(30))
     }
@@ -326,11 +516,15 @@ class SessionManager(
     }
 }
 
-private fun AuthSessionResponse.toUserSession(): UserSession =
-    UserSession(
+private fun AuthSessionResponse.toUserSession(): UserSession {
+    require(accessToken.isNotBlank() && refreshToken.isNotBlank())
+    require(SessionManager.parseInstant(accessTokenExpiresAtUtc) != null)
+    require(SessionManager.parseInstant(refreshTokenExpiresAtUtc) != null)
+    return UserSession(
         accessToken = accessToken,
         accessTokenExpiresAtUtc = accessTokenExpiresAtUtc,
         refreshToken = refreshToken,
         refreshTokenExpiresAtUtc = refreshTokenExpiresAtUtc,
         user = user,
     )
+}

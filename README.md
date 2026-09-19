@@ -81,3 +81,24 @@ Login
 ./gradlew test
 ./gradlew assembleDebug
 ```
+
+The checked-in Gradle Wrapper downloads Gradle 9.7.1 and verifies its distribution checksum. CI runs the API and app unit tests, Android Lint, a debug build and an **unsigned** release build. No release signing credentials are required for those checks.
+
+## Release signing
+
+To sign a release, set all four environment variables before invoking `:app:assembleRelease`:
+
+| Variable | Value |
+|---|---|
+| `KAJUTABOT_RELEASE_STORE_FILE` | Path to a keystore outside this repository |
+| `KAJUTABOT_RELEASE_STORE_PASSWORD` | Keystore password |
+| `KAJUTABOT_RELEASE_KEY_ALIAS` | Signing key alias |
+| `KAJUTABOT_RELEASE_KEY_PASSWORD` | Signing key password |
+
+With none of these variables set, `assembleRelease` builds an unsigned APK and logs that fact. With only some set, configuration fails. Keep credentials in a local secret store or the CI secret manager; do not put them in project files, command-line arguments, or logs. The unsigned CI artifact is for compilation checks and must not be distributed as a signed release.
+
+`clean-repo.cmd` removes only generated Gradle and module build directories. It preserves `.idea`, including shelves, `local.properties`, and other user files.
+
+## Logout semantics
+
+The current backend `/api/v1/auth/logout` requires a valid Bearer access token. The app refreshes an expired access token before logout and reports server-confirmed logout only after this endpoint succeeds. If refresh is already invalid, it ends the local session and reports that remote revocation was not confirmed. Fully reliable revocation in this case needs a backend endpoint that accepts the rotating refresh token as the credential, revokes its session, and is rate-limited and idempotent.

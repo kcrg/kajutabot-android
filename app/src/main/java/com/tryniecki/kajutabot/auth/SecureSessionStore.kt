@@ -6,6 +6,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
+import org.json.JSONObject
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -21,8 +22,8 @@ interface SessionStore {
 /**
  * AES-256-GCM session storage backed by Android Keystore.
  *
- * Secrets (tokens) are encrypted with a Keystore key and stored in a private prefs file
- * excluded from backup. Non-secret metadata lives in a separate private prefs file.
+ * The complete session is one encrypted preference value and one synchronous commit.
+ * The old two-file layout is read for migration on the next successful token rotation.
  * No biometrics: background refresh must work without user prompt.
  */
 class SecureSessionStore(context: Context) : SessionStore {
@@ -38,31 +39,53 @@ class SecureSessionStore(context: Context) : SessionStore {
     )
 
     override fun save(session: UserSession) {
-        secretPrefs.edit()
-            .putString(KEY_ACCESS, encrypt(session.accessToken))
-            .putString(KEY_REFRESH, encrypt(session.refreshToken))
-            .apply()
-        metaPrefs.edit()
-            .putString(KEY_ACCESS_EXP, session.accessTokenExpiresAtUtc)
-            .putString(KEY_REFRESH_EXP, session.refreshTokenExpiresAtUtc)
-            .putString(KEY_USER_ID, session.user.discordUserId)
-            .putString(KEY_USERNAME, session.user.username)
-            .putString(KEY_DISPLAY_NAME, session.user.displayName)
-            .putString(KEY_AVATAR, session.user.avatarUrl)
-            .apply()
+        val payload = JSONObject()
+            .put(KEY_ACCESS, session.accessToken)
+            .put(KEY_REFRESH, session.refreshToken)
+            .put(KEY_ACCESS_EXP, session.accessTokenExpiresAtUtc)
+            .put(KEY_REFRESH_EXP, session.refreshTokenExpiresAtUtc)
+            .put(KEY_USER_ID, session.user.discordUserId)
+            .put(KEY_USERNAME, session.user.username)
+            .put(KEY_DISPLAY_NAME, session.user.displayName)
+            .put(KEY_AVATAR, session.user.avatarUrl)
+            .toString()
+        val encrypted = encrypt(payload)
+        check(secretPrefs.edit()
+            .putString(KEY_SESSION, encrypted)
+            .remove(KEY_ACCESS)
+            .remove(KEY_REFRESH)
+            .commit()) { "Could not persist encrypted session" }
     }
 
     override fun load(): UserSession? {
-        val encAccess = secretPrefs.getString(KEY_ACCESS, null) ?: return null
-        val encRefresh = secretPrefs.getString(KEY_REFRESH, null) ?: return null
-        val accessExp = metaPrefs.getString(KEY_ACCESS_EXP, null) ?: return null
-        val refreshExp = metaPrefs.getString(KEY_REFRESH_EXP, null) ?: return null
-        val userId = metaPrefs.getString(KEY_USER_ID, null) ?: return null
-        val username = metaPrefs.getString(KEY_USERNAME, null) ?: return null
-        val displayName = metaPrefs.getString(KEY_DISPLAY_NAME, null) ?: return null
+        secretPrefs.getString(KEY_SESSION, null)?.let { encrypted ->
+            val payload = JSONObject(requireNotNull(decrypt(encrypted)))
+            return UserSession(
+                accessToken = payload.getString(KEY_ACCESS),
+                accessTokenExpiresAtUtc = payload.getString(KEY_ACCESS_EXP),
+                refreshToken = payload.getString(KEY_REFRESH),
+                refreshTokenExpiresAtUtc = payload.getString(KEY_REFRESH_EXP),
+                user = AuthUserResponse(
+                    discordUserId = payload.getString(KEY_USER_ID),
+                    username = payload.getString(KEY_USERNAME),
+                    displayName = payload.getString(KEY_DISPLAY_NAME),
+                    avatarUrl = if (payload.isNull(KEY_AVATAR)) null else payload.getString(KEY_AVATAR),
+                ),
+            )
+        }
+        // Legacy layout, retained only to read sessions from installed older versions.
+        val encAccess = secretPrefs.getString(KEY_ACCESS, null)
+        val encRefresh = secretPrefs.getString(KEY_REFRESH, null)
+        if (encAccess == null && encRefresh == null && !metaPrefs.contains(KEY_USER_ID)) return null
+        check(encAccess != null && encRefresh != null) { "Incomplete encrypted session" }
+        val accessExp = requireNotNull(metaPrefs.getString(KEY_ACCESS_EXP, null))
+        val refreshExp = requireNotNull(metaPrefs.getString(KEY_REFRESH_EXP, null))
+        val userId = requireNotNull(metaPrefs.getString(KEY_USER_ID, null))
+        val username = requireNotNull(metaPrefs.getString(KEY_USERNAME, null))
+        val displayName = requireNotNull(metaPrefs.getString(KEY_DISPLAY_NAME, null))
         return try {
-            val access = decrypt(encAccess) ?: return null
-            val refresh = decrypt(encRefresh) ?: return null
+            val access = requireNotNull(decrypt(encAccess))
+            val refresh = requireNotNull(decrypt(encRefresh))
             UserSession(
                 accessToken = access,
                 accessTokenExpiresAtUtc = accessExp,
@@ -75,14 +98,14 @@ class SecureSessionStore(context: Context) : SessionStore {
                     avatarUrl = metaPrefs.getString(KEY_AVATAR, null),
                 ),
             )
-        } catch (_: Exception) {
-            null
+        } catch (e: Exception) {
+            throw IllegalStateException("Cannot decrypt stored session", e)
         }
     }
 
     override fun clear() {
-        secretPrefs.edit().clear().apply()
-        metaPrefs.edit().clear().apply()
+        check(secretPrefs.edit().clear().commit()) { "Could not clear encrypted session" }
+        check(metaPrefs.edit().clear().commit()) { "Could not clear session metadata" }
     }
 
     private fun getOrCreateKey(): SecretKey {
@@ -138,6 +161,7 @@ class SecureSessionStore(context: Context) : SessionStore {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_IV_LENGTH = 12
+        private const val KEY_SESSION = "session_record"
 
         private const val KEY_ACCESS = "access_token"
         private const val KEY_REFRESH = "refresh_token"

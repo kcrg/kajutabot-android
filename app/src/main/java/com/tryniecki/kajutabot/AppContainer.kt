@@ -15,7 +15,7 @@ import com.tryniecki.kajutabot.auth.SessionStore
 import com.tryniecki.kajutabot.prefs.GuildSelectionStore
 
 /**
- * Minimal composition root. Created once by MainActivity and passed down.
+ * Minimal process-lifetime composition root owned by KajutaBotApplication.
  * No Hilt/Koin, no global ServiceLocator object.
  */
 class AppContainer(context: Context) {
@@ -35,26 +35,24 @@ class AppContainer(context: Context) {
     val authApi: KajutaBotAuthApi =
         KajutaBotApiClientFactory.createAuth(appConfig.apiBaseUrl)
 
-    // Created after sessionManager holder to allow token lambda without a cycle at init time.
-    lateinit var sessionManager: SessionManager
-        private set
+    private val tokenApis = LinkedHashMap<String, KajutaBotApi>(2, 0.75f, true)
 
-    lateinit var api: KajutaBotApi
-        private set
-
-    init {
-        var managerRef: SessionManager? = null
-        api = KajutaBotApiClientFactory.create(appConfig.apiBaseUrl) {
-            managerRef?.currentAccessToken()
+    private fun apiForToken(token: String): KajutaBotApi = synchronized(tokenApis) {
+        tokenApis[token]?.let { return@synchronized it }
+        KajutaBotApiClientFactory.create(appConfig.apiBaseUrl) { token }.also { api ->
+            tokenApis[token] = api
+            if (tokenApis.size > 2) tokenApis.remove(tokenApis.keys.first())
         }
-        sessionManager = SessionManager(
-            authApi = authApi,
-            apiProvider = { api },
-            sessionStore = sessionStore,
-            pendingStorage = pendingStorage,
-            appConfig = appConfig,
-            pkceGenerator = pkceGenerator,
-        )
-        managerRef = sessionManager
     }
+
+    fun clearApiCache() = synchronized(tokenApis) { tokenApis.clear() }
+
+    val sessionManager = SessionManager(
+        authApi = authApi,
+        apiProvider = ::apiForToken,
+        sessionStore = sessionStore,
+        pendingStorage = pendingStorage,
+        appConfig = appConfig,
+        pkceGenerator = pkceGenerator,
+    )
 }

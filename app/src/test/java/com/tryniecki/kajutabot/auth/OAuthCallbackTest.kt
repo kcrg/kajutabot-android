@@ -85,7 +85,7 @@ class OAuthCallbackTest {
     @Test
     fun `callback error access_denied produces readable message`() = runTest {
         val (sm, _, authApi) = setup()
-        val result = sm.handleOAuthCallback(null, null, "access_denied")
+        val result = sm.handleOAuthCallback(null, "state-123", "access_denied")
         assertTrue(result is OAuthCallbackResult.Failed)
         assertEquals(0, authApi.exchangeCount.get())
         val state = sm.authState.value as AuthState.SignedOut

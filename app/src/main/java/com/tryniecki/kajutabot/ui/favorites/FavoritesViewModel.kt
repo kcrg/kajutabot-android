@@ -26,6 +26,7 @@ class FavoritesViewModel(
     private val container: AppContainer,
 ) : ViewModel() {
     private val sessionManager = container.sessionManager
+    private val sessionIdentity = checkNotNull(sessionManager.sessionIdentity.value)
     private val selection = container.selectionStore
 
     private val _ui = MutableStateFlow(FavoritesUiState())
@@ -39,7 +40,7 @@ class FavoritesViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, error = null) }
             try {
-                val items = sessionManager.withApi { it.getFavorites() }
+                val items = sessionManager.withApiForSession(sessionIdentity) { it.getFavorites() }
                 _ui.update { it.copy(favorites = items, isLoading = false) }
             } catch (e: Exception) {
                 _ui.update { it.copy(isLoading = false, error = userMessageForError(e)) }
@@ -55,8 +56,8 @@ class FavoritesViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isMutating = true, error = null) }
             try {
-                sessionManager.withApi { it.deleteFavorite(contentUrl) }
-                val items = sessionManager.withApi { it.getFavorites() }
+                sessionManager.withApiForSession(sessionIdentity) { it.deleteFavorite(contentUrl) }
+                val items = sessionManager.withApiForSession(sessionIdentity) { it.getFavorites() }
                 _ui.update { it.copy(favorites = items, isMutating = false) }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
@@ -74,7 +75,7 @@ class FavoritesViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isMutating = true, error = null, info = null) }
             try {
-                sessionManager.withApi {
+                sessionManager.withApiForSession(sessionIdentity) {
                     it.queueFavorites(QueueFavoritesRequest(guildId, channelId))
                 }
                 _ui.update { it.copy(isMutating = false, info = "Dodano ulubione do kolejki.") }
@@ -94,7 +95,7 @@ class FavoritesViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isMutating = true, error = null, info = null) }
             try {
-                sessionManager.withApi { api ->
+                sessionManager.withApiForSession(sessionIdentity) { api ->
                     val queue = api.getQueue(guildId)
                     api.enqueue(guildId, EnqueueRequest(channelId, listOf(contentUrl), queue.version))
                 }

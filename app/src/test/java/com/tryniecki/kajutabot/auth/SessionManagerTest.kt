@@ -6,7 +6,6 @@ import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.DiscordOAuthExchangeRequest
 import com.tryniecki.kajutabot.api.model.auth.RefreshUserSessionRequest
-import com.tryniecki.kajutabot.api.model.common.ApiOperationResponse
 import com.tryniecki.kajutabot.api.model.common.HealthResponse
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
@@ -26,9 +25,15 @@ import com.tryniecki.kajutabot.api.model.radio.EnableRadioRequest
 import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
 import com.tryniecki.kajutabot.api.model.search.SearchResponse
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -40,6 +45,8 @@ import retrofit2.Response
 import java.io.IOException
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class FakeSessionStore(var session: UserSession? = null) : SessionStore {
     override fun save(session: UserSession) {
@@ -118,6 +125,7 @@ fun httpError(code: Int, errorCode: String?): HttpException {
     return HttpException(Response.error<Any>(code, responseBody))
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SessionManagerTest {
     private fun manager(
         store: FakeSessionStore = FakeSessionStore(),
@@ -125,14 +133,16 @@ class SessionManagerTest {
         authApi: FakeAuthApi = FakeAuthApi(),
         apiProvider: () -> KajutaBotApi = { throw UnsupportedOperationException() },
         clientId: String = "test-client",
+        refreshScope: CoroutineScope? = null,
     ): SessionManager {
         return SessionManager(
             authApi = authApi,
-            apiProvider = apiProvider,
+            apiProvider = { apiProvider() },
             sessionStore = store,
             pendingStorage = pending,
             appConfig = AppConfig("https://api.example", clientId),
             clock = { Instant.parse("2026-09-18T12:00:00Z") },
+            refreshScope = refreshScope ?: CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO),
         )
     }
 
@@ -277,6 +287,298 @@ class SessionManagerTest {
         }
         // 1 initial + 1 retry = 2, no more.
         assertEquals(2, calls)
+    }
+
+    @Test
+    fun cancelledFirstWaiterDoesNotCancelSharedRotation() = runTest {
+        val release = CompletableDeferred<Unit>()
+        val store = FakeSessionStore(sessionWith(accessExp = "2020-01-01T00:00:00Z"))
+        val auth = FakeAuthApi(refreshHandler = { release.await(); authResponse() })
+        val api = object : KajutaBotApi by unsupportedApi() {
+            override suspend fun getQueue(guildId: String) = emptySnapshot(guildId)
+        }
+        val sm = manager(store = store, authApi = auth, apiProvider = { api }, refreshScope = backgroundScope)
+        val first = async(start = CoroutineStart.UNDISPATCHED) { sm.withApi { it.getQueue("g") } }
+        runCurrent()
+        assertEquals(1, auth.refreshCount.get())
+        first.cancel()
+        val second = async(start = CoroutineStart.UNDISPATCHED) { sm.withApi { it.getQueue("g") } }
+        release.complete(Unit)
+        runCurrent()
+        assertEquals("g", second.await().guildId)
+        assertEquals(1, auth.refreshCount.get())
+        assertEquals("refresh-2", store.session?.refreshToken)
+    }
+
+    @Test
+    fun logoutDuringRefreshCannotRestoreOldSession() = runTest {
+        val release = CompletableDeferred<Unit>()
+        val store = FakeSessionStore(sessionWith(accessExp = "2020-01-01T00:00:00Z"))
+        val auth = FakeAuthApi(refreshHandler = { release.await(); authResponse() })
+        var logoutToken: String? = null
+        lateinit var sm: SessionManager
+        val api = object : KajutaBotApi by unsupportedApi() {
+            override suspend fun logout() {
+                logoutToken = sm.currentAccessToken()
+            }
+        }
+        sm = manager(store = store, authApi = auth, apiProvider = { api }, refreshScope = backgroundScope)
+        val waiter = async(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                sm.withApi { it.getQueue("g") }
+                false
+            } catch (_: SessionSignedOutException) {
+                true
+            }
+        }
+        runCurrent()
+        val logout = async(start = CoroutineStart.UNDISPATCHED) { sm.logout() }
+        release.complete(Unit)
+        runCurrent()
+        assertEquals(LogoutResult.SignedOut, logout.await())
+        assertEquals("access-2", logoutToken)
+        assertNull(store.session)
+        assertNull(sm.currentUserSession())
+        assertTrue(sm.authState.value is AuthState.SignedOut)
+        assertTrue(waiter.await())
+    }
+
+    @Test
+    fun olderExchangeCannotReplaceNewerLogin() = runTest {
+        val firstReply = CompletableDeferred<AuthSessionResponse>()
+        val secondReply = CompletableDeferred<AuthSessionResponse>()
+        val pending = FakePendingStorage(PendingOAuth("first-state", "v1", System.currentTimeMillis()))
+        val store = FakeSessionStore()
+        val auth = FakeAuthApi(exchangeHandler = {
+            if (it.code == "first") firstReply.await() else secondReply.await()
+        })
+        val sm = manager(store = store, pending = pending, authApi = auth)
+        val first = async(start = CoroutineStart.UNDISPATCHED) {
+            sm.handleOAuthCallback("first", "first-state", null)
+        }
+        val second = async(start = CoroutineStart.UNDISPATCHED) {
+            sm.handleOAuthCallback("second", "first-state", null)
+        }
+        secondReply.complete(authResponse("account-B", "refresh-B"))
+        assertEquals(OAuthCallbackResult.Exchanged, second.await())
+        firstReply.complete(authResponse("account-A", "refresh-A"))
+        assertTrue(first.await() is OAuthCallbackResult.Ignored)
+        assertEquals("account-B", store.session?.accessToken)
+    }
+
+    @Test
+    fun malformedRefreshIsContractError() = runTest {
+        val store = FakeSessionStore(sessionWith(accessExp = "2020-01-01T00:00:00Z"))
+        val sm = manager(
+            store = store,
+            authApi = FakeAuthApi(refreshHandler = { authResponse(access = "") }),
+        )
+        sm.restore()
+        assertTrue(sm.authState.value is AuthState.RecoverableError)
+        assertEquals("refresh-1", store.session?.refreshToken)
+    }
+
+    @Test
+    fun expiredAccessTokenIsRefreshedBeforeServerLogout() = runTest {
+        val store = FakeSessionStore(sessionWith(accessExp = "2020-01-01T00:00:00Z"))
+        lateinit var sm: SessionManager
+        var tokenAtLogout: String? = null
+        var refreshAttempts = 0
+        val api = object : KajutaBotApi by unsupportedApi() {
+            override suspend fun logout() {
+                tokenAtLogout = sm.currentAccessToken()
+            }
+        }
+        sm = manager(
+            store = store,
+            authApi = FakeAuthApi(refreshHandler = {
+                refreshAttempts++
+                if (refreshAttempts == 1) throw IOException("offline during restore")
+                authResponse()
+            }),
+            apiProvider = { api },
+        )
+        sm.restore()
+        assertTrue(sm.authState.value is AuthState.RecoverableError)
+        assertEquals(LogoutResult.SignedOut, sm.logout())
+        assertEquals("access-2", tokenAtLogout)
+        assertNull(store.session)
+    }
+
+    @Test
+    fun oldRestoreCannotOverwriteNewExchange() = runTest {
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val old = sessionWith(access = "old")
+        val storage = object : SessionStore {
+            var session: UserSession? = old
+            override fun load(): UserSession? {
+                val snapshot = session
+                started.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+                return snapshot
+            }
+            override fun save(session: UserSession) { this.session = session }
+            override fun clear() { session = null }
+        }
+        val sm = SessionManager(
+            authApi = FakeAuthApi(exchangeHandler = { authResponse("new", "new-refresh") }),
+            apiProvider = { unsupportedApi() },
+            sessionStore = storage,
+            pendingStorage = FakePendingStorage(PendingOAuth("state", "verifier", System.currentTimeMillis())),
+            appConfig = AppConfig("https://api.example", "client"),
+            clock = { Instant.parse("2026-09-18T12:00:00Z") },
+        )
+        val restoring = async(Dispatchers.Default) { sm.restore() }
+        assertTrue(started.await(5, TimeUnit.SECONDS))
+        assertEquals(OAuthCallbackResult.Exchanged, sm.handleOAuthCallback("code", "state", null))
+        release.countDown()
+        restoring.await()
+        assertEquals("new", sm.currentAccessToken())
+        assertEquals("new", storage.session?.accessToken)
+    }
+
+    @Test
+    fun storageFailureAfterSuccessfulRefreshIsNotReportedAsNetworkError() = runTest {
+        val old = sessionWith(accessExp = "2020-01-01T00:00:00Z")
+        val storage = object : SessionStore {
+            override fun load() = old
+            override fun save(session: UserSession) { throw IllegalStateException("disk full") }
+            override fun clear() = Unit
+        }
+        val sm = SessionManager(
+            authApi = FakeAuthApi(refreshHandler = { authResponse() }),
+            apiProvider = { unsupportedApi() },
+            sessionStore = storage,
+            pendingStorage = FakePendingStorage(),
+            appConfig = AppConfig("https://api.example", "client"),
+            clock = { Instant.parse("2026-09-18T12:00:00Z") },
+        )
+        sm.restore()
+        val error = sm.authState.value as AuthState.RecoverableError
+        assertTrue(error.message.contains("zapisać"))
+        assertEquals("access-1", sm.currentAccessToken())
+    }
+
+    @Test
+    fun restoreStorageFailureIsRecoverablePersistenceError() = runTest {
+        val storage = object : SessionStore {
+            override fun load(): UserSession? = throw IllegalStateException("Keystore unavailable")
+            override fun save(session: UserSession) = Unit
+            override fun clear() = Unit
+        }
+        val sm = SessionManager(
+            authApi = FakeAuthApi(),
+            apiProvider = { unsupportedApi() },
+            sessionStore = storage,
+            pendingStorage = FakePendingStorage(),
+            appConfig = AppConfig("https://api.example", "client"),
+        )
+        sm.restore()
+        assertTrue((sm.authState.value as AuthState.RecoverableError).message.contains("magazynu"))
+    }
+
+    @Test
+    fun expiredLogoutWithRejectedRefreshIsLocalOnly() = runTest {
+        val store = FakeSessionStore(sessionWith(accessExp = "2020-01-01T00:00:00Z"))
+        var attempts = 0
+        val auth = FakeAuthApi(refreshHandler = {
+            attempts++
+            if (attempts == 1) throw IOException("offline during restore")
+            throw httpError(401, "expired_refresh_token")
+        })
+        var serverLogoutCalls = 0
+        val api = object : KajutaBotApi by unsupportedApi() {
+            override suspend fun logout() { serverLogoutCalls++ }
+        }
+        val sm = manager(store = store, authApi = auth, apiProvider = { api })
+        sm.restore()
+        assertTrue(sm.logout() is LogoutResult.LocalOnly)
+        assertEquals(0, serverLogoutCalls)
+        assertNull(store.session)
+        assertTrue((sm.authState.value as AuthState.SignedOut).message!!.contains("lokalnie"))
+    }
+
+    @Test
+    fun late401FromOldRequestDoesNotRotateFreshTokenAgain() = runTest {
+        val releaseFirst = CompletableDeferred<Unit>()
+        val store = FakeSessionStore(sessionWith())
+        val auth = FakeAuthApi(refreshHandler = { authResponse("fresh", "fresh-refresh") })
+        var calls = 0
+        val api = object : KajutaBotApi by unsupportedApi() {
+            override suspend fun getQueue(guildId: String): QueueSnapshotResponse {
+                calls++
+                if (calls == 1) {
+                    releaseFirst.await()
+                    throw httpErrorWithToken("access-1")
+                }
+                if (calls == 2) throw httpErrorWithToken("access-1")
+                return emptySnapshot(guildId)
+            }
+        }
+        val sm = manager(store = store, authApi = auth, apiProvider = { api }, refreshScope = backgroundScope)
+        sm.restore()
+        val first = async(start = CoroutineStart.UNDISPATCHED) { sm.withApi { it.getQueue("g") } }
+        val second = async(start = CoroutineStart.UNDISPATCHED) { sm.withApi { it.getQueue("g") } }
+        runCurrent()
+        second.await()
+        releaseFirst.complete(Unit)
+        runCurrent()
+        first.await()
+        assertEquals(1, auth.refreshCount.get())
+        assertEquals(4, calls)
+    }
+
+    @Test
+    fun oldAccountRequestKeepsItsTokenAndCannotPublishIntoNewSession() = runTest {
+        val releaseA = CompletableDeferred<Unit>()
+        val sentTokens = mutableListOf<String>()
+        val sm = SessionManager(
+            authApi = FakeAuthApi(exchangeHandler = { authResponse("token-B", "refresh-B") }),
+            apiProvider = { token ->
+                object : KajutaBotApi by unsupportedApi() {
+                    override suspend fun getQueue(guildId: String): QueueSnapshotResponse {
+                        sentTokens += token
+                        if (token == "access-1") releaseA.await()
+                        return emptySnapshot(guildId)
+                    }
+                }
+            },
+            sessionStore = FakeSessionStore(sessionWith()),
+            pendingStorage = FakePendingStorage(PendingOAuth("state", "verifier", System.currentTimeMillis())),
+            appConfig = AppConfig("https://api.example", "client"),
+            clock = { Instant.parse("2026-09-18T12:00:00Z") },
+        )
+        sm.restore()
+        val oldIdentity = sm.sessionIdentity.value!!
+        val old = async(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                sm.withApiForSession(oldIdentity) { it.getQueue("g") }
+                false
+            } catch (_: SessionSignedOutException) {
+                true
+            }
+        }
+        assertEquals(OAuthCallbackResult.Exchanged, sm.handleOAuthCallback("code", "state", null))
+        releaseA.complete(Unit)
+        assertTrue(old.await())
+        try {
+            sm.withApiForSession(oldIdentity) { it.getQueue("g") }
+            assertTrue("old session should be rejected before a request", false)
+        } catch (_: SessionSignedOutException) {
+        }
+        assertEquals("g", sm.withApi { it.getQueue("g") }.guildId)
+        assertEquals(listOf("access-1", "token-B"), sentTokens)
+    }
+
+    private fun httpErrorWithToken(token: String): HttpException {
+        val body = "{}".toResponseBody("application/json".toMediaType())
+        val request = okhttp3.Request.Builder().url("https://api.example/queue")
+            .header("Authorization", "Bearer " + token).build()
+        val raw = okhttp3.Response.Builder().request(request)
+            .protocol(okhttp3.Protocol.HTTP_1_1).code(401).message("Unauthorized")
+            .body(body).build()
+        return HttpException(Response.error<Any>(body, raw))
     }
 
     private fun emptySnapshot(guildId: String) = QueueSnapshotResponse(

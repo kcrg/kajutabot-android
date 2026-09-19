@@ -139,6 +139,7 @@ class PlayerViewModel(
     private val container: AppContainer,
 ) : ViewModel() {
     private val sessionManager = container.sessionManager
+    private val sessionIdentity = checkNotNull(sessionManager.sessionIdentity.value)
     private val selection = container.selectionStore
 
     private val _ui = MutableStateFlow(
@@ -224,7 +225,7 @@ class PlayerViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isLoadingGuilds = true, error = null) }
             try {
-                val guilds = sessionManager.withApi { it.getMyGuilds() }
+                val guilds = sessionManager.withApiForSession(sessionIdentity) { it.getMyGuilds() }
                 var selGuild = selection.guildId
                 var selChannel = selection.voiceChannelId
                 if (selGuild != null && guilds.none { g -> g.id == selGuild }) {
@@ -278,7 +279,7 @@ class PlayerViewModel(
     fun refreshChannels(guildId: String, preserveChannel: String?) {
         viewModelScope.launch {
             try {
-                val channels = sessionManager.withApi { it.getVoiceChannels(guildId) }
+                val channels = sessionManager.withApiForSession(sessionIdentity) { it.getVoiceChannels(guildId) }
                 var selChannel = preserveChannel
                 if (selChannel != null && channels.none { c -> c.id == selChannel }) {
                     selChannel = null
@@ -331,7 +332,7 @@ class PlayerViewModel(
 
     private suspend fun fetchQueueSnapshot(guildId: String): QueueSnapshotResponse =
         queueFetchMutex.withLock {
-            sessionManager.withApi { it.getQueue(guildId) }
+            sessionManager.withApiForSession(sessionIdentity) { it.getQueue(guildId) }
         }
 
     /**
@@ -366,7 +367,7 @@ class PlayerViewModel(
         searchJob = viewModelScope.launch {
             _ui.update { it.copy(isSearching = true, error = null) }
             try {
-                val response = sessionManager.withApi {
+                val response = sessionManager.withApiForSession(sessionIdentity) {
                     it.search(query = trimmed, source = "YouTube", maxResults = 10)
                 }
                 _ui.update { it.copy(searchResults = response.items, isSearching = false) }
@@ -408,7 +409,7 @@ class PlayerViewModel(
             _ui.update { it.copy(isMutating = true, error = null, info = null) }
             try {
                 val version = _ui.value.queue?.version
-                val response = sessionManager.withApi {
+                val response = sessionManager.withApiForSession(sessionIdentity) {
                     it.enqueue(guildId, EnqueueRequest(channelId, inputs, version))
                 }
                 applyQueueSnapshot(response.snapshot)
@@ -461,7 +462,7 @@ class PlayerViewModel(
                 viewModelScope.launch {
                     _ui.update { it.copy(isMutating = true, error = null) }
                     try {
-                        val response = sessionManager.withApi { api ->
+                        val response = sessionManager.withApiForSession(sessionIdentity) { api ->
                             api.enableRadio(guildId, action.request)
                         }
                         applyQueueSnapshot(response.snapshot)
@@ -480,7 +481,7 @@ class PlayerViewModel(
             _ui.update { it.copy(isMutating = true, error = null) }
             try {
                 val version = _ui.value.queue?.version
-                val response = sessionManager.withApi {
+                val response = sessionManager.withApiForSession(sessionIdentity) {
                     it.removeQueueEntry(guildId, entryId, version)
                 }
                 applyQueueSnapshot(response.snapshot)
@@ -505,7 +506,7 @@ class PlayerViewModel(
             _ui.update { it.copy(isMutating = true, error = null) }
             try {
                 val version = _ui.value.queue?.version
-                val response = sessionManager.withApi { call(it, version) } ?: run {
+                val response = sessionManager.withApiForSession(sessionIdentity) { call(it, version) } ?: run {
                     _ui.update { it.copy(isMutating = false) }
                     return@launch
                 }

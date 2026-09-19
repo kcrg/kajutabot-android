@@ -12,6 +12,21 @@ val kajutaDiscordClientId: String =
 val discordScheme =
     if (kajutaDiscordClientId.isNotBlank()) "discord-$kajutaDiscordClientId" else "discord-unconfigured"
 
+// Release credentials come only from the build environment, never from project files.
+val releaseSigningKeys = listOf(
+    "KAJUTABOT_RELEASE_STORE_FILE",
+    "KAJUTABOT_RELEASE_STORE_PASSWORD",
+    "KAJUTABOT_RELEASE_KEY_ALIAS",
+    "KAJUTABOT_RELEASE_KEY_PASSWORD",
+)
+val releaseSigningValues = releaseSigningKeys.associateWith { key ->
+    providers.environmentVariable(key).orNull?.takeIf { it.isNotBlank() }
+}
+val suppliedSigningKeys = releaseSigningValues.filterValues { it != null }.keys
+require(suppliedSigningKeys.isEmpty() || suppliedSigningKeys.size == releaseSigningKeys.size) {
+    "Incomplete release signing environment: set all four KAJUTABOT_RELEASE_* variables or none."
+}
+
 android {
     namespace = "com.tryniecki.kajutabot"
     compileSdk {
@@ -33,9 +48,21 @@ android {
         manifestPlaceholders["discordScheme"] = discordScheme
     }
 
+    val releaseSigning = if (suppliedSigningKeys.isNotEmpty()) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseSigningValues.getValue("KAJUTABOT_RELEASE_STORE_FILE")!!)
+            storePassword = releaseSigningValues.getValue("KAJUTABOT_RELEASE_STORE_PASSWORD")
+            keyAlias = releaseSigningValues.getValue("KAJUTABOT_RELEASE_KEY_ALIAS")
+            keyPassword = releaseSigningValues.getValue("KAJUTABOT_RELEASE_KEY_PASSWORD")
+        }
+    } else {
+        logger.lifecycle("Release signing is not configured; assembleRelease will produce an unsigned APK.")
+        null
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = releaseSigning
             optimization {
                 enable = true
             }

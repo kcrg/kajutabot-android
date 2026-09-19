@@ -23,6 +23,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
@@ -70,6 +72,7 @@ fun KajutaBotApp(
     onThemeModeChange: (ThemeMode) -> Unit,
 ) {
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
+    val sessionIdentity by appViewModel.sessionIdentity.collectAsStateWithLifecycle()
     val isSigningIn by appViewModel.isSigningIn.collectAsStateWithLifecycle()
     val currentDestination by appViewModel.currentDestination.collectAsStateWithLifecycle()
     val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsStateWithLifecycle()
@@ -93,14 +96,18 @@ fun KajutaBotApp(
             message = state.message,
             onRetry = { appViewModel.retryRestore() },
         )
-        is AuthState.SignedIn -> AuthenticatedShell(
+        is AuthState.SignedIn -> sessionIdentity?.let { identity ->
+            CompositionLocalProvider(LocalViewModelStoreOwner provides appViewModel.ownerForSession(identity)) {
+                AuthenticatedShell(
             container = container,
             appViewModel = appViewModel,
             currentDestination = currentDestination,
             isAddTrackOpen = isAddTrackOpen,
             themeMode = themeMode,
             onThemeModeChange = onThemeModeChange,
-        )
+                )
+            }
+        } ?: RestoringScreen()
     }
 }
 
@@ -132,7 +139,7 @@ private fun RestoreErrorScreen(message: String, onRetry: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text("Brak połączenia", style = MaterialTheme.typography.titleLarge)
+            Text("Nie można przywrócić sesji", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
             Text(
                 message,
@@ -156,7 +163,7 @@ private fun AuthenticatedShell(
 ) {
     // Single shared player state for the whole authenticated shell: Player
     // screen, MiniPlayer, share flow. Scoped to the activity, so switching
-    // bottom tabs never recreates it and queue state survives.
+    // bottom tabs never recreates it and queue state survives within this session.
     val playerViewModel: PlayerViewModel = viewModel(
         factory = PlayerViewModel.Factory(container),
     )
@@ -273,7 +280,7 @@ private fun AuthenticatedShell(
             )
             AppDestination.MY_AUDIO -> MyAudioScreen()
             AppDestination.FAVORITES -> FavoritesRoute(container = container)
-            AppDestination.            MORE -> MoreScreen(
+            AppDestination.MORE -> MoreScreen(
                 container = container,
                 appViewModel = appViewModel,
                 themeMode = themeMode,
