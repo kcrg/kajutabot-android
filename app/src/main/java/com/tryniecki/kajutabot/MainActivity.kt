@@ -113,6 +113,6 @@ class MainActivity : ComponentActivity() {
         URL_REGEX.find(text)?.value
 
     private companion object {
-        val URL_REGEX = Regex("""https?://[^\s]+""")
+        val URL_REGEX = Regex("""https?://\S+""")
     }
 }

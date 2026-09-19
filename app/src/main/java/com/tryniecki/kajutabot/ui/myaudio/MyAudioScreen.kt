@@ -1,5 +1,11 @@
 package com.tryniecki.kajutabot.ui.myaudio
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.theme.KbMotion
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,6 +81,24 @@ fun MyAudioScreen() {
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
             ) {
+                // Adjacent tabs share one axis: content follows the tab direction
+                // with a short travel, without a full pager motion.
+                val motion = MaterialTheme.motionScheme
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        val direction = if (targetState > initialState) 1 else -1
+                        (fadeIn(motion.fastEffectsSpec()) +
+                            slideInHorizontally(motion.fastSpatialSpec()) {
+                                direction * (it * KbMotion.TAB_SLIDE_FRACTION).toInt()
+                            }) togetherWith
+                            (fadeOut(motion.fastEffectsSpec()) +
+                                slideOutHorizontally(motion.fastSpatialSpec()) {
+                                    -direction * (it * KbMotion.TAB_SLIDE_FRACTION).toInt()
+                                })
+                    },
+                    label = "myAudioTab",
+                ) { tab ->
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -83,14 +108,14 @@ fun MyAudioScreen() {
                 ) {
                     Icon(
                         painter = painterResource(
-                            if (selectedTab == 0) R.drawable.kb_ic_upload else R.drawable.kb_ic_server,
+                            if (tab == 0) R.drawable.kb_ic_upload else R.drawable.kb_ic_server,
                         ),
                         contentDescription = null,
                         modifier = Modifier.size(36.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Text(
-                        text = if (selectedTab == 0) "Brak przesłanych plików" else "Jellyfin nie jest jeszcze połączony",
+                        text = if (tab == 0) "Brak przesłanych plików" else "Jellyfin nie jest jeszcze połączony",
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
@@ -98,6 +123,7 @@ fun MyAudioScreen() {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
                 }
             }
         }

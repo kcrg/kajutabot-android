@@ -1,6 +1,12 @@
 package com.tryniecki.kajutabot.ui.more
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,7 +36,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
@@ -49,6 +55,7 @@ import com.tryniecki.kajutabot.browser.openCustomTab
 import com.tryniecki.kajutabot.browser.rememberCustomTabColors
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.navigation.MoreDestination
+import com.tryniecki.kajutabot.ui.theme.KbMotion
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 
 @Composable
@@ -68,7 +75,26 @@ fun MoreScreen(
         destination = MoreDestination.ROOT
     }
 
-    when (destination) {
+    // Hierarchical navigation: forward pushes content in from the right,
+    // Back reverses the direction. Shared-axis X, no full-screen travel.
+    val motion = MaterialTheme.motionScheme
+    AnimatedContent(
+        targetState = destination,
+        transitionSpec = {
+            val forward = targetState != MoreDestination.ROOT
+            val direction = if (forward) 1 else -1
+            (fadeIn(motion.defaultEffectsSpec()) +
+                slideInHorizontally(motion.defaultSpatialSpec()) {
+                    direction * (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                }) togetherWith
+                (fadeOut(motion.defaultEffectsSpec()) +
+                    slideOutHorizontally(motion.defaultSpatialSpec()) {
+                        -direction * (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                    })
+        },
+        label = "moreDestination",
+    ) { current ->
+    when (current) {
         MoreDestination.ROOT -> MoreRootScreen(
             container = container,
             appViewModel = appViewModel,
@@ -83,6 +109,7 @@ fun MoreScreen(
             onBack = { destination = MoreDestination.ROOT },
         )
     }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,7 +122,7 @@ private fun MoreRootScreen(
     onOpenLibraries: () -> Unit,
     onOpenContact: () -> Unit,
 ) {
-    val authState by appViewModel.authState.collectAsState()
+    val authState by appViewModel.authState.collectAsStateWithLifecycle()
     var isLoggingOut by remember { mutableStateOf(false) }
     var logoutError by remember { mutableStateOf<String?>(null) }
 
@@ -243,14 +270,6 @@ private fun MoreRootScreen(
 
 @Composable
 private fun LibrariesScreen(onBack: () -> Unit) {
-    val libraries = listOf(
-        LibraryInfo("Jetpack Compose", "Deklaratywny UI Androida", "Apache 2.0"),
-        LibraryInfo("Material 3", "Natywne komponenty i system motywów", "Apache 2.0"),
-        LibraryInfo("Tabler Icons", "Ikony interfejsu", "MIT"),
-        LibraryInfo("Retrofit", "Klient REST", "Apache 2.0"),
-        LibraryInfo("OkHttp", "Transport HTTP", "Apache 2.0"),
-        LibraryInfo("kotlinx.serialization", "Serializacja JSON", "Apache 2.0"),
-    )
     Scaffold(topBar = { BackTopBar(title = "Użyte biblioteki", onBack = onBack) }) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -259,13 +278,13 @@ private fun LibrariesScreen(onBack: () -> Unit) {
                 bottom = innerPadding.calculateBottomPadding() + 16.dp,
             ),
         ) {
-            items(libraries, key = { it.name }) { library ->
+            items(LIBRARIES, key = { it.name }) { library ->
                 ListItem(
                     headlineContent = { Text(library.name) },
                     supportingContent = { Text(library.description) },
                     trailingContent = { Text(library.license) },
                 )
-                if (library != libraries.last()) HorizontalDivider()
+                if (library != LIBRARIES.last()) HorizontalDivider()
             }
         }
     }
@@ -354,3 +373,12 @@ private fun SettingsRow(icon: Int, title: String, subtitle: String, onClick: () 
 }
 
 private data class LibraryInfo(val name: String, val description: String, val license: String)
+
+private val LIBRARIES = listOf(
+    LibraryInfo("Jetpack Compose", "Deklaratywny UI Androida", "Apache 2.0"),
+    LibraryInfo("Material 3", "Natywne komponenty i system motywów", "Apache 2.0"),
+    LibraryInfo("Tabler Icons", "Ikony interfejsu", "MIT"),
+    LibraryInfo("Retrofit", "Klient REST", "Apache 2.0"),
+    LibraryInfo("OkHttp", "Transport HTTP", "Apache 2.0"),
+    LibraryInfo("kotlinx.serialization", "Serializacja JSON", "Apache 2.0"),
+)

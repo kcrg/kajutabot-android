@@ -47,7 +47,7 @@ import com.tryniecki.kajutabot.ui.components.TrackArtwork
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTrackScreen(
-    ui: PlayerUiState,
+    ui: AddTrackUiState,
     onClose: () -> Unit,
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,

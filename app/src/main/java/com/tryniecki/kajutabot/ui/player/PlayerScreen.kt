@@ -3,14 +3,10 @@ package com.tryniecki.kajutabot.ui.player
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,7 +41,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +52,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
@@ -64,22 +60,22 @@ import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.theme.KbMotion
+import com.tryniecki.kajutabot.ui.theme.fadeThrough
+import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisX
 import kotlinx.coroutines.delay
 
-private const val ADD_TRACK_ENTER_MS = 180
-private const val ADD_TRACK_EXIT_MS = 150
-private const val ADD_TRACK_CLEAR_DELAY_MS = 200L
-private const val TRACK_CHANGE_MS = 180
-private const val TRACK_CHANGE_EXIT_MS = 140
+private const val ADD_TRACK_CLEAR_DELAY_MS = KbMotion.MODAL_CLEAR_DELAY_MS
 
 @Composable
 fun PlayerRoute(
     appViewModel: AppViewModel,
     viewModel: PlayerViewModel,
 ) {
-    val ui by viewModel.ui.collectAsState()
-    val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsState()
-    val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsState()
+    val ui by viewModel.playerScreenState.collectAsStateWithLifecycle()
+    val addTrackUi by viewModel.addTrackState.collectAsStateWithLifecycle()
+    val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsStateWithLifecycle()
+    val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsStateWithLifecycle()
 
     // Shared URL -> prefill the add-track modal and open it.
     LaunchedEffect(pendingSharedUrl) {
@@ -115,6 +111,7 @@ fun PlayerRoute(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        val motion = MaterialTheme.motionScheme
         PlayerScreen(
             ui = ui,
             onPickerOpen = { viewModel.setShowPicker(true) },
@@ -133,14 +130,14 @@ fun PlayerRoute(
         AnimatedVisibility(
             visible = isAddTrackOpen,
             enter = slideInVertically(
-                animationSpec = tween(ADD_TRACK_ENTER_MS),
-            ) { it } + fadeIn(tween(ADD_TRACK_ENTER_MS)),
+                animationSpec = motion.slowSpatialSpec(),
+            ) { it } + fadeIn(motion.defaultEffectsSpec()),
             exit = slideOutVertically(
-                animationSpec = tween(ADD_TRACK_EXIT_MS),
-            ) { it } + fadeOut(tween(ADD_TRACK_EXIT_MS)),
+                animationSpec = motion.fastSpatialSpec(),
+            ) { it } + fadeOut(motion.fastEffectsSpec()),
         ) {
             AddTrackScreen(
-                ui = ui,
+                ui = addTrackUi,
                 onClose = { appViewModel.setAddTrackOpen(false) },
                 onQueryChange = viewModel::setSearchQuery,
                 onSubmit = viewModel::submitSmartInput,
@@ -154,7 +151,7 @@ fun PlayerRoute(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
-    ui: PlayerUiState,
+    ui: PlayerScreenState,
     onPickerOpen: () -> Unit,
     onPickerDismiss: () -> Unit,
     onGuildSelect: (String) -> Unit,
@@ -168,6 +165,7 @@ fun PlayerScreen(
     onDismissMessage: () -> Unit,
     onAddTrackOpen: () -> Unit,
 ) {
+    val motion = MaterialTheme.motionScheme
     Scaffold(
         topBar = { TopAppBar(title = { Text("Odtwarzacz") }) },
         floatingActionButton = {
@@ -285,9 +283,9 @@ fun PlayerScreen(
                 items(pending, key = { it.entryId }) { entry ->
                     Card(
                         modifier = Modifier.animateItem(
-                            fadeInSpec = tween(120),
-                            fadeOutSpec = tween(120),
-                            placementSpec = tween(150),
+                            fadeInSpec = motion.fastEffectsSpec(),
+                            fadeOutSpec = motion.fastEffectsSpec(),
+                            placementSpec = motion.fastSpatialSpec(),
                         ),
                     ) {
                         ListItem(
@@ -341,6 +339,7 @@ private fun NowPlayingCard(
 ) {
     val repeatEnabled = queue?.isRepeatEnabled == true
     val radioEnabled = queue?.radio?.isEnabled == true
+    val motion = MaterialTheme.motionScheme
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -353,13 +352,25 @@ private fun NowPlayingCard(
             // Artwork, title, meta and progress transition as one unit keyed by
             // playback identity (track + start moment), so a repeated track counts
             // as a new playback and never animates 95% -> 2% on one progress bar.
+            // Track -> track keeps a directional shared axis; idle <-> playing
+            // has no "next" semantics, so it uses a calm fade-through instead.
+            // Both rely on the reserved title/flags slots below: equal heights
+            // mean no card jump on track change, and the built-in size animation
+            // only runs for genuine idle <-> playing height deltas.
             AnimatedContent(
                 targetState = nowPlayingSlide(queue),
                 transitionSpec = {
-                    (fadeIn(tween(TRACK_CHANGE_MS)) +
-                        slideInHorizontally(tween(TRACK_CHANGE_MS)) { (it * 0.08f).toInt() }) togetherWith
-                        (fadeOut(tween(TRACK_CHANGE_EXIT_MS)) +
-                            slideOutHorizontally(tween(TRACK_CHANGE_EXIT_MS)) { -(it * 0.08f).toInt() })
+                    if (initialState.hasTrack == targetState.hasTrack) {
+                        forwardSharedAxisX(
+                            fadeSpec = motion.defaultEffectsSpec(),
+                            slideSpec = motion.defaultSpatialSpec(),
+                        )
+                    } else {
+                        fadeThrough(
+                            enterSpec = motion.defaultEffectsSpec(),
+                            exitSpec = motion.fastEffectsSpec(),
+                        )
+                    }
                 },
                 label = "nowPlaying",
             ) { slide ->
@@ -381,10 +392,14 @@ private fun NowPlayingCard(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
+                        // Fixed two-line slot: 1-line and 2-line titles occupy
+                        // the same height at any font scale, so the card never
+                        // jumps on track -> track.
                         Text(
                             text = slide.title,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.SemiBold,
+                            minLines = 2,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -405,16 +420,20 @@ private fun NowPlayingCard(
                 }
             }
 
-            // Live flags update outside the track transition.
+            // Live flags update outside the track transition. The line is always
+            // reserved (non-breaking space when empty) so toggling radio/repeat
+            // never changes the card height.
             val flags = buildList {
                 if (radioEnabled) add("Radio włączone")
                 if (repeatEnabled) add("Powtarzanie")
             }
-            if (queue?.nowPlaying != null && flags.isNotEmpty()) {
+            if (queue?.nowPlaying != null) {
                 Text(
-                    text = flags.joinToString(" • "),
+                    text = flags.joinToString(" • ").ifEmpty { NBSP },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    minLines = 1,
+                    maxLines = 1,
                 )
             }
 
@@ -560,3 +579,6 @@ internal fun formatDuration(ms: Long): String {
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
 }
+
+/** Non-breaking space keeping reserved single-line slots at full line height. */
+private const val NBSP = " "

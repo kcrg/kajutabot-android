@@ -4,13 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,7 +24,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -40,9 +33,9 @@ import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
+import com.tryniecki.kajutabot.ui.theme.KbMotion
+import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisX
 
-private const val MINI_TRACK_CHANGE_MS = 140
-private const val MINI_TRACK_CHANGE_EXIT_MS = 120
 private const val MINI_PLAYER_HEIGHT_DP = 68
 
 /**
@@ -72,12 +65,13 @@ fun shouldShowMiniPlayer(
  */
 @Composable
 fun MiniPlayer(
-    ui: PlayerUiState,
+    slide: NowPlayingSlide,
+    isMutating: Boolean,
     onOpenPlayer: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val slide = nowPlayingSlide(ui.queue)
+    val motion = MaterialTheme.motionScheme
 
     Surface(
         tonalElevation = 2.dp,
@@ -94,18 +88,20 @@ fun MiniPlayer(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Track body: artwork + title + time + thin progress, animated
-                // as one unit on playback identity. The Skip button beside it
-                // never animates and never navigates.
+                // as one unit on playback identity with the same shared-axis
+                // language as the full player, only faster and subtler.
+                // The Skip button beside it never animates and never navigates.
                 AnimatedContent(
                     targetState = slide,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
                     transitionSpec = {
-                        (fadeIn(tween(MINI_TRACK_CHANGE_MS)) +
-                            slideInHorizontally(tween(MINI_TRACK_CHANGE_MS)) { (it * 0.06f).toInt() }) togetherWith
-                            (fadeOut(tween(MINI_TRACK_CHANGE_EXIT_MS)) +
-                                slideOutHorizontally(tween(MINI_TRACK_CHANGE_EXIT_MS)) { -(it * 0.06f).toInt() })
+                        forwardSharedAxisX(
+                            fadeSpec = motion.fastEffectsSpec(),
+                            slideSpec = motion.fastSpatialSpec(),
+                            distanceFraction = KbMotion.MINI_TRACK_SLIDE_FRACTION,
+                        )
                     },
                     label = "miniPlayer",
                 ) { current ->
@@ -128,8 +124,6 @@ fun MiniPlayer(
                                 .weight(1f)
                                 .fillMaxWidth()
                                 .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
                                     role = Role.Button,
                                     onClickLabel = "Otwórz odtwarzacz",
                                     onClick = onOpenPlayer,
@@ -170,7 +164,7 @@ fun MiniPlayer(
                 }
                 IconButton(
                     onClick = onSkip,
-                    enabled = !ui.isMutating,
+                    enabled = !isMutating,
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.kb_ic_player_skip_forward),

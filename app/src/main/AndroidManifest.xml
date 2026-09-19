@@ -30,7 +30,10 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
-            <intent-filter>
+            <!-- Discord OAuth PKCE callback on a custom scheme. Deliberately not
+                 an https App Link (no host by design), so AppLinkUrlError is
+                 a false positive here. -->
+            <intent-filter tools:ignore="AppLinkUrlError">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />

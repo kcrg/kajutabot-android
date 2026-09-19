@@ -18,9 +18,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -48,6 +52,89 @@ data class PlayerUiState(
     val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
 }
 
+/**
+ * Narrow, independently observed slices of [PlayerUiState]. The mappers are
+ * pure so the projections stay unit-testable without Android/Compose.
+ */
+data class PlayerScreenState(
+    val guilds: List<DiscordGuildResponse> = emptyList(),
+    val voiceChannels: List<DiscordVoiceChannelResponse> = emptyList(),
+    val selectedGuildId: String? = null,
+    val selectedVoiceChannelId: String? = null,
+    val queue: QueueSnapshotResponse? = null,
+    val isLoadingGuilds: Boolean = false,
+    val isLoadingQueue: Boolean = false,
+    val isMutating: Boolean = false,
+    val showGuildPicker: Boolean = false,
+    val error: String? = null,
+    val info: String? = null,
+) {
+    val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
+    val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
+    val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
+}
+
+data class AddTrackUiState(
+    val searchQuery: String = "",
+    val searchResults: List<SearchItemResponse> = emptyList(),
+    val isSearching: Boolean = false,
+    val isMutating: Boolean = false,
+    val error: String? = null,
+    val info: String? = null,
+)
+
+data class MiniPlayerState(
+    val slide: NowPlayingSlide,
+    val isMutating: Boolean,
+)
+
+data class PlayerPollingKeys(
+    val guildId: String?,
+    val playbackKey: String?,
+)
+
+fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
+    guilds = guilds,
+    voiceChannels = voiceChannels,
+    selectedGuildId = selectedGuildId,
+    selectedVoiceChannelId = selectedVoiceChannelId,
+    queue = queue,
+    isLoadingGuilds = isLoadingGuilds,
+    isLoadingQueue = isLoadingQueue,
+    isMutating = isMutating,
+    showGuildPicker = showGuildPicker,
+    error = error,
+    info = info,
+)
+
+fun PlayerUiState.toAddTrackUiState(): AddTrackUiState = AddTrackUiState(
+    searchQuery = searchQuery,
+    searchResults = searchResults,
+    isSearching = isSearching,
+    isMutating = isMutating,
+    error = error,
+    info = info,
+)
+
+fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
+    val queueSnapshot = queue ?: return null
+    if (queueSnapshot.nowPlaying == null) return null
+    return MiniPlayerState(
+        slide = nowPlayingSlide(queueSnapshot),
+        isMutating = isMutating,
+    )
+}
+
+fun PlayerUiState.toPollingKeys(): PlayerPollingKeys {
+    val guildId = selectedGuildId ?: return PlayerPollingKeys(null, null)
+    val snapshot = queue
+    val track = snapshot?.nowPlaying
+    return PlayerPollingKeys(
+        guildId = guildId,
+        playbackKey = track?.let { playbackIdentity(it, snapshot.nowPlayingStartedAt) },
+    )
+}
+
 class PlayerViewModel(
     private val container: AppContainer,
 ) : ViewModel() {
@@ -61,6 +148,36 @@ class PlayerViewModel(
         ),
     )
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
+
+    /**
+     * Narrow projections so collectors only recompose on their own slice:
+     * typing in AddTrack search must not recompose the hidden Player screen,
+     * the shell or the MiniPlayer, and polling keys must not carry the queue.
+     */
+    val playerScreenState: StateFlow<PlayerScreenState> = _ui
+        .map { it.toPlayerScreenState() }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toPlayerScreenState())
+
+    val addTrackState: StateFlow<AddTrackUiState> = _ui
+        .map { it.toAddTrackUiState() }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toAddTrackUiState())
+
+    val miniPlayerState: StateFlow<MiniPlayerState?> = _ui
+        .map { it.toMiniPlayerState() }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toMiniPlayerState())
+
+    val playerError: StateFlow<String?> = _ui
+        .map { it.error }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.error)
+
+    val pollingKeys: StateFlow<PlayerPollingKeys> = _ui
+        .map { it.toPollingKeys() }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toPollingKeys())
 
     private val _trackAdded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val trackAdded: SharedFlow<Unit> = _trackAdded.asSharedFlow()

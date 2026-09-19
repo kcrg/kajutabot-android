@@ -2,12 +2,10 @@ package com.tryniecki.kajutabot.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -26,15 +24,17 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tryniecki.kajutabot.AppContainer
@@ -49,6 +49,7 @@ import com.tryniecki.kajutabot.ui.myaudio.MyAudioScreen
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
 import com.tryniecki.kajutabot.ui.player.EXPECTED_END_GRACE_MS
 import com.tryniecki.kajutabot.ui.player.MiniPlayer
+import com.tryniecki.kajutabot.ui.player.MiniPlayerState
 import com.tryniecki.kajutabot.ui.player.POLL_INTERVAL_MS
 import com.tryniecki.kajutabot.ui.player.PlayerRoute
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
@@ -56,6 +57,7 @@ import com.tryniecki.kajutabot.ui.player.playbackIdentity
 import com.tryniecki.kajutabot.ui.player.remainingMs
 import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
+import com.tryniecki.kajutabot.ui.theme.fadeThrough
 import java.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -67,10 +69,10 @@ fun KajutaBotApp(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
 ) {
-    val authState by appViewModel.authState.collectAsState()
-    val isSigningIn by appViewModel.isSigningIn.collectAsState()
-    val currentDestination by appViewModel.currentDestination.collectAsState()
-    val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsState()
+    val authState by appViewModel.authState.collectAsStateWithLifecycle()
+    val isSigningIn by appViewModel.isSigningIn.collectAsStateWithLifecycle()
+    val currentDestination by appViewModel.currentDestination.collectAsStateWithLifecycle()
+    val isAddTrackOpen by appViewModel.isAddTrackOpen.collectAsStateWithLifecycle()
     val openCustomTab = rememberOpenCustomTab()
 
     LaunchedEffect(appViewModel) {
@@ -158,20 +160,32 @@ private fun AuthenticatedShell(
     val playerViewModel: PlayerViewModel = viewModel(
         factory = PlayerViewModel.Factory(container),
     )
-    val playerUi by playerViewModel.ui.collectAsState()
+    // Narrow slices: the shell only needs the mini-player state, the error
+    // line and the polling keys — typing in AddTrack search must not
+    // recompose the shell or the MiniPlayer.
+    val miniPlayerState by playerViewModel.miniPlayerState.collectAsStateWithLifecycle()
+    val playerError by playerViewModel.playerError.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val motion = MaterialTheme.motionScheme
+
+    // Retain the last content for the exit transition: visibility and state
+    // go null in the same frame when the track ends.
+    var lastMiniPlayerState by remember { mutableStateOf<MiniPlayerState?>(null) }
+    LaunchedEffect(miniPlayerState) {
+        if (miniPlayerState != null) lastMiniPlayerState = miniPlayerState
+    }
 
     val miniPlayerVisible = shouldShowMiniPlayer(
         isAuthenticated = true,
         isBottomBarVisible = !isAddTrackOpen,
         destination = currentDestination,
-        hasNowPlaying = playerUi.queue?.nowPlaying != null,
+        hasNowPlaying = miniPlayerState != null,
     )
 
     // Surface player errors on tabs without their own error card.
     // The Player tab keeps its inline card; other tabs get a transient snackbar.
-    LaunchedEffect(playerUi.error, currentDestination) {
-        val message = playerUi.error
+    LaunchedEffect(playerError, currentDestination) {
+        val message = playerError
         if (message != null && currentDestination != AppDestination.PLAYER) {
             snackbarHostState.showSnackbar(message)
         }
@@ -189,16 +203,30 @@ private fun AuthenticatedShell(
             // Full-screen AddTrack modal: no tabs reachable underneath.
             if (!isAddTrackOpen) {
                 Column {
+                    // Appear/disappear animates the occupied space too, so the
+                    // NavigationBar stays put and content above glides instead
+                    // of jumping.
                     AnimatedVisibility(
                         visible = miniPlayerVisible,
-                        enter = fadeIn(tween(160)) + slideInVertically(tween(160)) { it },
-                        exit = fadeOut(tween(120)) + slideOutVertically(tween(120)) { it },
+                        enter = fadeIn(motion.defaultEffectsSpec()) +
+                            expandVertically(
+                                animationSpec = motion.defaultSpatialSpec(),
+                                expandFrom = Alignment.Bottom,
+                            ),
+                        exit = fadeOut(motion.fastEffectsSpec()) +
+                            shrinkVertically(
+                                animationSpec = motion.defaultSpatialSpec(),
+                                shrinkTowards = Alignment.Bottom,
+                            ),
                     ) {
-                        MiniPlayer(
-                            ui = playerUi,
-                            onOpenPlayer = { appViewModel.onDestinationChange(AppDestination.PLAYER) },
-                            onSkip = playerViewModel::skip,
-                        )
+                        lastMiniPlayerState?.let { state ->
+                            MiniPlayer(
+                                slide = state.slide,
+                                isMutating = state.isMutating,
+                                onOpenPlayer = { appViewModel.onDestinationChange(AppDestination.PLAYER) },
+                                onSkip = playerViewModel::skip,
+                            )
+                        }
                     }
                     NavigationBar {
                         AppDestination.entries.forEach { destination ->
@@ -226,12 +254,15 @@ private fun AuthenticatedShell(
                 .fillMaxSize()
                 .padding(bottom = innerPadding.calculateBottomPadding()),
         ) {
-        // Short Material-like fade-through on destination change.
-        // Only the content animates; the NavigationBar itself stays put.
+        // True fade-through on destination change: the outgoing screen fades
+        // out first, the incoming one follows. Content only, no travel.
         AnimatedContent(
             targetState = currentDestination,
             transitionSpec = {
-                fadeIn(tween(140)) togetherWith fadeOut(tween(90))
+                fadeThrough(
+                    enterSpec = motion.defaultEffectsSpec(),
+                    exitSpec = motion.fastEffectsSpec(),
+                )
             },
             label = "destination",
         ) { destination ->
@@ -262,15 +293,11 @@ private fun AuthenticatedShell(
  */
 @Composable
 private fun PlayerPollingEffect(viewModel: PlayerViewModel) {
-    val ui by viewModel.ui.collectAsState()
-    val guildId = ui.selectedGuildId
+    val keys by viewModel.pollingKeys.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
-    val playbackKey = ui.queue?.nowPlaying?.let { track ->
-        playbackIdentity(track, ui.queue?.nowPlayingStartedAt)
-    }
 
-    LaunchedEffect(guildId, playbackKey) {
-        if (guildId == null) return@LaunchedEffect
+    LaunchedEffect(keys.guildId, keys.playbackKey) {
+        val guildId = keys.guildId ?: return@LaunchedEffect
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.pollQueueOnce()
             val remaining = viewModel.ui.value.queue?.let { snapshot ->

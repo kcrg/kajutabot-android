@@ -1,5 +1,6 @@
 package com.tryniecki.kajutabot.ui.favorites
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,23 +25,24 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.theme.fadeThrough
 
 @Composable
 fun FavoritesRoute(
     container: AppContainer,
     viewModel: FavoritesViewModel = viewModel(factory = FavoritesViewModel.Factory(container)),
 ) {
-    val ui by viewModel.ui.collectAsState()
+    val ui by viewModel.ui.collectAsStateWithLifecycle()
     FavoritesScreen(
         ui = ui,
         onRefresh = viewModel::refresh,
@@ -64,7 +66,20 @@ fun FavoritesScreen(
     Scaffold(
         topBar = { TopAppBar(title = { Text("Ulubione") }) },
     ) { innerPadding ->
-        if (ui.isLoading && ui.favorites.isEmpty()) {
+        val motion = MaterialTheme.motionScheme
+        // Gentle fade between the initial loading state and content only —
+        // steady list updates (delete/refresh with items present) don't animate.
+        AnimatedContent(
+            targetState = ui.isLoading && ui.favorites.isEmpty(),
+            transitionSpec = {
+                fadeThrough(
+                    enterSpec = motion.defaultEffectsSpec(),
+                    exitSpec = motion.fastEffectsSpec(),
+                )
+            },
+            label = "favoritesContent",
+        ) { loading ->
+        if (loading) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -74,9 +89,7 @@ fun FavoritesScreen(
             ) {
                 CircularProgressIndicator()
             }
-            return@Scaffold
-        }
-
+        } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -154,7 +167,13 @@ fun FavoritesScreen(
                     }
                 }
                 items(ui.favorites, key = { it.contentUrl }) { fav ->
-                    Card {
+                    Card(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = motion.fastEffectsSpec(),
+                            fadeOutSpec = motion.fastEffectsSpec(),
+                            placementSpec = motion.fastSpatialSpec(),
+                        ),
+                    ) {
                         ListItem(
                             leadingContent = {
                                 TrackArtwork(
@@ -181,6 +200,8 @@ fun FavoritesScreen(
                     }
                 }
             }
+        }
+        }
         }
     }
 }
