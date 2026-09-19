@@ -1,9 +1,6 @@
 package com.tryniecki.kajutabot.ui.player
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -86,14 +83,7 @@ fun MiniPlayer(
         durationMs = slide.durationMs,
     )
 
-    val animatedFraction by animateFloatAsState(
-        targetValue = progress.fraction,
-        animationSpec = tween(
-            durationMillis = PROGRESS_TICK_MS.toInt(),
-            easing = LinearEasing,
-        ),
-        label = "miniProgress",
-    )
+    val animatedFraction = rememberSmoothPlaybackFraction(progress.fraction)
 
     Surface(
         tonalElevation = 2.dp,

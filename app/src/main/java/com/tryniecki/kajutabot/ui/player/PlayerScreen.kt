@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.ui.player
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -528,7 +529,7 @@ private fun NowPlayingCard(
             AnimatedContent(
                 targetState = nowPlayingSlide(queue),
                 transitionSpec = {
-                    if (initialState.hasTrack == targetState.hasTrack) {
+                    val contentTransition = if (initialState.hasTrack == targetState.hasTrack) {
                         forwardSharedAxisX(
                             fadeSpec = motion.defaultEffectsSpec(),
                             slideSpec = motion.defaultSpatialSpec(),
@@ -539,6 +540,9 @@ private fun NowPlayingCard(
                             exitSpec = motion.fastEffectsSpec(),
                         )
                     }
+                    contentTransition.using(
+                        SizeTransform { _, _ -> motion.defaultSpatialSpec() },
+                    )
                 },
                 label = "nowPlaying",
             ) { slide ->

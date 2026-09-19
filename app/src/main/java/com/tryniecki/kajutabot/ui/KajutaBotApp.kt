@@ -1,10 +1,18 @@
 package com.tryniecki.kajutabot.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -20,9 +28,11 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -78,7 +88,6 @@ import com.tryniecki.kajutabot.ui.player.pollSelectedQueue
 import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import com.tryniecki.kajutabot.ui.theme.KbMotion
-import kotlinx.coroutines.delay
 
 @Composable
 fun KajutaBotApp(
@@ -193,48 +202,95 @@ private fun AuthenticatedShell(
         onboardingCompleted = onboardingCompleted,
         manualOnboardingRequested = manualOnboardingRequested,
     )
+    val motion = MaterialTheme.motionScheme
 
-    when (gate) {
-        AuthenticatedGate.CHECKING_ACCESS -> {
-            AccessCheckingScreen()
-            return
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        AnimatedContent(
+            targetState = gate,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                when {
+                    targetState == AuthenticatedGate.ONBOARDING ->
+                        (fadeIn(motion.defaultEffectsSpec()) +
+                            slideInHorizontally(motion.slowSpatialSpec()) {
+                                (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                            }) togetherWith
+                            (fadeOut(motion.fastEffectsSpec()) +
+                                slideOutHorizontally(motion.slowSpatialSpec()) {
+                                    -(it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                                })
+                    initialState == AuthenticatedGate.ONBOARDING ->
+                        (fadeIn(motion.defaultEffectsSpec()) +
+                            slideInHorizontally(motion.slowSpatialSpec()) {
+                                -(it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                            }) togetherWith
+                            (fadeOut(motion.fastEffectsSpec()) +
+                                slideOutHorizontally(motion.slowSpatialSpec()) {
+                                    (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                                })
+                    else -> EnterTransition.None togetherWith ExitTransition.None
+                }
+            },
+            label = "onboardingTransition",
+        ) { activeGate ->
+            when (activeGate) {
+                AuthenticatedGate.CHECKING_ACCESS -> AccessCheckingScreen()
+                AuthenticatedGate.ACCESS_ERROR -> AccessErrorScreen(
+                    message = entryState.guildAccessError,
+                    onRetry = playerViewModel::refreshGuilds,
+                    onLogout = { appViewModel.logout() },
+                )
+                AuthenticatedGate.NO_ACCESS -> NoAccessScreen(
+                    onRetry = playerViewModel::refreshGuilds,
+                    onLogout = { appViewModel.logout() },
+                )
+                AuthenticatedGate.ONBOARDING -> {
+                    // Keep the close affordance stable while this screen slides out.
+                    val canDismissOnboarding = remember {
+                        manualOnboardingRequested && onboardingCompleted
+                    }
+                    OnboardingScreen(
+                        guilds = entryState.guilds,
+                        voiceChannels = entryState.voiceChannels,
+                        selectedGuildId = entryState.selectedGuildId,
+                        selectedChannelId = entryState.selectedVoiceChannelId,
+                        isLoadingVoiceChannels = entryState.isLoadingVoiceChannels,
+                        canDismiss = canDismissOnboarding,
+                        backEnabled = gate == AuthenticatedGate.ONBOARDING,
+                        onGuildSelect = playerViewModel::selectGuild,
+                        onChannelSelect = playerViewModel::selectChannel,
+                        onComplete = {
+                            container.onboardingPreferences.setCompletedFor(discordUserId)
+                            onboardingCompleted = true
+                            manualOnboardingRequested = false
+                        },
+                        onDismiss = { manualOnboardingRequested = false },
+                    )
+                }
+                AuthenticatedGate.CONTENT -> AuthenticatedContent(
+                    container = container,
+                    appViewModel = appViewModel,
+                    playerViewModel = playerViewModel,
+                    navController = navController,
+                    themeMode = themeMode,
+                    onThemeModeChange = onThemeModeChange,
+                    onOpenOnboarding = { manualOnboardingRequested = true },
+                )
+            }
         }
-        AuthenticatedGate.ACCESS_ERROR -> {
-            AccessErrorScreen(
-                message = entryState.guildAccessError,
-                onRetry = playerViewModel::refreshGuilds,
-                onLogout = { appViewModel.logout() },
-            )
-            return
-        }
-        AuthenticatedGate.NO_ACCESS -> {
-            NoAccessScreen(
-                onRetry = playerViewModel::refreshGuilds,
-                onLogout = { appViewModel.logout() },
-            )
-            return
-        }
-        AuthenticatedGate.ONBOARDING -> {
-            OnboardingScreen(
-                guilds = entryState.guilds,
-                voiceChannels = entryState.voiceChannels,
-                selectedGuildId = entryState.selectedGuildId,
-                selectedChannelId = entryState.selectedVoiceChannelId,
-                isLoadingVoiceChannels = entryState.isLoadingVoiceChannels,
-                canDismiss = manualOnboardingRequested && onboardingCompleted,
-                onGuildSelect = playerViewModel::selectGuild,
-                onChannelSelect = playerViewModel::selectChannel,
-                onComplete = {
-                    container.onboardingPreferences.setCompletedFor(discordUserId)
-                    onboardingCompleted = true
-                    manualOnboardingRequested = false
-                },
-                onDismiss = { manualOnboardingRequested = false },
-            )
-            return
-        }
-        AuthenticatedGate.CONTENT -> Unit
     }
+}
+
+@Composable
+private fun AuthenticatedContent(
+    container: AppContainer,
+    appViewModel: AppViewModel,
+    playerViewModel: PlayerViewModel,
+    navController: NavHostController,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    onOpenOnboarding: () -> Unit,
+) {
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination
@@ -263,18 +319,6 @@ private fun AuthenticatedShell(
             navController.navigate(AppRoute.AddTrack) { launchSingleTop = true }
         }
         appViewModel.clearPendingSharedUrl()
-    }
-
-    // Clear transient search state after the closing transition, including system Back.
-    var addTrackWasOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(isAddTrackOpen) {
-        if (isAddTrackOpen) {
-            addTrackWasOpen = true
-        } else if (addTrackWasOpen) {
-            addTrackWasOpen = false
-            delay(KbMotion.MODAL_CLEAR_DELAY_MS)
-            playerViewModel.clearAddTrack()
-        }
     }
 
     // Retain the last content for the exit transition: visibility and state
@@ -381,6 +425,52 @@ private fun AuthenticatedShell(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(bottom = innerPadding.calculateBottomPadding()),
+            // Peer tabs settle quickly. Detail routes travel farther along the
+            // horizontal hierarchy; effects and spatial motion use distinct specs.
+            enterTransition = {
+                if (targetState.destination.isDetailRoute()) {
+                    fadeIn(motion.defaultEffectsSpec()) +
+                        slideInHorizontally(motion.defaultSpatialSpec()) {
+                            (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                        }
+                } else {
+                    fadeIn(motion.fastEffectsSpec()) +
+                        scaleIn(motion.fastSpatialSpec(), initialScale = 0.98f)
+                }
+            },
+            exitTransition = {
+                if (targetState.destination.isDetailRoute()) {
+                    fadeOut(motion.fastEffectsSpec()) +
+                        slideOutHorizontally(motion.defaultSpatialSpec()) {
+                            -(it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                        }
+                } else {
+                    fadeOut(motion.fastEffectsSpec()) +
+                        scaleOut(motion.fastSpatialSpec(), targetScale = 0.98f)
+                }
+            },
+            popEnterTransition = {
+                if (initialState.destination.isDetailRoute()) {
+                    fadeIn(motion.defaultEffectsSpec()) +
+                        slideInHorizontally(motion.defaultSpatialSpec()) {
+                            -(it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                        }
+                } else {
+                    fadeIn(motion.fastEffectsSpec()) +
+                        scaleIn(motion.fastSpatialSpec(), initialScale = 0.98f)
+                }
+            },
+            popExitTransition = {
+                if (initialState.destination.isDetailRoute()) {
+                    fadeOut(motion.fastEffectsSpec()) +
+                        slideOutHorizontally(motion.defaultSpatialSpec()) {
+                            (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                        }
+                } else {
+                    fadeOut(motion.fastEffectsSpec()) +
+                        scaleOut(motion.fastSpatialSpec(), targetScale = 0.98f)
+                }
+            },
         ) {
             composable<AppRoute.Player> {
                 PlayerRoute(
@@ -397,7 +487,7 @@ private fun AuthenticatedShell(
                     appViewModel = appViewModel,
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange,
-                    onOpenOnboarding = { manualOnboardingRequested = true },
+                    onOpenOnboarding = onOpenOnboarding,
                     onOpenLibraries = { navController.navigate(AppRoute.Libraries) },
                     onOpenContact = { navController.navigate(AppRoute.Contact) },
                 )
@@ -409,6 +499,10 @@ private fun AuthenticatedShell(
                 ContactScreen(container = container, onBack = { navController.popBackStack() })
             }
             composable<AppRoute.AddTrack> {
+                // Disposal follows the actual Navigation exit, including system Back.
+                DisposableEffect(Unit) {
+                    onDispose { playerViewModel.clearAddTrack() }
+                }
                 AddTrackRoute(
                     viewModel = playerViewModel,
                     favoritesViewModel = favoritesViewModel,
@@ -418,6 +512,11 @@ private fun AuthenticatedShell(
         }
     }
 }
+
+private fun NavDestination.isDetailRoute(): Boolean =
+    hasRoute<AppRoute.AddTrack>() ||
+        hasRoute<AppRoute.Libraries>() ||
+        hasRoute<AppRoute.Contact>()
 
 private fun NavDestination?.topLevelDestination(): AppDestination = when {
     this?.hasRoute<AppRoute.MyAudio>() == true -> AppDestination.MY_AUDIO

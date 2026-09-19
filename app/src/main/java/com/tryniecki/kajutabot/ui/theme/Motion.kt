@@ -13,12 +13,11 @@ import androidx.compose.ui.unit.IntOffset
 /**
  * App-wide motion language, mapped onto [androidx.compose.material3.MaterialTheme.motionScheme].
  *
- * Rules used across screens (standard Material motion, not expressive):
+ * Rules used across screens with the expressive Material motion scheme:
  * - effects (alpha/color) come from `*EffectsSpec`,
  * - spatial (position/size) comes from `*SpatialSpec`,
- * - `fast*` for small local changes, `default*` for content transitions,
- *   `slow*` for full-screen surfaces.
- * - linear tweens stay only where motion must be linear (progress smoothing).
+ * - `fast*` for frequent or bottom-navigation changes, `default*` for
+ *   hierarchical and content transitions, `slow*` for prominent onboarding motion.
  *
  * Call sites read `MaterialTheme.motionScheme` once and pass specs in; the
  * choreography itself lives here so durations/directions aren't scattered.
@@ -37,9 +36,6 @@ object KbMotion {
 
     /** Shared-axis travel between adjacent tabs. */
     const val TAB_SLIDE_FRACTION = 0.08f
-
-    /** Post-exit grace before clearing modal state (covers the exit settle). */
-    const val MODAL_CLEAR_DELAY_MS = 250L
 }
 
 /**
@@ -57,9 +53,8 @@ fun <S> AnimatedContentTransitionScope<S>.forwardSharedAxisX(
             slideOutHorizontally(slideSpec) { -(it * distanceFraction).toInt() })
 
 /**
- * True fade-through feel: the outgoing content uses the quicker spec and is
- * gone well before the incoming content settles — no simultaneous crossfade
- * snap. For peer destinations and state swaps (loading/content, idle/playing).
+ * Fade between peer states without a directional slide (loading/content,
+ * idle/playing). The caller chooses separate enter and exit effects specs.
  */
 fun <S> AnimatedContentTransitionScope<S>.fadeThrough(
     enterSpec: FiniteAnimationSpec<Float>,

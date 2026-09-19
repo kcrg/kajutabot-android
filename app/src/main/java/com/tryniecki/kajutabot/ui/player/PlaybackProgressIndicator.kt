@@ -71,6 +71,17 @@ fun rememberPlaybackProgress(
     )
 }
 
+/** Progress represents elapsed time, so its interpolation stays linear. */
+@Composable
+fun rememberSmoothPlaybackFraction(fraction: Float): Float {
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = tween(durationMillis = PROGRESS_TICK_MS.toInt(), easing = LinearEasing),
+        label = "playbackProgress",
+    )
+    return animatedFraction
+}
+
 /**
  * Full Now Playing progress: wavy indicator with elapsed/total labels.
  * Linear motion only — no bounce or spring on a progress bar.
@@ -83,11 +94,7 @@ fun PlaybackProgressIndicator(
     modifier: Modifier = Modifier,
 ) {
     val progress = rememberPlaybackProgress(playbackKey, startedAtRaw, durationMs)
-    val animatedFraction by animateFloatAsState(
-        targetValue = progress.fraction,
-        animationSpec = tween(durationMillis = PROGRESS_TICK_MS.toInt(), easing = LinearEasing),
-        label = "playbackProgress",
-    )
+    val animatedFraction = rememberSmoothPlaybackFraction(progress.fraction)
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         LinearWavyProgressIndicator(

@@ -114,9 +114,7 @@ fun KajutaBotTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        // Standard (non-expressive) motion: calm springs without bounce.
-        // All screen transitions read their specs from this scheme.
-        motionScheme = MotionScheme.standard(),
+        motionScheme = MotionScheme.expressive(),
         typography = Typography,
         content = content,
     )

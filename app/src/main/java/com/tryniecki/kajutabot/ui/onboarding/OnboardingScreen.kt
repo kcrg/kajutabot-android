@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -99,6 +102,7 @@ fun OnboardingScreen(
     selectedChannelId: String?,
     isLoadingVoiceChannels: Boolean,
     canDismiss: Boolean,
+    backEnabled: Boolean = true,
     onGuildSelect: (String) -> Unit,
     onChannelSelect: (String) -> Unit,
     onComplete: () -> Unit,
@@ -106,12 +110,18 @@ fun OnboardingScreen(
 ) {
     val pagerState = rememberPagerState(pageCount = { pageCount })
     val scope = rememberCoroutineScope()
+    val motion = MaterialTheme.motionScheme
 
     fun goToPage(page: Int) {
-        scope.launch { pagerState.animateScrollToPage(page.coerceIn(0, pageCount - 1)) }
+        scope.launch {
+            pagerState.animateScrollToPage(
+                page = page.coerceIn(0, pageCount - 1),
+                animationSpec = motion.slowSpatialSpec(),
+            )
+        }
     }
 
-    BackHandler {
+    BackHandler(enabled = backEnabled) {
         when {
             pagerState.currentPage > 0 -> goToPage(pagerState.currentPage - 1)
             canDismiss -> onDismiss()
@@ -161,7 +171,10 @@ fun OnboardingScreen(
                 beyondViewportPageCount = 1,
             ) { page ->
                 if (page < selectionPageIndex) {
-                    OnboardingFeaturePage(onboardingPages[page])
+                    OnboardingFeaturePage(
+                        page = onboardingPages[page],
+                        isActive = pagerState.targetPage == page,
+                    )
                 } else {
                     OnboardingSelectionPage(
                         guilds = guilds,
@@ -225,7 +238,12 @@ fun OnboardingScreen(
 }
 
 @Composable
-private fun OnboardingFeaturePage(page: OnboardingPage) {
+private fun OnboardingFeaturePage(page: OnboardingPage, isActive: Boolean) {
+    val heroScale by animateFloatAsState(
+        targetValue = if (isActive) 1f else 0.96f,
+        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
+        label = "onboardingHeroScale",
+    )
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -238,7 +256,11 @@ private fun OnboardingFeaturePage(page: OnboardingPage) {
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .heightIn(min = 220.dp),
+                .heightIn(min = 220.dp)
+                .graphicsLayer {
+                    scaleX = heroScale
+                    scaleY = heroScale
+                },
         )
 
         Spacer(Modifier.height(24.dp))
@@ -545,16 +567,21 @@ private fun PageIndicator(
                 animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                 label = "onboardingIndicatorWidth",
             )
+            val color by animateColorAsState(
+                targetValue = if (index == currentPage) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHighest
+                },
+                animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                label = "onboardingIndicatorColor",
+            )
             Surface(
                 modifier = Modifier
                     .height(8.dp)
                     .width(width),
                 shape = RoundedCornerShape(999.dp),
-                color = if (index == currentPage) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                },
+                color = color,
             ) {}
         }
     }
