@@ -83,12 +83,21 @@ fun KajutaBotTheme(
     }
 
     val context = LocalContext.current
-    val colorScheme = when {
-        themeMode == ThemeMode.NATIVE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val colorScheme = when (themeMode) {
+        ThemeMode.LIGHT -> LightColorScheme
+        ThemeMode.DARK -> DarkColorScheme
+        ThemeMode.NATIVE -> {
+            // Dynamic Material You colors are available from Android 12 (API 31).
+            // On Android 10/11, Systemowy still follows the system night mode,
+            // but uses KajutaBot's own light/dark color schemes.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (systemDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            } else if (systemDarkTheme) {
+                DarkColorScheme
+            } else {
+                LightColorScheme
+            }
         }
-        useDarkTheme -> DarkColorScheme
-        else -> LightColorScheme
     }
 
     val activity = context as? Activity

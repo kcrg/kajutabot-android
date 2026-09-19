@@ -44,12 +44,18 @@ import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.app.AppViewModel
+import com.tryniecki.kajutabot.ui.app.AuthenticatedGate
+import com.tryniecki.kajutabot.ui.app.resolveAuthenticatedGate
 import com.tryniecki.kajutabot.ui.auth.LoginScreen
 import com.tryniecki.kajutabot.ui.favorites.FavoritesRoute
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.more.MoreScreen
 import com.tryniecki.kajutabot.ui.myaudio.MyAudioScreen
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
+import com.tryniecki.kajutabot.ui.onboarding.AccessCheckingScreen
+import com.tryniecki.kajutabot.ui.onboarding.AccessErrorScreen
+import com.tryniecki.kajutabot.ui.onboarding.NoAccessScreen
+import com.tryniecki.kajutabot.ui.onboarding.OnboardingScreen
 import com.tryniecki.kajutabot.ui.player.EXPECTED_END_GRACE_MS
 import com.tryniecki.kajutabot.ui.player.MiniPlayer
 import com.tryniecki.kajutabot.ui.player.MiniPlayerState
@@ -100,12 +106,13 @@ fun KajutaBotApp(
         is AuthState.SignedIn -> sessionIdentity?.let { identity ->
             CompositionLocalProvider(LocalViewModelStoreOwner provides appViewModel.ownerForSession(identity)) {
                 AuthenticatedShell(
-            container = container,
-            appViewModel = appViewModel,
-            currentDestination = currentDestination,
-            isAddTrackOpen = isAddTrackOpen,
-            themeMode = themeMode,
-            onThemeModeChange = onThemeModeChange,
+                    container = container,
+                    appViewModel = appViewModel,
+                    discordUserId = state.user.discordUserId,
+                    currentDestination = currentDestination,
+                    isAddTrackOpen = isAddTrackOpen,
+                    themeMode = themeMode,
+                    onThemeModeChange = onThemeModeChange,
                 )
             }
         } ?: RestoringScreen()
@@ -157,6 +164,7 @@ private fun RestoreErrorScreen(message: String, onRetry: () -> Unit) {
 private fun AuthenticatedShell(
     container: AppContainer,
     appViewModel: AppViewModel,
+    discordUserId: String,
     currentDestination: AppDestination,
     isAddTrackOpen: Boolean,
     themeMode: ThemeMode,
@@ -168,6 +176,60 @@ private fun AuthenticatedShell(
     val playerViewModel: PlayerViewModel = viewModel(
         factory = PlayerViewModel.Factory(container),
     )
+    val entryState by playerViewModel.entryState.collectAsStateWithLifecycle()
+    var onboardingCompleted by remember(discordUserId) {
+        mutableStateOf(container.onboardingPreferences.isCompletedFor(discordUserId))
+    }
+    var manualOnboardingRequested by remember(discordUserId) { mutableStateOf(false) }
+
+    val gate = resolveAuthenticatedGate(
+        guildAccessState = entryState.guildAccessState,
+        onboardingCompleted = onboardingCompleted,
+        manualOnboardingRequested = manualOnboardingRequested,
+    )
+
+    when (gate) {
+        AuthenticatedGate.CHECKING_ACCESS -> {
+            AccessCheckingScreen()
+            return
+        }
+        AuthenticatedGate.ACCESS_ERROR -> {
+            AccessErrorScreen(
+                message = entryState.guildAccessError,
+                onRetry = playerViewModel::refreshGuilds,
+                onLogout = { appViewModel.logout() },
+            )
+            return
+        }
+        AuthenticatedGate.NO_ACCESS -> {
+            NoAccessScreen(
+                onRetry = playerViewModel::refreshGuilds,
+                onLogout = { appViewModel.logout() },
+            )
+            return
+        }
+        AuthenticatedGate.ONBOARDING -> {
+            OnboardingScreen(
+                guilds = entryState.guilds,
+                voiceChannels = entryState.voiceChannels,
+                selectedGuildId = entryState.selectedGuildId,
+                selectedChannelId = entryState.selectedVoiceChannelId,
+                isLoadingVoiceChannels = entryState.isLoadingVoiceChannels,
+                canDismiss = manualOnboardingRequested && onboardingCompleted,
+                onGuildSelect = playerViewModel::selectGuild,
+                onChannelSelect = playerViewModel::selectChannel,
+                onComplete = {
+                    container.onboardingPreferences.setCompletedFor(discordUserId)
+                    onboardingCompleted = true
+                    manualOnboardingRequested = false
+                },
+                onDismiss = { manualOnboardingRequested = false },
+            )
+            return
+        }
+        AuthenticatedGate.CONTENT -> Unit
+    }
+
     val favoritesViewModel: FavoritesViewModel = viewModel(
         factory = FavoritesViewModel.Factory(container),
     )
@@ -295,6 +357,7 @@ private fun AuthenticatedShell(
                 appViewModel = appViewModel,
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange,
+                onOpenOnboarding = { manualOnboardingRequested = true },
             )
         }
         }

@@ -72,6 +72,21 @@ class PlayerStateProjectionTest {
     }
 
     @Test
+    fun `queue update does not change authenticated entry slice`() {
+        val before = PlayerUiState(
+            selectedGuildId = "g1",
+            selectedVoiceChannelId = "c1",
+            queue = snapshot(version = 10L),
+        ).toPlayerEntryState()
+        val after = PlayerUiState(
+            selectedGuildId = "g1",
+            selectedVoiceChannelId = "c1",
+            queue = snapshot(version = 11L),
+        ).toPlayerEntryState()
+        assertEquals(before, after)
+    }
+
+    @Test
     fun `queue update does not change add track slice`() {
         val before = PlayerUiState(
             queue = snapshot(version = 10L),

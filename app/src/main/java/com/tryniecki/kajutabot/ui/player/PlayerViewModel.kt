@@ -33,6 +33,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import retrofit2.HttpException
 
+enum class GuildAccessState {
+    CHECKING,
+    AVAILABLE,
+    NONE,
+    ERROR,
+}
+
 data class PlayerUiState(
     val guilds: List<DiscordGuildResponse> = emptyList(),
     val voiceChannels: List<DiscordVoiceChannelResponse> = emptyList(),
@@ -41,7 +48,10 @@ data class PlayerUiState(
     val queue: QueueSnapshotResponse? = null,
     val searchQuery: String = "",
     val searchResults: List<SearchItemResponse> = emptyList(),
-    val isLoadingGuilds: Boolean = false,
+    val isLoadingGuilds: Boolean = true,
+    val isLoadingVoiceChannels: Boolean = false,
+    val guildAccessState: GuildAccessState = GuildAccessState.CHECKING,
+    val guildAccessError: String? = null,
     val isLoadingQueue: Boolean = false,
     val isSearching: Boolean = false,
     val isMutating: Boolean = false,
@@ -76,6 +86,17 @@ data class PlayerScreenState(
     val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
 }
 
+
+data class PlayerEntryState(
+    val guilds: List<DiscordGuildResponse> = emptyList(),
+    val voiceChannels: List<DiscordVoiceChannelResponse> = emptyList(),
+    val selectedGuildId: String? = null,
+    val selectedVoiceChannelId: String? = null,
+    val isLoadingVoiceChannels: Boolean = false,
+    val guildAccessState: GuildAccessState = GuildAccessState.CHECKING,
+    val guildAccessError: String? = null,
+)
+
 data class AddTrackUiState(
     val searchQuery: String = "",
     val searchResults: List<SearchItemResponse> = emptyList(),
@@ -108,6 +129,17 @@ fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     showGuildPicker = showGuildPicker,
     error = error,
     info = info,
+)
+
+
+fun PlayerUiState.toPlayerEntryState(): PlayerEntryState = PlayerEntryState(
+    guilds = guilds,
+    voiceChannels = voiceChannels,
+    selectedGuildId = selectedGuildId,
+    selectedVoiceChannelId = selectedVoiceChannelId,
+    isLoadingVoiceChannels = isLoadingVoiceChannels,
+    guildAccessState = guildAccessState,
+    guildAccessError = guildAccessError,
 )
 
 fun PlayerUiState.toAddTrackUiState(): AddTrackUiState = AddTrackUiState(
@@ -159,6 +191,12 @@ class PlayerViewModel(
      * typing in AddTrack search must not recompose the hidden Player screen,
      * the shell or the MiniPlayer, and polling keys must not carry the queue.
      */
+
+    val entryState: StateFlow<PlayerEntryState> = _ui
+        .map { it.toPlayerEntryState() }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toPlayerEntryState())
+
     val playerScreenState: StateFlow<PlayerScreenState> = _ui
         .map { it.toPlayerScreenState() }
         .distinctUntilChanged()
@@ -227,7 +265,13 @@ class PlayerViewModel(
 
     fun refreshGuilds() {
         viewModelScope.launch {
-            _ui.update { it.copy(isLoadingGuilds = true, error = null) }
+            _ui.update {
+                it.copy(
+                    isLoadingGuilds = true,
+                    guildAccessState = GuildAccessState.CHECKING,
+                    guildAccessError = null,
+                )
+            }
             try {
                 val guilds = sessionManager.withApiForSession(sessionIdentity) { it.getMyGuilds() }
                 var selGuild = selection.guildId
@@ -248,13 +292,32 @@ class PlayerViewModel(
                         selectedGuildId = selGuild,
                         selectedVoiceChannelId = selChannel,
                         isLoadingGuilds = false,
+                        guildAccessState = if (guilds.isEmpty()) {
+                            GuildAccessState.NONE
+                        } else {
+                            GuildAccessState.AVAILABLE
+                        },
+                        guildAccessError = null,
                     )
                 }
                 if (selGuild != null) {
                     refreshChannels(selGuild, preserveChannel = selChannel)
                 }
             } catch (e: Exception) {
-                _ui.update { it.copy(isLoadingGuilds = false, error = userMessageForError(e)) }
+                val noGuildAccess = e is HttpException &&
+                    e.code() == 403 &&
+                    KajutaBotApiErrors.errorCodeOf(e) == "discord_guild_access_denied"
+                _ui.update {
+                    it.copy(
+                        isLoadingGuilds = false,
+                        guildAccessState = if (noGuildAccess) {
+                            GuildAccessState.NONE
+                        } else {
+                            GuildAccessState.ERROR
+                        },
+                        guildAccessError = if (noGuildAccess) null else userMessageForError(e),
+                    )
+                }
             }
         }
     }
@@ -282,6 +345,7 @@ class PlayerViewModel(
 
     fun refreshChannels(guildId: String, preserveChannel: String?) {
         viewModelScope.launch {
+            _ui.update { it.copy(isLoadingVoiceChannels = true, error = null) }
             try {
                 val channels = sessionManager.withApiForSession(sessionIdentity) { it.getVoiceChannels(guildId) }
                 var selChannel = preserveChannel
@@ -293,11 +357,17 @@ class PlayerViewModel(
                     it.copy(
                         voiceChannels = channels.sortedBy { c -> c.position },
                         selectedVoiceChannelId = selChannel,
+                        isLoadingVoiceChannels = false,
                     )
                 }
                 refreshQueue(guildId)
             } catch (e: Exception) {
-                _ui.update { it.copy(error = userMessageForError(e)) }
+                _ui.update {
+                    it.copy(
+                        isLoadingVoiceChannels = false,
+                        error = userMessageForError(e),
+                    )
+                }
             }
         }
     }

@@ -71,6 +71,7 @@ fun MoreScreen(
     appViewModel: AppViewModel,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onOpenOnboarding: () -> Unit,
 ) {
     var destination by rememberSaveable {
         mutableStateOf(MoreDestination.ROOT)
@@ -107,6 +108,7 @@ fun MoreScreen(
             appViewModel = appViewModel,
             themeMode = themeMode,
             onThemeModeChange = onThemeModeChange,
+            onOpenOnboarding = onOpenOnboarding,
             onOpenLibraries = { destination = MoreDestination.LIBRARIES },
             onOpenContact = { destination = MoreDestination.CONTACT },
         )
@@ -126,6 +128,7 @@ private fun MoreRootScreen(
     appViewModel: AppViewModel,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onOpenOnboarding: () -> Unit,
     onOpenLibraries: () -> Unit,
     onOpenContact: () -> Unit,
 ) {
@@ -285,6 +288,18 @@ private fun MoreRootScreen(
                         }
                     }
                 }
+            }
+
+            item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+            item { SectionTitle("Pomoc") }
+
+            item {
+                SettingsRow(
+                    icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_directions_outline,
+                    title = "Przewodnik po aplikacji",
+                    subtitle = "Uruchom onboarding ponownie",
+                    onClick = onOpenOnboarding,
+                )
             }
 
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
