@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.KajutaBot" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.KajutaBot" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/app_window_background</item>
         <item name="android:colorAccent">@color/kajuta_accent</item>
         <item name="android:forceDarkAllowed">false</item>
@@ -14,6 +13,6 @@
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_mark</item>
         <item name="windowSplashScreenAnimationDuration">240</item>
         <item name="postSplashScreenTheme">@style/Theme.KajutaBot</item>
-        <item name="isLightTheme">true</item>
+        <item name="isLightTheme">false</item>
     </style>
 </resources>

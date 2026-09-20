@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material You dynamic light roles from the system wallpaper palette. -->
+    <color name="app_window_background">@android:color/system_neutral1_10</color>
+    <color name="splash_background">@android:color/system_neutral1_10</color>
+    <color name="splash_mark">@android:color/system_accent1_600</color>
+</resources>

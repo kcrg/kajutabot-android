@@ -7,4 +7,9 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <color name="kajuta_accent">#6541CC</color>
+    <color name="app_window_background">#FAF8FC</color>
+    <color name="splash_background">#FAF8FC</color>
+    <color name="splash_mark">#6541CC</color>
 </resources>

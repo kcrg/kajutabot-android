@@ -3,8 +3,6 @@ package com.tryniecki.kajutabot.ui
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,8 +18,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -69,6 +67,8 @@ import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.app.AuthenticatedGate
 import com.tryniecki.kajutabot.ui.app.resolveAuthenticatedGate
 import com.tryniecki.kajutabot.ui.auth.LoginScreen
+import com.tryniecki.kajutabot.ui.components.BrandMark
+import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
 import com.tryniecki.kajutabot.ui.favorites.FavoritesRoute
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.more.ContactScreen
@@ -155,9 +155,15 @@ private fun RestoringScreen() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            CircularProgressIndicator()
+            BrandMark(size = 72.dp)
+            Spacer(Modifier.height(20.dp))
+            ExpressiveLoadingIndicator(modifier = Modifier.size(36.dp))
             Spacer(Modifier.height(12.dp))
-            Text("Przywracanie sesji…", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Przywracanie sesji…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -239,10 +245,11 @@ private fun AuthenticatedShell(
                                 slideOutHorizontally(motion.slowSpatialSpec()) {
                                     (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
                                 })
-                    else -> EnterTransition.None togetherWith ExitTransition.None
+                    else -> fadeIn(motion.defaultEffectsSpec()) togetherWith
+                        fadeOut(motion.fastEffectsSpec())
                 }
             },
-            label = "onboardingTransition",
+            label = "authenticatedGateTransition",
         ) { activeGate ->
             when (activeGate) {
                 AuthenticatedGate.CHECKING_ACCESS -> AccessCheckingScreen(isGuest = sessionType == SessionType.GUEST)

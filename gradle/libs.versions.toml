@@ -15,6 +15,7 @@ kotlinxSerialization = "1.9.0"
 okhttp = "4.12.0"
 tablerIcons = "2.2.1"
 browser = "1.10.0"
+coreSplashscreen = "1.2.0"
 material3 = "1.5.0-alpha28"
 navigation = "2.10.1"
 media3 = "1.11.1"
@@ -55,6 +56,7 @@ coil3-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref
 coil3-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil3" }
 tabler-icons-outline-android = { group = "com.composables", name = "icons-tabler-outline-android", version.ref = "tablerIcons" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 signalr = { group = "com.microsoft.signalr", name = "signalr", version.ref = "signalr" }
 
 [plugins]

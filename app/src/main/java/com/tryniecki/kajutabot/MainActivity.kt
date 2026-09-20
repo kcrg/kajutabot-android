@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
 import com.tryniecki.kajutabot.auth.DiscordOAuth
 import com.tryniecki.kajutabot.image.CoilSetup
@@ -24,7 +25,19 @@ class MainActivity : ComponentActivity() {
     private lateinit var appViewModel: AppViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        splashScreen.setOnExitAnimationListener { provider ->
+            provider.view.animate()
+                .alpha(0f)
+                .scaleX(1.025f)
+                .scaleY(1.025f)
+                .setDuration(180L)
+                .withEndAction { provider.remove() }
+                .start()
+        }
+
         enableEdgeToEdge()
         CoilSetup.init(this)
 
@@ -49,8 +62,11 @@ class MainActivity : ComponentActivity() {
                     appViewModel = appViewModel,
                     themeMode = themeMode,
                     onThemeModeChange = { mode ->
-                        themeMode = mode
+                        // Update Compose immediately. The Activity handles uiMode
+                        // configuration changes itself, so switching themes never
+                        // tears down and rebuilds the navigation/UI tree.
                         themePreferences.themeMode = mode
+                        themeMode = mode
                     },
                 )
             }
