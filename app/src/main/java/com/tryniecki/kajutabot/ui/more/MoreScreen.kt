@@ -58,6 +58,7 @@ import com.tryniecki.kajutabot.auth.LogoutResult
 import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.browser.openCustomTab
 import com.tryniecki.kajutabot.browser.rememberCustomTabColors
+import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.RealtimeConnectionState
@@ -79,6 +80,7 @@ fun MoreRootScreen(
     var isLoggingOut by remember { mutableStateOf(false) }
     var logoutError by remember { mutableStateOf<String?>(null) }
     val isGuest = container.sessionManager.currentUserSession()?.sessionType == SessionType.GUEST
+    val openCustomTab = rememberOpenCustomTab()
 
     Scaffold(
         //topBar = { TopAppBar(title = { Text("Więcej") }) },
@@ -114,14 +116,16 @@ fun MoreRootScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            AsyncImage(
-                                model = user?.avatarUrl,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(MaterialTheme.shapes.medium),
-                                contentScale = ContentScale.Crop,
-                            )
+                            if (!isGuest) {
+                                AsyncImage(
+                                    model = user?.avatarUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(MaterialTheme.shapes.medium),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            }
 
                             Column(
                                 modifier = Modifier.weight(1f),
@@ -177,6 +181,11 @@ fun MoreRootScreen(
                         }
 
                         if (isGuest) {
+                            Button(
+                                onClick = { openCustomTab("https://discord.gg/7jV7j5djF") },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("Dołącz do serwera testowego") }
+
                             OutlinedButton(
                                 onClick = {
                                     logoutError = null
