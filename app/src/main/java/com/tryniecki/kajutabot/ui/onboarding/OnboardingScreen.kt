@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -46,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
+import com.tryniecki.kajutabot.ui.components.DiscordTargetPicker
 import kotlinx.coroutines.launch
 
 private data class OnboardingPage(
@@ -196,41 +200,78 @@ fun OnboardingScreen(
                     .padding(vertical = 14.dp),
             )
 
-            Row(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (pagerState.currentPage > 0) {
-                    OutlinedButton(
-                        onClick = { goToPage(pagerState.currentPage - 1) },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("Wstecz")
-                    }
-                }
+                val showBack = pagerState.currentPage > 0
+                val splitButtonWidth = ((maxWidth - 12.dp) / 2).coerceAtLeast(0.dp)
+                val backWidth by animateDpAsState(
+                    targetValue = if (showBack) splitButtonWidth else 0.dp,
+                    animationSpec = motion.defaultSpatialSpec(),
+                    label = "onboardingBackWidth",
+                )
+                val nextWidth by animateDpAsState(
+                    targetValue = if (showBack) splitButtonWidth else maxWidth,
+                    animationSpec = motion.defaultSpatialSpec(),
+                    label = "onboardingNextWidth",
+                )
+                val buttonSpacing by animateDpAsState(
+                    targetValue = if (showBack) 12.dp else 0.dp,
+                    animationSpec = motion.defaultSpatialSpec(),
+                    label = "onboardingButtonSpacing",
+                )
+                val backAlpha by animateFloatAsState(
+                    targetValue = if (showBack) 1f else 0f,
+                    animationSpec = motion.defaultEffectsSpec(),
+                    label = "onboardingBackAlpha",
+                )
 
-                Button(
-                    onClick = {
-                        if (pagerState.currentPage == selectionPageIndex) {
-                            onComplete()
-                        } else {
-                            goToPage(pagerState.currentPage + 1)
-                        }
-                    },
-                    enabled = pagerState.currentPage != selectionPageIndex ||
-                        (selectedGuildId != null && selectedChannelId != null),
-                    modifier = Modifier.weight(1f),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        if (pagerState.currentPage == selectionPageIndex) {
-                            if (canDismiss) "Gotowe" else "Zaczynamy"
-                        } else {
-                            "Dalej"
+                    if (backWidth > 0.dp) {
+                        Box(
+                            modifier = Modifier
+                                .width(backWidth)
+                                .clipToBounds(),
+                        ) {
+                            OutlinedButton(
+                                onClick = { goToPage((pagerState.currentPage - 1).coerceAtLeast(0)) },
+                                enabled = showBack,
+                                modifier = Modifier
+                                    .requiredWidth(splitButtonWidth)
+                                    .graphicsLayer { alpha = backAlpha },
+                            ) {
+                                Text("Wstecz")
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.width(buttonSpacing))
+
+                    Button(
+                        onClick = {
+                            if (pagerState.currentPage == selectionPageIndex) {
+                                onComplete()
+                            } else {
+                                goToPage(pagerState.currentPage + 1)
+                            }
                         },
-                    )
+                        enabled = pagerState.currentPage != selectionPageIndex ||
+                            (selectedGuildId != null && selectedChannelId != null),
+                        modifier = Modifier.width(nextWidth),
+                    ) {
+                        Text(
+                            if (pagerState.currentPage == selectionPageIndex) {
+                                if (canDismiss) "Gotowe" else "Zaczynamy"
+                            } else {
+                                "Dalej"
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -320,71 +361,18 @@ private fun OnboardingSelectionPage(
         )
 
         Spacer(Modifier.height(18.dp))
-        Text(
-            text = "Serwer Discord",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
+        DiscordTargetPicker(
+            guilds = guilds,
+            voiceChannels = voiceChannels,
+            selectedGuildId = selectedGuildId,
+            selectedChannelId = selectedChannelId,
+            isLoadingVoiceChannels = isLoadingVoiceChannels,
+            onGuildSelect = onGuildSelect,
+            onChannelSelect = onChannelSelect,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
         )
-        Spacer(Modifier.height(8.dp))
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(end = 8.dp),
-        ) {
-            items(guilds, key = { it.id }) { guild ->
-                GuildChoiceCard(
-                    guild = guild,
-                    selected = guild.id == selectedGuildId,
-                    onClick = {
-                        if (guild.id != selectedGuildId) onGuildSelect(guild.id)
-                    },
-                )
-            }
-        }
-
-        Spacer(Modifier.height(18.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "Kanał głosowy",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            if (isLoadingVoiceChannels) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                )
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-
-        when {
-            selectedGuildId == null -> SelectionHint("Najpierw wybierz serwer.")
-            isLoadingVoiceChannels -> SelectionHint("Pobieranie kanałów głosowych…")
-            voiceChannels.isEmpty() -> SelectionHint("Na tym serwerze nie ma dostępnych kanałów głosowych.")
-            else -> LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .animateContentSize(
-                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                    ),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 8.dp),
-            ) {
-                items(voiceChannels, key = { it.id }) { channel ->
-                    ChannelChoiceCard(
-                        channel = channel,
-                        selected = channel.id == selectedChannelId,
-                        onClick = { onChannelSelect(channel.id) },
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -442,111 +430,6 @@ private fun ScreenshotSlot(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun GuildChoiceCard(
-    guild: DiscordGuildResponse,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .widthIn(min = 190.dp, max = 260.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) {
-                MaterialTheme.colorScheme.secondaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainer
-            },
-        ),
-        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            GuildAvatar(
-                iconUrl = guild.iconUrl,
-                modifier = Modifier.size(38.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = guild.name,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            RadioButton(selected = selected, onClick = null)
-        }
-    }
-}
-
-@Composable
-private fun ChannelChoiceCard(
-    channel: DiscordVoiceChannelResponse,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) {
-                MaterialTheme.colorScheme.secondaryContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainer
-            },
-        ),
-        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_volume_outline),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = channel.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            RadioButton(selected = selected, onClick = null)
-        }
-    }
-}
-
-@Composable
-private fun SelectionHint(text: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = MaterialTheme.shapes.large,
-            )
-            .padding(18.dp),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

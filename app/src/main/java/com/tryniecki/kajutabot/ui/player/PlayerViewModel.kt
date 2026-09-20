@@ -17,6 +17,7 @@ import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.ui.userMessageForError
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -40,12 +41,20 @@ enum class GuildAccessState {
     ERROR,
 }
 
+enum class PlayerControlAction {
+    STOP,
+    SKIP,
+    REPEAT,
+    RADIO,
+}
+
 data class PlayerUiState(
     val guilds: List<DiscordGuildResponse> = emptyList(),
     val voiceChannels: List<DiscordVoiceChannelResponse> = emptyList(),
     val selectedGuildId: String? = null,
     val selectedVoiceChannelId: String? = null,
     val queue: QueueSnapshotResponse? = null,
+    val presentedNowPlaying: NowPlayingPresentation? = null,
     val searchQuery: String = "",
     val searchResults: List<SearchItemResponse> = emptyList(),
     val isLoadingGuilds: Boolean = true,
@@ -55,13 +64,15 @@ data class PlayerUiState(
     val isLoadingQueue: Boolean = false,
     val isSearching: Boolean = false,
     val isMutating: Boolean = false,
-    val showGuildPicker: Boolean = false,
+    val activeControlAction: PlayerControlAction? = null,
     val error: String? = null,
     val info: String? = null,
 ) {
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
     val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
+    val effectiveNowPlaying: NowPlayingPresentation?
+        get() = presentedNowPlaying ?: queue?.nowPlayingPresentationOrNull()
 }
 
 /**
@@ -74,10 +85,11 @@ data class PlayerScreenState(
     val selectedGuildId: String? = null,
     val selectedVoiceChannelId: String? = null,
     val queue: QueueSnapshotResponse? = null,
+    val presentedNowPlaying: NowPlayingPresentation? = null,
     val isLoadingGuilds: Boolean = false,
     val isLoadingQueue: Boolean = false,
     val isMutating: Boolean = false,
-    val showGuildPicker: Boolean = false,
+    val activeControlAction: PlayerControlAction? = null,
     val error: String? = null,
     val info: String? = null,
 ) {
@@ -110,6 +122,7 @@ data class MiniPlayerState(
     val slide: NowPlayingSlide,
     val track: TrackResponse,
     val isMutating: Boolean,
+    val activeControlAction: PlayerControlAction?,
 )
 
 data class PlayerPollingKeys(
@@ -123,10 +136,11 @@ fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     selectedGuildId = selectedGuildId,
     selectedVoiceChannelId = selectedVoiceChannelId,
     queue = queue,
+    presentedNowPlaying = effectiveNowPlaying,
     isLoadingGuilds = isLoadingGuilds,
     isLoadingQueue = isLoadingQueue,
     isMutating = isMutating,
-    showGuildPicker = showGuildPicker,
+    activeControlAction = activeControlAction,
     error = error,
     info = info,
 )
@@ -152,12 +166,12 @@ fun PlayerUiState.toAddTrackUiState(): AddTrackUiState = AddTrackUiState(
 )
 
 fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
-    val queueSnapshot = queue ?: return null
-    val track = queueSnapshot.nowPlaying ?: return null
+    val presentation = effectiveNowPlaying ?: return null
     return MiniPlayerState(
-        slide = nowPlayingSlide(queueSnapshot),
-        track = track,
+        slide = nowPlayingSlide(presentation, hasQueue = queue != null),
+        track = presentation.track,
         isMutating = isMutating,
+        activeControlAction = activeControlAction,
     )
 }
 
@@ -225,7 +239,12 @@ class PlayerViewModel(
     private val _trackAdded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val trackAdded: SharedFlow<Unit> = _trackAdded.asSharedFlow()
 
+    private val _controlMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val controlMessages: SharedFlow<String> = _controlMessages.asSharedFlow()
+
     private var searchJob: Job? = null
+    private var transitionRefreshJob: Job? = null
+    private var presentationIdleJob: Job? = null
 
     /**
      * Serializes all queue GETs (regular poll, expected-end refresh, explicit
@@ -234,16 +253,16 @@ class PlayerViewModel(
      */
     private val queueFetchMutex = Mutex()
 
+    /** Serializes remote player controls so versioned queue mutations never race. */
+    private val controlMutationMutex = Mutex()
+    private val pendingControlActions = mutableSetOf<PlayerControlAction>()
+
     init {
         refreshGuilds()
     }
 
     fun setSearchQuery(query: String) {
         _ui.update { it.copy(searchQuery = query) }
-    }
-
-    fun setShowPicker(show: Boolean) {
-        _ui.update { it.copy(showGuildPicker = show) }
     }
 
     fun dismissMessage() {
@@ -323,6 +342,7 @@ class PlayerViewModel(
     }
 
     fun selectGuild(guildId: String) {
+        cancelPresentationRecovery()
         selection.guildId = guildId
         selection.voiceChannelId = null
         _ui.update {
@@ -330,8 +350,8 @@ class PlayerViewModel(
                 selectedGuildId = guildId,
                 selectedVoiceChannelId = null,
                 queue = null,
+                presentedNowPlaying = null,
                 searchResults = emptyList(),
-                showGuildPicker = false,
             )
         }
         refreshChannels(guildId, preserveChannel = null)
@@ -339,7 +359,7 @@ class PlayerViewModel(
 
     fun selectChannel(channelId: String) {
         selection.voiceChannelId = channelId
-        _ui.update { it.copy(selectedVoiceChannelId = channelId, showGuildPicker = false, error = null) }
+        _ui.update { it.copy(selectedVoiceChannelId = channelId, error = null) }
         _ui.value.selectedGuildId?.let { refreshQueue(it) }
     }
 
@@ -414,17 +434,109 @@ class PlayerViewModel(
      * a version older than the one already shown, never overwrites UI state.
      * Returns whether the snapshot was applied.
      */
-    private fun applyQueueSnapshot(snapshot: QueueSnapshotResponse): Boolean {
+    private fun applyQueueSnapshot(
+        snapshot: QueueSnapshotResponse,
+        forcePresentationIdle: Boolean = false,
+    ): Boolean {
         var applied = false
+        var holdsPreviousTrack = false
+        var likelyTrackTransition = false
         _ui.update { current ->
             if (shouldApplyQueueSnapshot(current.queue, snapshot, current.selectedGuildId)) {
                 applied = true
-                current.copy(queue = snapshot)
+                val nextPresentation = when {
+                    snapshot.nowPlaying != null -> snapshot.nowPlayingPresentationOrNull()
+                    forcePresentationIdle -> null
+                    current.effectiveNowPlaying != null -> {
+                        holdsPreviousTrack = true
+                        likelyTrackTransition =
+                            current.queue?.pendingEntries?.isNotEmpty() == true ||
+                            current.queue?.isRepeatEnabled == true ||
+                            current.queue?.radio?.isEnabled == true ||
+                            snapshot.pendingEntries.isNotEmpty() ||
+                            snapshot.isRepeatEnabled ||
+                            snapshot.radio.isEnabled
+                        current.effectiveNowPlaying
+                    }
+                    else -> null
+                }
+                current.copy(
+                    queue = snapshot,
+                    presentedNowPlaying = nextPresentation,
+                )
             } else {
                 current
             }
         }
+        if (applied) {
+            if (holdsPreviousTrack) {
+                schedulePresentationRecovery(
+                    guildId = snapshot.guildId,
+                    likelyTrackTransition = likelyTrackTransition,
+                )
+            } else {
+                cancelPresentationRecovery()
+            }
+        }
         return applied
+    }
+
+    private fun schedulePresentationRecovery(
+        guildId: String,
+        likelyTrackTransition: Boolean,
+    ) {
+        if (transitionRefreshJob?.isActive != true) {
+            transitionRefreshJob = viewModelScope.launch {
+                val delays = if (likelyTrackTransition) {
+                    TRACK_TRANSITION_REFRESH_DELAYS_MS
+                } else {
+                    IDLE_CONFIRM_REFRESH_DELAYS_MS
+                }
+                for (waitMs in delays) {
+                    delay(waitMs)
+                    if (!isAwaitingNextTrack(guildId)) return@launch
+                    pollQueueOnce()
+                    if (!isAwaitingNextTrack(guildId)) return@launch
+                }
+            }
+        }
+
+        if (presentationIdleJob?.isActive != true) {
+            presentationIdleJob = viewModelScope.launch {
+                delay(
+                    if (likelyTrackTransition) {
+                        TRACK_TRANSITION_GRACE_MS
+                    } else {
+                        PRESENTATION_IDLE_GRACE_MS
+                    },
+                )
+                _ui.update { current ->
+                    if (
+                        current.selectedGuildId == guildId &&
+                        current.queue?.nowPlaying == null &&
+                        current.presentedNowPlaying != null
+                    ) {
+                        current.copy(presentedNowPlaying = null)
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+    }
+
+    private fun isAwaitingNextTrack(guildId: String): Boolean {
+        val current = _ui.value
+        return current.selectedGuildId == guildId &&
+            current.queue?.nowPlaying == null &&
+            current.presentedNowPlaying != null
+    }
+
+    private fun cancelPresentationRecovery() {
+        transitionRefreshJob?.cancel()
+        transitionRefreshJob = null
+        presentationIdleJob?.cancel()
+        presentationIdleJob = null
     }
 
     fun search(query: String) {
@@ -473,8 +585,7 @@ class PlayerViewModel(
         if (guildId == null || channelId == null) {
             _ui.update {
                 it.copy(
-                    showGuildPicker = true,
-                    error = "Wybierz serwer i kanał głosowy, aby dodać utwór.",
+                    error = "Wybierz serwer i kanał głosowy na ekranie odtwarzacza, aby dodać utwór.",
                 )
             }
             return
@@ -498,53 +609,50 @@ class PlayerViewModel(
     }
 
     fun skip() {
-        mutate { api, version ->
+        mutate(controlAction = PlayerControlAction.SKIP) { api, version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             api.skip(guildId, SkipQueueRequest(expectedVersion = version))
         }
     }
 
     fun stop() {
-        mutate { api, version ->
+        mutate(
+            controlAction = PlayerControlAction.STOP,
+            forcePresentationIdleOnSuccess = true,
+        ) { api, version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             api.stop(guildId, QueueMutationRequest(expectedVersion = version))
         }
     }
 
     fun setRepeat(enabled: Boolean) {
-        mutate { api, version ->
+        mutate(
+            controlAction = PlayerControlAction.REPEAT,
+            successMessage = { response ->
+                if (response.snapshot.isRepeatEnabled) "Powtarzanie włączone" else "Powtarzanie wyłączone"
+            },
+        ) { api, version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             api.setRepeat(guildId, SetQueueRepeatRequest(enabled, version))
         }
     }
 
     fun toggleRadio() {
-        val queue = _ui.value.queue ?: return
-        when (val action = decideRadioToggle(queue, _ui.value.selectedVoiceChannelId)) {
-            RadioToggleAction.MissingVoiceChannel -> _ui.update {
-                it.copy(error = "Najpierw wybierz serwer i kanał głosowy.")
-            }
-            is RadioToggleAction.Disable -> mutate { api, _ ->
-                val guildId = _ui.value.selectedGuildId ?: return@mutate null
-                api.disableRadio(guildId, action.expectedVersion)
-            }
-            is RadioToggleAction.Enable -> {
-                val guildId = _ui.value.selectedGuildId ?: run {
+        mutate(
+            controlAction = PlayerControlAction.RADIO,
+            successMessage = { response ->
+                if (response.snapshot.radio?.isEnabled == true) "Radio włączone" else "Radio wyłączone"
+            },
+        ) { api, _ ->
+            val queue = _ui.value.queue ?: return@mutate null
+            val guildId = _ui.value.selectedGuildId ?: return@mutate null
+            when (val action = decideRadioToggle(queue, _ui.value.selectedVoiceChannelId)) {
+                RadioToggleAction.MissingVoiceChannel -> {
                     _ui.update { it.copy(error = "Najpierw wybierz serwer i kanał głosowy.") }
-                    return
+                    null
                 }
-                viewModelScope.launch {
-                    _ui.update { it.copy(isMutating = true, error = null) }
-                    try {
-                        val response = sessionManager.withApiForSession(sessionIdentity) { api ->
-                            api.enableRadio(guildId, action.request)
-                        }
-                        applyQueueSnapshot(response.snapshot)
-                        _ui.update { it.copy(isMutating = false) }
-                    } catch (e: Exception) {
-                        handleMutationError(e)
-                    }
-                }
+                is RadioToggleAction.Disable -> api.disableRadio(guildId, action.expectedVersion)
+                is RadioToggleAction.Enable -> api.enableRadio(guildId, action.request)
             }
         }
     }
@@ -604,21 +712,64 @@ class PlayerViewModel(
     }
 
     private fun mutate(
+        controlAction: PlayerControlAction? = null,
+        forcePresentationIdleOnSuccess: Boolean = false,
+        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse) -> String?)? = null,
         call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse?,
     ) {
-        viewModelScope.launch {
-            _ui.update { it.copy(isMutating = true, error = null) }
-            try {
-                val version = _ui.value.queue?.version
-                val response = sessionManager.withApiForSession(sessionIdentity) { call(it, version) } ?: run {
-                    _ui.update { it.copy(isMutating = false) }
-                    return@launch
-                }
-                applyQueueSnapshot(response.snapshot)
-                _ui.update { it.copy(isMutating = false) }
-            } catch (e: Exception) {
-                handleMutationError(e)
+        if (controlAction != null) {
+            val accepted = synchronized(pendingControlActions) {
+                pendingControlActions.add(controlAction)
             }
+            if (!accepted) return
+        }
+
+        viewModelScope.launch {
+            try {
+                if (controlAction != null) {
+                    controlMutationMutex.withLock {
+                        performMutation(controlAction, forcePresentationIdleOnSuccess, successMessage, call)
+                    }
+                } else {
+                    performMutation(null, forcePresentationIdleOnSuccess, successMessage, call)
+                }
+            } finally {
+                if (controlAction != null) {
+                    synchronized(pendingControlActions) {
+                        pendingControlActions.remove(controlAction)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun performMutation(
+        controlAction: PlayerControlAction?,
+        forcePresentationIdleOnSuccess: Boolean,
+        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse) -> String?)?,
+        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse?,
+    ) {
+        _ui.update {
+            it.copy(
+                isMutating = true,
+                activeControlAction = controlAction,
+                error = null,
+            )
+        }
+        try {
+            val version = _ui.value.queue?.version
+            val response = sessionManager.withApiForSession(sessionIdentity) { call(it, version) } ?: run {
+                _ui.update { it.copy(isMutating = false, activeControlAction = null) }
+                return
+            }
+            applyQueueSnapshot(
+                response.snapshot,
+                forcePresentationIdle = forcePresentationIdleOnSuccess,
+            )
+            _ui.update { it.copy(isMutating = false, activeControlAction = null) }
+            successMessage?.invoke(response)?.let(_controlMessages::tryEmit)
+        } catch (e: Exception) {
+            handleMutationError(e)
         }
     }
 
@@ -638,6 +789,7 @@ class PlayerViewModel(
                         _ui.update {
                             it.copy(
                                 isMutating = false,
+                                activeControlAction = null,
                                 error = if (applied) {
                                     "Kolejka zmieniła się w międzyczasie. Odświeżono stan."
                                 } else {
@@ -651,11 +803,21 @@ class PlayerViewModel(
                 }
             }
         }
-        _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
+        _ui.update {
+            it.copy(
+                isMutating = false,
+                activeControlAction = null,
+                error = userMessageForError(e),
+            )
+        }
     }
 
     companion object {
         private val URL_REGEX = Regex("""https?://[^\s]+""")
+        private val TRACK_TRANSITION_REFRESH_DELAYS_MS = longArrayOf(80L, 180L, 350L, 700L)
+        private val IDLE_CONFIRM_REFRESH_DELAYS_MS = longArrayOf(120L, 300L)
+        private const val TRACK_TRANSITION_GRACE_MS = 2_000L
+        private const val PRESENTATION_IDLE_GRACE_MS = 900L
 
         fun looksLikeUrl(input: String): Boolean =
             input.startsWith("http://", ignoreCase = true) ||

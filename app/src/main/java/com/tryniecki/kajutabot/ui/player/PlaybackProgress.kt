@@ -106,17 +106,35 @@ data class NowPlayingSlide(
     val startedAt: String?,
 )
 
-fun nowPlayingSlide(queue: QueueSnapshotResponse?): NowPlayingSlide {
-    val track = queue?.nowPlaying
-    if (queue == null || track == null) {
+/**
+ * Stable UI/media representation of the currently playing track.
+ *
+ * The raw queue snapshot can briefly report `nowPlaying = null` while the backend
+ * switches tracks. Keeping this projection separate lets the UI hold the previous
+ * track until the next concrete track is known instead of flashing an idle state.
+ */
+data class NowPlayingPresentation(
+    val track: TrackResponse,
+    val startedAt: String?,
+)
+
+fun QueueSnapshotResponse.nowPlayingPresentationOrNull(): NowPlayingPresentation? =
+    nowPlaying?.let { track -> NowPlayingPresentation(track, nowPlayingStartedAt) }
+
+fun nowPlayingSlide(
+    presentation: NowPlayingPresentation?,
+    hasQueue: Boolean,
+): NowPlayingSlide {
+    val track = presentation?.track
+    if (track == null) {
         return NowPlayingSlide(
-            identity = if (queue == null) "empty:no-queue" else "empty:idle",
+            identity = if (hasQueue) "empty:idle" else "empty:no-queue",
             hasTrack = false,
             title = "Nic nie gra",
-            hint = if (queue == null) {
-                "Połącz aplikację z serwerem i wybierz kanał głosowy"
-            } else {
+            hint = if (hasQueue) {
                 "Kolejka oczekuje na utwory"
+            } else {
+                "Połącz aplikację z serwerem i wybierz kanał głosowy"
             },
             thumbnailUrl = null,
             artworkAccentColor = null,
@@ -124,14 +142,22 @@ fun nowPlayingSlide(queue: QueueSnapshotResponse?): NowPlayingSlide {
             startedAt = null,
         )
     }
+
     return NowPlayingSlide(
-        identity = playbackIdentity(track, queue.nowPlayingStartedAt),
+        identity = playbackIdentity(track, presentation.startedAt),
         hasTrack = true,
         title = track.title,
         hint = formatDuration(track.durationMilliseconds),
         thumbnailUrl = track.thumbnailUrl,
         artworkAccentColor = track.artworkAccentColor,
         durationMs = track.durationMilliseconds,
-        startedAt = queue.nowPlayingStartedAt,
+        startedAt = presentation.startedAt,
+    )
+}
+
+fun nowPlayingSlide(queue: QueueSnapshotResponse?): NowPlayingSlide {
+    return nowPlayingSlide(
+        presentation = queue?.nowPlayingPresentationOrNull(),
+        hasQueue = queue != null,
     )
 }

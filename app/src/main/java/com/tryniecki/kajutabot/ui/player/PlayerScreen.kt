@@ -1,6 +1,13 @@
 package com.tryniecki.kajutabot.ui.player
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.SizeTransform
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +35,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -38,6 +44,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -46,6 +53,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +75,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,11 +88,13 @@ import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
+import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.components.TonalToggleIconButton
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.theme.fadeThrough
-import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisX
+import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import coil3.compose.AsyncImage
 
 @Composable
@@ -91,16 +102,21 @@ fun PlayerRoute(
     viewModel: PlayerViewModel,
     favoritesViewModel: FavoritesViewModel,
     onAddTrackOpen: () -> Unit,
+    onDiscordSelectionOpen: () -> Unit,
 ) {
     val ui by viewModel.playerScreenState.collectAsStateWithLifecycle()
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    LaunchedEffect(viewModel, context) {
+        viewModel.controlMessages.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     PlayerScreen(
         ui = ui,
-        onPickerOpen = { viewModel.setShowPicker(true) },
-        onPickerDismiss = { viewModel.setShowPicker(false) },
-        onGuildSelect = viewModel::selectGuild,
-        onChannelSelect = viewModel::selectChannel,
+        onDiscordSelectionOpen = onDiscordSelectionOpen,
         onSkip = viewModel::skip,
         onStop = viewModel::stop,
         onRepeatToggle = { viewModel.setRepeat(ui.queue?.isRepeatEnabled != true) },
@@ -146,10 +162,7 @@ fun AddTrackRoute(
 @Composable
 fun PlayerScreen(
     ui: PlayerScreenState,
-    onPickerOpen: () -> Unit,
-    onPickerDismiss: () -> Unit,
-    onGuildSelect: (String) -> Unit,
-    onChannelSelect: (String) -> Unit,
+    onDiscordSelectionOpen: () -> Unit,
     onSkip: () -> Unit,
     onStop: () -> Unit,
     onRepeatToggle: () -> Unit,
@@ -167,6 +180,7 @@ fun PlayerScreen(
     var confirmStop by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val showFloatingActions = rememberScrollAwareFabVisible(listState)
     var draggingEntryId by remember { mutableStateOf<String?>(null) }
     var dragOffsetPx by remember { mutableStateOf(0f) }
     var dragTargetIndex by remember { mutableStateOf(-1) }
@@ -180,11 +194,43 @@ fun PlayerScreen(
     Scaffold(
         //topBar = { TopAppBar(title = { Text("Odtwarzacz") }) },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddTrackOpen) {
-                Icon(
-                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
-                    contentDescription = "Dodaj utwór",
-                )
+            AnimatedVisibility(
+                visible = showFloatingActions,
+                enter = fadeIn(animationSpec = motion.fastEffectsSpec()) +
+                    scaleIn(animationSpec = motion.fastSpatialSpec(), initialScale = 0.82f),
+                exit = fadeOut(animationSpec = motion.fastEffectsSpec()) +
+                    scaleOut(animationSpec = motion.fastSpatialSpec(), targetScale = 0.82f),
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SmallFloatingActionButton(
+                        onClick = onDiscordSelectionOpen,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Zmień serwer i kanał głosowy"
+                        },
+                    ) {
+                        if (ui.selectedGuild != null) {
+                            GuildAvatar(
+                                iconUrl = ui.selectedGuild.iconUrl,
+                                modifier = Modifier.size(32.dp),
+                                iconSize = 18.dp,
+                            )
+                        } else {
+                            Icon(
+                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_discord_outline),
+                                contentDescription = null,
+                            )
+                        }
+                    }
+                    FloatingActionButton(onClick = onAddTrackOpen) {
+                        Icon(
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
+                            contentDescription = "Dodaj utwór",
+                        )
+                    }
+                }
             }
         },
     ) { innerPadding ->
@@ -199,27 +245,6 @@ fun PlayerScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item {
-                val label = if (ui.selectedGuildId != null) {
-                    val guild = ui.selectedGuild?.name ?: "Serwer"
-                    val channel = ui.selectedChannel?.name
-                    if (channel != null) "$guild • $channel" else guild
-                } else {
-                    "Wybierz serwer i kanał"
-                }
-                AssistChip(
-                    onClick = onPickerOpen,
-                    label = { Text(label) },
-                    leadingIcon = {
-                        GuildAvatar(
-                            iconUrl = ui.selectedGuild?.iconUrl,
-                            modifier = Modifier.size(20.dp),
-                            iconSize = 14.dp,
-                        )
-                    },
-                )
-            }
-
             if (ui.error != null || ui.info != null) {
                 item {
                     Card(
@@ -254,7 +279,10 @@ fun PlayerScreen(
                 } else {
                     NowPlayingCard(
                         queue = ui.queue,
+                        presentedNowPlaying = ui.presentedNowPlaying
+                            ?: ui.queue?.nowPlayingPresentationOrNull(),
                         isMutating = ui.isMutating,
+                        activeControlAction = ui.activeControlAction,
                         onSkip = onSkip,
                         onStop = { confirmStop = true },
                         isFavorite = isFavorite,
@@ -454,17 +482,6 @@ fun PlayerScreen(
             }
         }
 
-        if (ui.showGuildPicker) {
-            GuildChannelDialog(
-                guilds = ui.guilds,
-                channels = ui.voiceChannels,
-                selectedGuildId = ui.selectedGuildId,
-                selectedChannelId = ui.selectedVoiceChannelId,
-                onGuildSelect = onGuildSelect,
-                onChannelSelect = onChannelSelect,
-                onDismiss = onPickerDismiss,
-            )
-        }
         if (confirmStop) {
             AlertDialog(
                 onDismissRequest = { confirmStop = false },
@@ -497,7 +514,9 @@ fun PlayerScreen(
 @Composable
 private fun NowPlayingCard(
     queue: QueueSnapshotResponse?,
+    presentedNowPlaying: NowPlayingPresentation?,
     isMutating: Boolean,
+    activeControlAction: PlayerControlAction?,
     onSkip: () -> Unit,
     onStop: () -> Unit,
     isFavorite: (TrackResponse) -> Boolean,
@@ -509,6 +528,13 @@ private fun NowPlayingCard(
     val repeatEnabled = queue?.isRepeatEnabled == true
     val radioEnabled = queue?.radio?.isEnabled == true
     val motion = MaterialTheme.motionScheme
+    val currentSlide = nowPlayingSlide(
+        presentation = presentedNowPlaying,
+        hasQueue = queue != null,
+    )
+    // Queue mutations such as reorder/remove still block playback controls, but a
+    // control mutation must not make its sibling buttons flash disabled.
+    val playbackControlsBlocked = isMutating && activeControlAction == null
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -521,78 +547,71 @@ private fun NowPlayingCard(
             // Artwork, title, meta and progress transition as one unit keyed by
             // playback identity (track + start moment), so a repeated track counts
             // as a new playback and never animates 95% -> 2% on one progress bar.
-            // Track -> track keeps a directional shared axis; idle <-> playing
+            // Track -> track keeps a vertical directional shared axis; idle <-> playing
             // has no "next" semantics, so it uses a calm fade-through instead.
             // Both rely on the reserved title/flags slots below: equal heights
             // mean no card jump on track change, and the built-in size animation
             // only runs for genuine idle <-> playing height deltas.
-            AnimatedContent(
-                targetState = nowPlayingSlide(queue),
-                transitionSpec = {
-                    val contentTransition = if (initialState.hasTrack == targetState.hasTrack) {
-                        forwardSharedAxisX(
-                            fadeSpec = motion.defaultEffectsSpec(),
-                            slideSpec = motion.defaultSpatialSpec(),
-                        )
-                    } else {
-                        fadeThrough(
-                            enterSpec = motion.defaultEffectsSpec(),
-                            exitSpec = motion.fastEffectsSpec(),
-                        )
-                    }
-                    contentTransition.using(
-                        SizeTransform { _, _ -> motion.defaultSpatialSpec() },
-                    )
-                },
-                label = "nowPlaying",
-            ) { slide ->
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    NowPlayingArtwork(slide)
+            Box {
+                SmoothArtworkGlow(
+                    slide = currentSlide,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .align(Alignment.TopCenter),
+                )
 
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            "TERAZ ODTWARZANE",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                AnimatedContent(
+                    targetState = currentSlide,
+                    transitionSpec = {
+                        val contentTransition = if (initialState.hasTrack == targetState.hasTrack) {
+                            forwardSharedAxisY(
+                                fadeSpec = motion.defaultEffectsSpec(),
+                                slideSpec = motion.defaultSpatialSpec(),
+                            )
+                        } else {
+                            fadeThrough(
+                                enterSpec = motion.defaultEffectsSpec(),
+                                exitSpec = motion.fastEffectsSpec(),
+                            )
+                        }
+                        contentTransition.using(
+                            SizeTransform { _, _ -> motion.defaultSpatialSpec() },
                         )
-                        // Fixed two-line slot: 1-line and 2-line titles occupy
-                        // the same height at any font scale, so the card never
-                        // jumps on track -> track.
-                        Text(
-                            text = slide.title,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            minLines = 2,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    },
+                    label = "nowPlaying",
+                ) { slide ->
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        NowPlayingArtwork(slide)
 
-                    if (slide.hasTrack) {
-                        PlaybackProgressIndicator(
-                            playbackKey = slide.identity,
-                            startedAtRaw = slide.startedAt,
-                            durationMs = slide.durationMs,
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                "TERAZ ODTWARZANE",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            // Fixed two-line slot: 1-line and 2-line titles occupy
+                            // the same height at any font scale, so the card never
+                            // jumps on track -> track.
+                            Text(
+                                text = slide.title,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                minLines = 2,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+
+                        if (slide.hasTrack) {
+                            PlaybackProgressIndicator(
+                                playbackKey = slide.identity,
+                                startedAtRaw = slide.startedAt,
+                                durationMs = slide.durationMs,
+                            )
+                        }
                     }
                 }
-            }
-
-            // Live flags update outside the track transition. The line is always
-            // reserved (non-breaking space when empty) so toggling radio/repeat
-            // never changes the card height.
-            val flags = buildList {
-                if (radioEnabled) add("Radio włączone")
-                if (repeatEnabled) add("Powtarzanie")
-            }
-            if (queue?.nowPlaying != null) {
-                Text(
-                    text = flags.joinToString(" • ").ifEmpty { NBSP },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    minLines = 1,
-                    maxLines = 1,
-                )
             }
 
             Row(
@@ -602,7 +621,7 @@ private fun NowPlayingCard(
             ) {
                 OutlinedIconButton(
                     onClick = onStop,
-                    enabled = !isMutating && queue?.nowPlaying != null,
+                    enabled = !playbackControlsBlocked && presentedNowPlaying != null,
                 ) {
                     Icon(
                         painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_stop_outline),
@@ -612,7 +631,7 @@ private fun NowPlayingCard(
                 }
                 FilledIconButton(
                     onClick = onSkip,
-                    enabled = !isMutating && queue?.nowPlaying != null,
+                    enabled = !playbackControlsBlocked && presentedNowPlaying != null,
                     modifier = Modifier.size(56.dp),
                 ) {
                     Icon(
@@ -620,35 +639,23 @@ private fun NowPlayingCard(
                         contentDescription = "Pomiń",
                     )
                 }
-                FilledTonalIconToggleButton(
+                TonalToggleIconButton(
                     checked = repeatEnabled,
                     onCheckedChange = { onRepeatToggle() },
-                    enabled = !isMutating && queue != null,
-                ) {
-                    Icon(
-                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_repeat_outline),
-                        contentDescription = if (repeatEnabled) {
-                            "Wyłącz powtarzanie"
-                        } else {
-                            "Włącz powtarzanie"
-                        },
-                    )
-                }
-                FilledTonalIconToggleButton(
+                    iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_repeat_outline,
+                    checkedContentDescription = "Wyłącz powtarzanie",
+                    uncheckedContentDescription = "Włącz powtarzanie",
+                    enabled = !playbackControlsBlocked && queue != null,
+                )
+                TonalToggleIconButton(
                     checked = radioEnabled,
                     onCheckedChange = { onRadioToggle() },
-                    enabled = !isMutating && queue != null,
-                ) {
-                    Icon(
-                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline),
-                        contentDescription = if (radioEnabled) {
-                            "Wyłącz radio"
-                        } else {
-                            "Włącz radio"
-                        },
-                    )
-                }
-                queue?.nowPlaying?.let { track ->
+                    iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline,
+                    checkedContentDescription = "Wyłącz radio",
+                    uncheckedContentDescription = "Włącz radio",
+                    enabled = !playbackControlsBlocked && queue != null,
+                )
+                presentedNowPlaying?.track?.let { track ->
                     FavoriteTrackButton(
                         track = track,
                         checked = isFavorite(track),
@@ -660,38 +667,86 @@ private fun NowPlayingCard(
         }
     }
 }
+
 @Composable
-private fun NowPlayingArtwork(slide: NowPlayingSlide) {
-    val accent = remember(slide.artworkAccentColor) {
-        slide.artworkAccentColor
-            ?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) }
-            ?.let { Color(0xFF000000L or it.substring(1).toLong(16)) }
+private fun SmoothArtworkGlow(
+    slide: NowPlayingSlide,
+    modifier: Modifier = Modifier,
+) {
+    val motion = MaterialTheme.motionScheme
+    val latestSlide by rememberUpdatedState(slide)
+    var displayedSlide by remember { mutableStateOf(slide) }
+
+    // Color-backed glows can transition immediately. Image-backed glows first
+    // warm Coil's cache at the real render size so the old glow stays visible
+    // until the new artwork is actually ready, avoiding a fade-through-black gap.
+    val targetAccent = slide.artworkAccentColor.toArtworkAccentColor()
+    val preloadImage = slide != displayedSlide &&
+        slide.hasTrack &&
+        slide.thumbnailUrl != null &&
+        targetAccent == null
+
+    LaunchedEffect(slide, preloadImage) {
+        if (!preloadImage) displayedSlide = slide
     }
 
+    Box(modifier = modifier) {
+        if (preloadImage) {
+            val candidate = slide
+            AsyncImage(
+                model = candidate.thumbnailUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(0f),
+                onSuccess = {
+                    if (latestSlide == candidate) displayedSlide = candidate
+                },
+                onError = {
+                    // Do not pin the previous track forever if artwork fails.
+                    if (latestSlide == candidate) displayedSlide = candidate
+                },
+            )
+        }
+
+        Crossfade(
+            targetState = displayedSlide,
+            animationSpec = motion.slowEffectsSpec(),
+            modifier = Modifier.fillMaxSize(),
+            label = "nowPlayingGlow",
+        ) { current ->
+            if (!current.hasTrack || current.thumbnailUrl == null) return@Crossfade
+
+            val accent = current.artworkAccentColor.toArtworkAccentColor()
+            if (accent != null) {
+                AccentArtworkGlow(
+                    accent = accent,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                ImageArtworkGlow(
+                    imageUrl = current.thumbnailUrl,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
+private fun String?.toArtworkAccentColor(): Color? =
+    this
+        ?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) }
+        ?.let { Color(0xFF000000L or it.substring(1).toLong(16)) }
+
+@Composable
+private fun NowPlayingArtwork(slide: NowPlayingSlide) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(16f / 9f),
         contentAlignment = Alignment.Center,
     ) {
-        if (slide.hasTrack && slide.thumbnailUrl != null) {
-            if (accent != null) {
-                AccentArtworkGlow(
-                    accent = accent,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .align(Alignment.Center),
-                )
-            } else {
-                ImageArtworkGlow(
-                    imageUrl = slide.thumbnailUrl,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .align(Alignment.Center),
-                )
-            }
-        }
-
         TrackArtwork(
             imageUrl = slide.thumbnailUrl,
             modifier = Modifier.fillMaxSize(),
@@ -822,54 +877,6 @@ private fun EmptyQueueCard() {
     }
 }
 
-@Composable
-private fun GuildChannelDialog(
-    guilds: List<DiscordGuildResponse>,
-    channels: List<DiscordVoiceChannelResponse>,
-    selectedGuildId: String?,
-    selectedChannelId: String?,
-    onGuildSelect: (String) -> Unit,
-    onChannelSelect: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Wybierz serwer i kanał") },
-        text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                item { Text("Serwer", style = MaterialTheme.typography.labelLarge) }
-                if (guilds.isEmpty()) {
-                    item { Text("Brak dostępnych serwerów.") }
-                }
-                items(guilds, key = { it.id }) { guild ->
-                    FilterChip(
-                        selected = guild.id == selectedGuildId,
-                        onClick = { onGuildSelect(guild.id) },
-                        label = { Text(guild.name) },
-                    )
-                }
-                item {
-                    Spacer(Modifier.size(8.dp))
-                    Text("Kanał głosowy", style = MaterialTheme.typography.labelLarge)
-                }
-                if (selectedGuildId == null) {
-                    item { Text("Najpierw wybierz serwer.") }
-                } else if (channels.isEmpty()) {
-                    item { Text("Brak kanałów głosowych.") }
-                }
-                items(channels, key = { it.id }) { channel ->
-                    FilterChip(
-                        selected = channel.id == selectedChannelId,
-                        onClick = { onChannelSelect(channel.id) },
-                        label = { Text("${channel.name} (${channel.userCount})") },
-                    )
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Zamknij") } },
-    )
-}
-
 internal fun formatDuration(ms: Long): String {
     if (ms <= 0) return "—"
     val totalSeconds = ms / 1000
@@ -877,6 +884,3 @@ internal fun formatDuration(ms: Long): String {
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
 }
-
-/** Non-breaking space keeping reserved single-line slots at full line height. */
-private const val NBSP = " "

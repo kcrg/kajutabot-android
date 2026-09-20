@@ -47,10 +47,11 @@ class RemotePlaybackService : MediaSessionService() {
         val playerState = ViewModelProvider(owner, PlayerViewModel.Factory(container))[PlayerViewModel::class.java]
         val favoritesState = ViewModelProvider(owner, FavoritesViewModel.Factory(container))[FavoritesViewModel::class.java]
         val player = RemoteQueuePlayer {
-            if (!playerState.ui.value.isMutating) playerState.skip()
+            val state = playerState.ui.value
+            if (!state.isMutating || state.activeControlAction != null) playerState.skip()
         }
         remotePlayer = player
-        player.update(playerState.ui.value.queue)
+        player.update(playerState.ui.value.effectiveNowPlaying)
         val session = MediaSession.Builder(this, player)
             .setCallback(RemoteSessionCallback(playerState, favoritesState))
             .setMediaButtonPreferences(mediaButtons(playerState, favoritesState))
@@ -69,7 +70,7 @@ class RemotePlaybackService : MediaSessionService() {
 
         scope.launch {
             playerState.ui.collectLatest { state ->
-                player.update(state.queue)
+                player.update(state.effectiveNowPlaying)
                 session.setMediaButtonPreferences(mediaButtons(playerState, favoritesState))
                 // Stop foreground playback promptly when the bot disconnects.
                 if (state.queue != null && state.queue.nowPlaying == null && state.queue.voiceChannelId == null) {
@@ -137,10 +138,12 @@ class RemotePlaybackService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            val queue = player.ui.value.queue
-            val track = queue?.nowPlaying
+            val state = player.ui.value
+            val queue = state.queue
+            val track = state.effectiveNowPlaying?.track
+            val playbackControlsBlocked = state.isMutating && state.activeControlAction == null
             if ((!controller.isTrusted && !session.isMediaNotificationController(controller)) ||
-                track == null || player.ui.value.isMutating
+                queue == null || track == null || playbackControlsBlocked
             ) {
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
             }
@@ -179,30 +182,30 @@ class RemotePlaybackService : MediaSessionService() {
 
         fun mediaButtons(player: PlayerViewModel, favorites: FavoritesViewModel): List<CommandButton> {
             val state = player.ui.value
-            val queue = state.queue
-            val track = queue?.nowPlaying ?: return emptyList()
-            val busy = state.isMutating
+            val queue = state.queue ?: return emptyList()
+            val track = state.effectiveNowPlaying?.track ?: return emptyList()
+            val playbackControlsBlocked = state.isMutating && state.activeControlAction == null
             val isFavorite = favorites.isFavorite(track)
             return listOf(
                 CommandButton.Builder(CommandButton.ICON_NEXT)
                     .setDisplayName("Pomiń utwór")
                     .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT)
-                    .setEnabled(!busy)
+                    .setEnabled(!playbackControlsBlocked)
                     .build(),
                 CommandButton.Builder(if (queue.isRepeatEnabled) CommandButton.ICON_REPEAT_ALL else CommandButton.ICON_REPEAT_OFF)
                     .setDisplayName(if (queue.isRepeatEnabled) "Wyłącz powtarzanie" else "Włącz powtarzanie")
                     .setSessionCommand(REPEAT)
-                    .setEnabled(!busy)
+                    .setEnabled(!playbackControlsBlocked)
                     .build(),
                 CommandButton.Builder(CommandButton.ICON_RADIO)
                     .setDisplayName(if (queue.radio.isEnabled) "Wyłącz radio" else "Włącz radio")
                     .setSessionCommand(RADIO)
-                    .setEnabled(!busy && (queue.radio.isEnabled || state.selectedVoiceChannelId != null))
+                    .setEnabled(!playbackControlsBlocked && (queue.radio.isEnabled || state.selectedVoiceChannelId != null))
                     .build(),
                 CommandButton.Builder(if (isFavorite) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
                     .setDisplayName(if (isFavorite) "Usuń z ulubionych" else "Dodaj do ulubionych")
                     .setSessionCommand(FAVORITE)
-                    .setEnabled(!busy && !favorites.ui.value.isMutating && !favorites.ui.value.isLoading)
+                    .setEnabled(!playbackControlsBlocked && !favorites.ui.value.isMutating && !favorites.ui.value.isLoading)
                     .build(),
             )
         }

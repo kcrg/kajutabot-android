@@ -1,5 +1,10 @@
 package com.tryniecki.kajutabot.ui.favorites
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,16 +17,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.ToggleFloatingActionButton
+import androidx.compose.material3.ToggleFloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -35,12 +43,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -74,10 +85,78 @@ fun FavoritesScreen(
     var addDialogOpen by remember { mutableStateOf(false) }
     var newUrl by remember { mutableStateOf("") }
     val openUrl = rememberOpenCustomTab()
+    val motion = MaterialTheme.motionScheme
+    val listState = rememberLazyListState()
+    val showFloatingAction = rememberScrollAwareFabVisible(listState)
 
-    Scaffold { innerPadding ->
+    Scaffold(
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = showFloatingAction,
+                enter = fadeIn(animationSpec = motion.fastEffectsSpec()) +
+                    scaleIn(animationSpec = motion.fastSpatialSpec(), initialScale = 0.82f),
+                exit = fadeOut(animationSpec = motion.fastEffectsSpec()) +
+                    scaleOut(animationSpec = motion.fastSpatialSpec(), targetScale = 0.82f),
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SmallFloatingActionButton(
+                        onClick = { addDialogOpen = true },
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ) {
+                        Icon(
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_heart_plus_outline),
+                            contentDescription = "Dodaj ulubiony przez link",
+                        )
+                    }
+
+                    if (ui.favorites.isNotEmpty()) {
+                        val shuffleContainerColor = ToggleFloatingActionButtonDefaults.containerColor(
+                            initialColor = MaterialTheme.colorScheme.secondaryContainer,
+                            finalColor = MaterialTheme.colorScheme.primaryContainer,
+                        )
+                        val shuffleUncheckedIconColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        val shuffleCheckedIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+
+                        ToggleFloatingActionButton(
+                            checked = ui.shuffle,
+                            onCheckedChange = onShuffleChange,
+                            containerColor = shuffleContainerColor,
+                        ) {
+                            Icon(
+                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrows_shuffle_outline),
+                                contentDescription = if (ui.shuffle) "Wyłącz losowanie" else "Włącz losowanie",
+                                tint = lerp(
+                                    shuffleUncheckedIconColor,
+                                    shuffleCheckedIconColor,
+                                    checkedProgress,
+                                ),
+                            )
+                        }
+
+                        ExtendedFloatingActionButton(
+                            text = { Text("Dodaj wszystkie (${ui.favorites.size})") },
+                            icon = {
+                                Icon(
+                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                if (!ui.isMutating) onQueueAll()
+                            },
+                        )
+                    }
+                }
+            }
+        },
+    ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(
                 start = 12.dp,
                 top = innerPadding.calculateTopPadding() + 8.dp,
@@ -86,22 +165,6 @@ fun FavoritesScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Ulubione (${ui.favorites.size})", style = MaterialTheme.typography.titleLarge)
-                    FilledTonalIconButton(onClick = { addDialogOpen = true }, enabled = !ui.isMutating) {
-                        Icon(
-                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_plus_outline),
-                            contentDescription = "Dodaj ulubiony przez link",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            }
             if (ui.error != null || ui.info != null) {
                 item {
                     Card(
@@ -142,33 +205,14 @@ fun FavoritesScreen(
                     }
                 }
             } else {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        FilterChip(
-                            selected = ui.shuffle,
-                            enabled = !ui.isMutating,
-                            onClick = { onShuffleChange(!ui.shuffle) },
-                            label = { Text("Losowo") },
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrows_shuffle_outline),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            },
-                        )
-                        Button(onClick = onQueueAll, enabled = !ui.isMutating) {
-                            Text("Dodaj wszystkie")
-                        }
-                    }
-                }
                 items(ui.favorites, key = { it.contentUrl }) { fav ->
-                    Card {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        ),
+                    ) {
                         ListItem(
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             contentPadding = PaddingValues(
                                 start = 12.dp,
                                 top = 8.dp,

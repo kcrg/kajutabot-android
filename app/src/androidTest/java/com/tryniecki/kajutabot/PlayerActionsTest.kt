@@ -69,7 +69,7 @@ class PlayerActionsTest {
             MaterialTheme {
                 PlayerScreen(
                     ui = state(nowPlaying = true),
-                    onPickerOpen = {}, onPickerDismiss = {}, onGuildSelect = {}, onChannelSelect = {},
+                    onDiscordSelectionOpen = {},
                     onSkip = {}, onStop = { stops++ }, onRepeatToggle = {}, onRadioToggle = {},
                     onRemoveEntry = {}, onMoveEntry = { _, _, _ -> }, onClearQueue = { clears++ },
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
@@ -97,7 +97,7 @@ class PlayerActionsTest {
             MaterialTheme {
                 PlayerScreen(
                     ui = state(),
-                    onPickerOpen = {}, onPickerDismiss = {}, onGuildSelect = {}, onChannelSelect = {},
+                    onDiscordSelectionOpen = {},
                     onSkip = {}, onStop = {}, onRepeatToggle = {}, onRadioToggle = {},
                     onRemoveEntry = {}, onMoveEntry = { id, position, version ->
                         moved = Triple(id, position, version)

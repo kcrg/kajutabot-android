@@ -5,7 +5,9 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.ui.unit.IntOffset
@@ -51,6 +53,20 @@ fun <S> AnimatedContentTransitionScope<S>.forwardSharedAxisX(
         slideInHorizontally(slideSpec) { (it * distanceFraction).toInt() }) togetherWith
         (fadeOut(fadeSpec) +
             slideOutHorizontally(slideSpec) { -(it * distanceFraction).toInt() })
+
+/**
+ * Directional shared-axis Y with a fixed forward direction (next track).
+ * Enter slides in from the bottom, exit leaves through the top. Interruptible.
+ */
+fun <S> AnimatedContentTransitionScope<S>.forwardSharedAxisY(
+    fadeSpec: FiniteAnimationSpec<Float>,
+    slideSpec: FiniteAnimationSpec<IntOffset>,
+    distanceFraction: Float = KbMotion.TRACK_SLIDE_FRACTION,
+): ContentTransform =
+    (fadeIn(fadeSpec) +
+        slideInVertically(slideSpec) { (it * distanceFraction).toInt() }) togetherWith
+        (fadeOut(fadeSpec) +
+            slideOutVertically(slideSpec) { -(it * distanceFraction).toInt() })
 
 /**
  * Fade between peer states without a directional slide (loading/content,

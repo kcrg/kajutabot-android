@@ -10,8 +10,11 @@ import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.api.model.favorites.QueueFavoritesRequest
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
 import com.tryniecki.kajutabot.ui.userMessageForError
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -36,6 +39,9 @@ class FavoritesViewModel(
 
     private val _ui = MutableStateFlow(FavoritesUiState(shuffle = preferences.shuffle(userId), isLoading = true))
     val ui: StateFlow<FavoritesUiState> = _ui.asStateFlow()
+
+    private val _toggleMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val toggleMessages: SharedFlow<String> = _toggleMessages.asSharedFlow()
     private var refreshGeneration = 0L
     private var mutationRevision = 0L
 
@@ -75,6 +81,7 @@ class FavoritesViewModel(
     fun setShuffle(enabled: Boolean) {
         preferences.setShuffle(userId, enabled)
         _ui.update { it.copy(shuffle = enabled) }
+        _toggleMessages.tryEmit(if (enabled) "Losowanie włączone" else "Losowanie wyłączone")
     }
 
     fun isFavorite(track: TrackResponse): Boolean {
@@ -87,15 +94,20 @@ class FavoritesViewModel(
         val identities = track.favoriteIdentities()
         val existing = _ui.value.favorites.firstOrNull { favoriteIdentity(it.contentUrl) in identities }
         if (existing != null) {
-            delete(existing.contentUrl)
+            delete(existing.contentUrl, toggleFeedback = true)
         } else {
-            add(track.url, track.title, track.thumbnailUrl)
+            add(track.url, track.title, track.thumbnailUrl, toggleFeedback = true)
         }
     }
 
-    fun addByUrl(contentUrl: String) = add(contentUrl.trim(), null, null)
+    fun addByUrl(contentUrl: String) = add(contentUrl.trim(), null, null, toggleFeedback = false)
 
-    private fun add(contentUrl: String, title: String?, thumbnailUrl: String?) {
+    private fun add(
+        contentUrl: String,
+        title: String?,
+        thumbnailUrl: String?,
+        toggleFeedback: Boolean,
+    ) {
         if (_ui.value.isMutating || contentUrl.isBlank()) return
         viewModelScope.launch {
             _ui.update { it.copy(isMutating = true, error = null, info = null) }
@@ -112,8 +124,11 @@ class FavoritesViewModel(
                         },
                         isMutating = false,
                         isLoading = false,
-                        info = "Zapisano utwór w ulubionych.",
+                        info = if (toggleFeedback) null else "Zapisano utwór w ulubionych.",
                     )
+                }
+                if (toggleFeedback) {
+                    _toggleMessages.emit("Dodano do ulubionych")
                 }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
@@ -121,7 +136,9 @@ class FavoritesViewModel(
         }
     }
 
-    fun delete(contentUrl: String) {
+    fun delete(contentUrl: String) = delete(contentUrl, toggleFeedback = false)
+
+    private fun delete(contentUrl: String, toggleFeedback: Boolean) {
         if (_ui.value.isMutating) return
         viewModelScope.launch {
             _ui.update { it.copy(isMutating = true, error = null) }
@@ -135,6 +152,9 @@ class FavoritesViewModel(
                         isMutating = false,
                         isLoading = false,
                     )
+                }
+                if (toggleFeedback) {
+                    _toggleMessages.emit("Usunięto z ulubionych")
                 }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }

@@ -231,6 +231,7 @@ fun MoreRootScreen(
                     icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_directions_outline,
                     title = "Przewodnik po aplikacji",
                     subtitle = "Uruchom onboarding ponownie",
+                    useContainer = true,
                     onClick = onOpenOnboarding,
                 )
             }
@@ -243,6 +244,7 @@ fun MoreRootScreen(
                     icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_info_circle_outline,
                     title = "Użyte biblioteki",
                     subtitle = "Licencje i komponenty open source",
+                    useContainer = true,
                     onClick = onOpenLibraries,
                 )
             }
@@ -251,6 +253,7 @@ fun MoreRootScreen(
                     icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_mail_outline,
                     title = "Kontakt",
                     subtitle = "Kacper Tryniecki",
+                    useContainer = true,
                     onClick = onOpenContact,
                 )
             }
@@ -353,10 +356,22 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun SettingsRow(icon: Int, title: String, subtitle: String, onClick: () -> Unit) {
+private fun SettingsRow(
+    icon: Int,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    useContainer: Boolean = false,
+) {
     ListItem(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = if (useContainer) {
+            Modifier
+                .clip(MaterialTheme.shapes.large)
+                .clickable(onClick = onClick)
+        } else {
+            Modifier.clickable(onClick = onClick)
+        },
         leadingContent = {
                 Icon(
                     painter = painterResource(icon),
@@ -373,7 +388,13 @@ private fun SettingsRow(icon: Int, title: String, subtitle: String, onClick: () 
             },
         overlineContent = null,
         supportingContent = { Text(subtitle) },
-        colors = ListItemDefaults.colors(),
+        colors = ListItemDefaults.colors(
+            containerColor = if (useContainer) {
+                MaterialTheme.colorScheme.surfaceContainer
+            } else {
+                ListItemDefaults.containerColor
+            },
+        ),
         elevation = ListItemDefaults.elevation(ListItemDefaults.Elevation),
         content = { Text(title) },
     )

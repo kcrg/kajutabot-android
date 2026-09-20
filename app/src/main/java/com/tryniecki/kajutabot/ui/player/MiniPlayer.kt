@@ -68,6 +68,7 @@ fun MiniPlayer(
     slide: NowPlayingSlide,
     track: TrackResponse,
     isMutating: Boolean,
+    activeControlAction: PlayerControlAction?,
     isFavorite: Boolean,
     favoritesBusy: Boolean,
     onToggleFavorite: (TrackResponse) -> Unit,
@@ -76,6 +77,7 @@ fun MiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val motion = MaterialTheme.motionScheme
+    val playbackControlsBlocked = isMutating && activeControlAction == null
 
     val progress = rememberPlaybackProgress(
         playbackKey = slide.identity,
@@ -163,7 +165,7 @@ fun MiniPlayer(
                 )
                 IconButton(
                     onClick = onSkip,
-                    enabled = !isMutating,
+                    enabled = !playbackControlsBlocked,
                 ) {
                     Icon(
                         painter = painterResource(

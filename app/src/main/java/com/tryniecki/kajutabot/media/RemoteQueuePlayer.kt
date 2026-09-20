@@ -10,9 +10,9 @@ import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.util.UnstableApi
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.ui.components.ArtworkSource
 import com.tryniecki.kajutabot.ui.components.resolveArtworkSource
+import com.tryniecki.kajutabot.ui.player.NowPlayingPresentation
 import com.tryniecki.kajutabot.ui.player.initialPositionMs
 import com.tryniecki.kajutabot.ui.player.playbackIdentity
 
@@ -21,30 +21,29 @@ import com.tryniecki.kajutabot.ui.player.playbackIdentity
 class RemoteQueuePlayer(
     private val onSkip: () -> Unit,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
-    private var queue: QueueSnapshotResponse? = null
+    private var nowPlaying: NowPlayingPresentation? = null
 
-    fun update(snapshot: QueueSnapshotResponse?) {
+    fun update(presentation: NowPlayingPresentation?) {
         verifyApplicationThread()
-        if (queue == snapshot) return
-        queue = snapshot
+        if (nowPlaying == presentation) return
+        nowPlaying = presentation
         invalidateState()
     }
 
     override fun getState(): State {
-        val snapshot = queue
-        val track = snapshot?.nowPlaying
         val commands = Player.Commands.Builder()
             .add(Player.COMMAND_GET_CURRENT_MEDIA_ITEM)
             .add(Player.COMMAND_GET_TIMELINE)
             .add(Player.COMMAND_GET_METADATA)
             .add(Player.COMMAND_RELEASE)
-        if (track == null) return State.Builder()
+        val presentation = nowPlaying ?: return State.Builder()
             .setAvailableCommands(commands.build())
             .setPlaybackState(Player.STATE_IDLE)
             .build()
+        val track = presentation.track
 
         commands.add(Player.COMMAND_SEEK_TO_NEXT)
-        val identity = playbackIdentity(track, snapshot.nowPlayingStartedAt)
+        val identity = playbackIdentity(track, presentation.startedAt)
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
             .setDisplayTitle(track.title)
@@ -61,7 +60,7 @@ class RemoteQueuePlayer(
         val durationMs = track.durationMilliseconds
         val durationUs = if (durationMs > 0) durationMs * 1_000 else C.TIME_UNSET
         val positionMs = initialPositionMs(
-            snapshot.nowPlayingStartedAt,
+            presentation.startedAt,
             durationMs,
             System.currentTimeMillis(),
         ) ?: 0L

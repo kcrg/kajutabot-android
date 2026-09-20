@@ -63,7 +63,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = releaseSigning
+            signingConfig = signingConfigs.getByName("debug")
             optimization {
                 enable = true
             }

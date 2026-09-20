@@ -1,5 +1,6 @@
 package com.tryniecki.kajutabot.ui
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -84,6 +85,7 @@ import com.tryniecki.kajutabot.ui.player.MiniPlayerState
 import com.tryniecki.kajutabot.ui.player.PlayerRoute
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.AddTrackRoute
+import com.tryniecki.kajutabot.ui.player.DiscordSelectionRoute
 import com.tryniecki.kajutabot.ui.player.pollSelectedQueue
 import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
@@ -296,6 +298,8 @@ private fun AuthenticatedContent(
     val currentRoute = backStackEntry?.destination
     val currentDestination = currentRoute.topLevelDestination()
     val isAddTrackOpen = currentRoute?.hasRoute<AppRoute.AddTrack>() == true
+    val isDiscordSelectionOpen = currentRoute?.hasRoute<AppRoute.DiscordSelection>() == true
+    val isFullScreenDetailOpen = isAddTrackOpen || isDiscordSelectionOpen
     val favoritesViewModel: FavoritesViewModel = viewModel(
         factory = FavoritesViewModel.Factory(container),
     )
@@ -310,6 +314,12 @@ private fun AuthenticatedContent(
     val pendingSharedUrl by appViewModel.pendingSharedUrl.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val motion = MaterialTheme.motionScheme
+
+    LaunchedEffect(favoritesViewModel, context) {
+        favoritesViewModel.toggleMessages.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     LaunchedEffect(pendingSharedUrl) {
         val url = pendingSharedUrl ?: return@LaunchedEffect
@@ -330,7 +340,7 @@ private fun AuthenticatedContent(
 
     val miniPlayerVisible = shouldShowMiniPlayer(
         isAuthenticated = true,
-        isBottomBarVisible = !isAddTrackOpen,
+        isBottomBarVisible = !isFullScreenDetailOpen,
         destination = currentDestination,
         hasNowPlaying = miniPlayerState != null,
     )
@@ -359,7 +369,7 @@ private fun AuthenticatedContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             // Full-screen AddTrack modal: no tabs reachable underneath.
-            if (!isAddTrackOpen) {
+            if (!isFullScreenDetailOpen) {
                 Column {
                     // Appear/disappear animates the occupied space too, so the
                     // NavigationBar stays put and content above glides instead
@@ -382,6 +392,7 @@ private fun AuthenticatedContent(
                                 slide = state.slide,
                                 track = state.track,
                                 isMutating = state.isMutating,
+                                activeControlAction = state.activeControlAction,
                                 isFavorite = favoritesViewModel.isFavorite(state.track),
                                 favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
                                 onToggleFavorite = favoritesViewModel::toggle,
@@ -477,6 +488,7 @@ private fun AuthenticatedContent(
                     viewModel = playerViewModel,
                     favoritesViewModel = favoritesViewModel,
                     onAddTrackOpen = { navController.navigate(AppRoute.AddTrack) },
+                    onDiscordSelectionOpen = { navController.navigate(AppRoute.DiscordSelection) },
                 )
             }
             composable<AppRoute.MyAudio> { MyAudioScreen() }
@@ -509,17 +521,24 @@ private fun AuthenticatedContent(
                     onClose = { navController.popBackStack() },
                 )
             }
+            composable<AppRoute.DiscordSelection> {
+                DiscordSelectionRoute(
+                    viewModel = playerViewModel,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }
 
 private fun NavDestination.isDetailRoute(): Boolean =
     hasRoute<AppRoute.AddTrack>() ||
+        hasRoute<AppRoute.DiscordSelection>() ||
         hasRoute<AppRoute.Libraries>() ||
         hasRoute<AppRoute.Contact>()
 
 private fun NavDestination?.topLevelDestination(): AppDestination = when {
-    this?.hasRoute<AppRoute.MyAudio>() == true -> AppDestination.MY_AUDIO
+    //this?.hasRoute<AppRoute.MyAudio>() == true -> AppDestination.MY_AUDIO
     this?.hasRoute<AppRoute.Favorites>() == true -> AppDestination.FAVORITES
     this?.hasRoute<AppRoute.More>() == true ||
         this?.hasRoute<AppRoute.Libraries>() == true ||
