@@ -74,11 +74,8 @@ import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.more.ContactScreen
 import com.tryniecki.kajutabot.ui.more.LibrariesScreen
 import com.tryniecki.kajutabot.ui.more.MoreRootScreen
-import com.tryniecki.kajutabot.ui.myaudio.MyAudioScreen
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
 import com.tryniecki.kajutabot.ui.navigation.AppRoute
-import com.tryniecki.kajutabot.ui.navigation.visibleDestinations
-import com.tryniecki.kajutabot.ui.navigation.canUseUserMedia
 import com.tryniecki.kajutabot.ui.onboarding.AccessCheckingScreen
 import com.tryniecki.kajutabot.ui.onboarding.AccessErrorScreen
 import com.tryniecki.kajutabot.ui.onboarding.NoAccessScreen
@@ -420,7 +417,7 @@ private fun AuthenticatedContent(
                         }
                     }
                     NavigationBar {
-                        visibleDestinations(sessionType).forEach { destination ->
+                        AppDestination.entries.forEach { destination ->
                             NavigationBarItem(
                                 selected = currentDestination == destination,
                                 onClick = {
@@ -509,14 +506,6 @@ private fun AuthenticatedContent(
                     onDiscordSelectionOpen = { navController.navigate(AppRoute.DiscordSelection) },
                 )
             }
-            composable<AppRoute.MyAudio> {
-                if (sessionType.canUseUserMedia) {
-                    MyAudioScreen()
-                } else {
-                    LaunchedEffect(Unit) { navController.navigateToTopLevel(AppDestination.PLAYER) }
-                    Text("Moje Audio jest dostępne po zalogowaniu przez Discord.")
-                }
-            }
             composable<AppRoute.Favorites> { FavoritesRoute(viewModel = favoritesViewModel) }
             composable<AppRoute.More> {
                 MoreRootScreen(
@@ -534,7 +523,7 @@ private fun AuthenticatedContent(
                 LibrariesScreen(onBack = { navController.popBackStack() })
             }
             composable<AppRoute.Contact> {
-                ContactScreen(container = container, onBack = { navController.popBackStack() })
+                ContactScreen(onBack = { navController.popBackStack() })
             }
             composable<AppRoute.AddTrack> {
                 // Disposal follows the actual Navigation exit, including system Back.
@@ -565,7 +554,6 @@ private fun NavDestination.isDetailRoute(): Boolean =
         hasRoute<AppRoute.Contact>()
 
 private fun NavDestination?.topLevelDestination(): AppDestination = when {
-    //this?.hasRoute<AppRoute.MyAudio>() == true -> AppDestination.MY_AUDIO
     this?.hasRoute<AppRoute.Favorites>() == true -> AppDestination.FAVORITES
     this?.hasRoute<AppRoute.More>() == true ||
         this?.hasRoute<AppRoute.Libraries>() == true ||

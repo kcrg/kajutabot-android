@@ -367,7 +367,7 @@ fun LibrariesScreen(onBack: () -> Unit) {
                     overlineContent = null,
                     supportingContent = { Text(library.description) },
                     colors = ListItemDefaults.colors(),
-                    elevation = ListItemDefaults.elevation(ListItemDefaults.Elevation),
+                    elevation = ListItemDefaults.elevation(),
                     content = { Text(library.name) },
                 )
                 if (library != LIBRARIES.last()) HorizontalDivider()
@@ -377,7 +377,7 @@ fun LibrariesScreen(onBack: () -> Unit) {
 }
 
 @Composable
-fun ContactScreen(container: AppContainer, onBack: () -> Unit) {
+fun ContactScreen(onBack: () -> Unit) {
     Scaffold(topBar = { BackTopBar(title = "Kontakt", onBack = onBack) }) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             ListItem(
@@ -388,7 +388,7 @@ fun ContactScreen(container: AppContainer, onBack: () -> Unit) {
                 overlineContent = null,
                 supportingContent = { Text("Autor KajutaBot") },
                 colors = ListItemDefaults.colors(),
-                elevation = ListItemDefaults.elevation(ListItemDefaults.Elevation),
+                elevation = ListItemDefaults.elevation(),
                 content = { Text("Kacper Tryniecki") },
             )
             HorizontalDivider()
@@ -482,7 +482,7 @@ private fun SettingsRow(
                 ListItemDefaults.containerColor
             },
         ),
-        elevation = ListItemDefaults.elevation(ListItemDefaults.Elevation),
+        elevation = ListItemDefaults.elevation(),
         content = { Text(title) },
     )
 }

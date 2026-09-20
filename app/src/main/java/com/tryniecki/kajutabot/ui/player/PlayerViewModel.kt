@@ -1,7 +1,6 @@
 package com.tryniecki.kajutabot.ui.player
 
 import android.os.SystemClock
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -216,7 +215,6 @@ class PlayerViewModel(
         onSnapshot = { snapshot -> applyQueueSnapshot(snapshot) },
         recoverQueue = ::recoverQueueOnce,
         elapsedRealtimeMs = SystemClock::elapsedRealtime,
-        log = { message -> Log.d("KajutaBotRealtime", message) },
     )
     val realtimeDiagnostics: StateFlow<RealtimeDiagnostics> = realtime.diagnostics
 
@@ -278,7 +276,6 @@ class PlayerViewModel(
 
     override fun onCleared() {
         realtime.close()
-        super.onCleared()
     }
 
     fun setSearchQuery(query: String) {
@@ -703,7 +700,7 @@ class PlayerViewModel(
         mutate(
             controlAction = PlayerControlAction.RADIO,
             successMessage = { response ->
-                if (response.snapshot.radio?.isEnabled == true) "Radio włączone" else "Radio wyłączone"
+                if (response.snapshot.radio.isEnabled) "Radio włączone" else "Radio wyłączone"
             },
         ) { api, _ ->
             val queue = _ui.value.queue ?: return@mutate null

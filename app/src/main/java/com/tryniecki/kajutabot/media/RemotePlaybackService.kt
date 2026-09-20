@@ -12,6 +12,7 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -29,7 +30,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /** Exposes the Discord bot's remote playback; the device never plays audio. */
-@UnstableApi
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class RemotePlaybackService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var container: AppContainer
@@ -149,7 +150,7 @@ class RemotePlaybackService : MediaSessionService() {
             if ((!controller.isTrusted && !session.isMediaNotificationController(controller)) ||
                 queue == null || track == null || playbackControlsBlocked
             ) {
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+                return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
             }
             when (customCommand.customAction) {
                 STOP.customAction -> player.stop()
@@ -157,11 +158,11 @@ class RemotePlaybackService : MediaSessionService() {
                 RADIO.customAction -> player.toggleRadio()
                 FAVORITE.customAction -> {
                     if (favorites.ui.value.isLoading || favorites.ui.value.isMutating) {
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+                        return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
                     }
                     favorites.toggle(track)
                 }
-                else -> return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+                else -> return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
             }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }

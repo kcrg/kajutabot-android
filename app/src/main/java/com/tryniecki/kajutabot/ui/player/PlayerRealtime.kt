@@ -61,7 +61,6 @@ internal class PlayerRealtime(
     private val recoverQueue: suspend (String) -> Unit,
     private val elapsedRealtimeMs: () -> Long = { System.nanoTime() / 1_000_000L },
     private val jitterMs: () -> Long = { Random.nextLong(0, 251) },
-    private val log: (String) -> Unit = {},
 ) {
     private val owners = MutableStateFlow<Set<RealtimeOwner>>(emptySet())
     private val _diagnostics = MutableStateFlow(RealtimeDiagnostics())
@@ -110,7 +109,6 @@ internal class PlayerRealtime(
                             reconnectAttempts = attempts,
                         )
                     }
-                    log(if (attempts == 0) "SignalR connecting" else "SignalR reconnect attempt $attempts")
                     client = connect(token())
                     coroutineScope {
                         // One serial consumer. The bounded transport flow conflates bursts.
@@ -142,7 +140,6 @@ internal class PlayerRealtime(
                                 connectedAtMs = connectedAt,
                             )
                         }
-                        log("SignalR connected")
                         val subscriptions = launch(start = CoroutineStart.UNDISPATCHED) {
                             var recoveryJob: Job? = null
                             try {
@@ -165,7 +162,6 @@ internal class PlayerRealtime(
                                             _diagnostics.update {
                                                 it.copy(state = RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED)
                                             }
-                                            log("SignalR guild subscribed")
                                             recoveryJob = launch {
                                                 try {
                                                     if (!initialSnapshotAvailable ||
@@ -190,7 +186,6 @@ internal class PlayerRealtime(
                         try {
                             val disconnect = closed.await()
                             _diagnostics.update { it.copy(lastDisconnectReason = disconnect.reason) }
-                            log("SignalR connection closed: ${disconnect.reason ?: "unknown"}")
                         } finally {
                             subscriptions.cancelAndJoin()
                             snapshots.cancelAndJoin()
@@ -204,15 +199,14 @@ internal class PlayerRealtime(
                         .take(4)
                         .joinToString(" > ") { it.javaClass.simpleName }
                     _diagnostics.update { it.copy(lastDisconnectReason = reason) }
-                    log("SignalR connection failed: $reason")
                     guildId.value?.let { recoverOnce(it) }
                 } finally {
                     client?.let { connection ->
                         withContext(NonCancellable) {
                             try {
                                 withTimeoutOrNull(STOP_TIMEOUT_MS) { connection.stop() }
-                            } catch (error: Exception) {
-                                log("SignalR stop failed: ${error.javaClass.simpleName}")
+                            } catch (_: Exception) {
+                                // Shutdown is best effort; the reconnect loop owns the next attempt.
                             }
                         }
                     }

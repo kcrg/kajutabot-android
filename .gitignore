@@ -6,7 +6,7 @@ build/
 # Local configuration file (sdk path, etc)
 local.properties
 
-# Log/OS Files
+# Logs
 *.log
 
 # Android Studio generated files and folders
@@ -24,14 +24,21 @@ misc.xml
 deploymentTargetDropDown.xml
 render.experimental.xml
 
-# Keystore files
+# Local signing material and configuration
 *.jks
 *.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+secrets.properties
+keystore.properties
+.env
+.env.*
 
-# Google Services (e.g. APIs or Firebase)
+# Local service configuration
 google-services.json
 
-# Android Profiling
+# Android profiling
 *.hprof
-.idea
 app/release
