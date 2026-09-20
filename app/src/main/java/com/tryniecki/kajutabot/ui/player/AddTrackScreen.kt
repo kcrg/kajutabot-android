@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -16,7 +18,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,7 +39,10 @@ import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
+import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 
 /**
@@ -102,10 +106,7 @@ fun AddTrackScreen(
                         },
                         trailingIcon = {
                             if (ui.isSearching) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                )
+                                ExpressiveLoadingIndicator(modifier = Modifier.size(24.dp))
                             }
                         },
                         placeholder = { Text("Wklej link lub wyszukaj utwór") },
@@ -162,15 +163,22 @@ fun AddTrackScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Center,
                         ) {
-                            CircularProgressIndicator()
+                            ExpressiveLoadingIndicator(modifier = Modifier.size(40.dp))
                         }
                     }
                 }
 
-                if (ui.searchResults.isNotEmpty()) {
+                if (ui.isSearching && ui.searchResults.isEmpty() && !isUrlInput) {
+                    items(3, key = { "search-skeleton-$it" }) {
+                        SearchResultSkeleton(
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
+                } else if (ui.searchResults.isNotEmpty()) {
                     items(ui.searchResults, key = { it.input }) { item ->
                         Card(
                             modifier = Modifier
+                                .animateItem()
                                 .fillMaxWidth()
                                 .clickable(
                                     enabled = !ui.isMutating,
@@ -207,6 +215,7 @@ fun AddTrackScreen(
                     item {
                         Column(
                             modifier = Modifier
+                                .animateItem()
                                 .fillMaxWidth()
                                 .padding(top = 8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -224,6 +233,29 @@ fun AddTrackScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchResultSkeleton(modifier: Modifier = Modifier) {
+    val pulse = rememberSkeletonPulse()
+    Card(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SkeletonBlock(pulse, Modifier.size(64.dp), MaterialTheme.shapes.medium)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                SkeletonBlock(pulse, Modifier.fillMaxWidth(0.9f).height(17.dp))
+                SkeletonBlock(pulse, Modifier.fillMaxWidth(0.65f).height(17.dp))
+                SkeletonBlock(pulse, Modifier.width(104.dp).height(12.dp))
+            }
+            SkeletonBlock(pulse, Modifier.size(38.dp), MaterialTheme.shapes.extraLarge)
         }
     }
 }

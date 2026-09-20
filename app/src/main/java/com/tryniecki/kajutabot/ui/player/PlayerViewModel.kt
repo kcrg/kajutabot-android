@@ -52,6 +52,13 @@ enum class PlayerControlAction {
     RADIO,
 }
 
+enum class QueueLoadState {
+    IDLE,
+    LOADING,
+    READY,
+    ERROR,
+}
+
 data class PlayerUiState(
     val guilds: List<DiscordGuildResponse> = emptyList(),
     val voiceChannels: List<DiscordVoiceChannelResponse> = emptyList(),
@@ -66,6 +73,8 @@ data class PlayerUiState(
     val guildAccessState: GuildAccessState = GuildAccessState.CHECKING,
     val guildAccessError: String? = null,
     val isLoadingQueue: Boolean = false,
+    val queueLoadState: QueueLoadState = QueueLoadState.IDLE,
+    val queueLoadError: String? = null,
     val isSearching: Boolean = false,
     val isMutating: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
@@ -92,6 +101,8 @@ data class PlayerScreenState(
     val presentedNowPlaying: NowPlayingPresentation? = null,
     val isLoadingGuilds: Boolean = false,
     val isLoadingQueue: Boolean = false,
+    val queueLoadState: QueueLoadState = QueueLoadState.IDLE,
+    val queueLoadError: String? = null,
     val isMutating: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
     val error: String? = null,
@@ -100,6 +111,8 @@ data class PlayerScreenState(
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
     val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
+    val isInitialContentLoading: Boolean
+        get() = isLoadingGuilds || (selectedGuildId != null && queue == null)
 }
 
 
@@ -138,6 +151,8 @@ fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     presentedNowPlaying = effectiveNowPlaying,
     isLoadingGuilds = isLoadingGuilds,
     isLoadingQueue = isLoadingQueue,
+    queueLoadState = queueLoadState,
+    queueLoadError = queueLoadError,
     isMutating = isMutating,
     activeControlAction = activeControlAction,
     error = error,
@@ -232,9 +247,9 @@ class PlayerViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toMiniPlayerState())
 
     val playerError: StateFlow<String?> = _ui
-        .map { it.error }
+        .map { it.error ?: it.queueLoadError }
         .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.error)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.error ?: _ui.value.queueLoadError)
 
     private val _trackAdded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val trackAdded: SharedFlow<Unit> = _trackAdded.asSharedFlow()
@@ -311,6 +326,7 @@ class PlayerViewModel(
                     selection.guildId = selGuild
                 }
                 _ui.update {
+                    val keepsCurrentQueue = it.selectedGuildId == selGuild && it.queue != null
                     it.copy(
                         guilds = guilds,
                         selectedGuildId = selGuild,
@@ -318,6 +334,13 @@ class PlayerViewModel(
                         queue = if (it.selectedGuildId == selGuild) it.queue else null,
                         presentedNowPlaying = if (it.selectedGuildId == selGuild) it.presentedNowPlaying else null,
                         isLoadingGuilds = false,
+                        isLoadingQueue = selGuild != null && !keepsCurrentQueue,
+                        queueLoadState = when {
+                            selGuild == null -> QueueLoadState.IDLE
+                            keepsCurrentQueue -> QueueLoadState.READY
+                            else -> QueueLoadState.LOADING
+                        },
+                        queueLoadError = null,
                         guildAccessState = if (guilds.isEmpty()) {
                             GuildAccessState.NONE
                         } else {
@@ -359,6 +382,9 @@ class PlayerViewModel(
                 voiceChannels = emptyList(),
                 queue = null,
                 presentedNowPlaying = null,
+                isLoadingQueue = true,
+                queueLoadState = QueueLoadState.LOADING,
+                queueLoadError = null,
                 searchResults = emptyList(),
             )
         }
@@ -404,7 +430,13 @@ class PlayerViewModel(
     fun refreshQueue(guildId: String) {
         viewModelScope.launch {
             if (_ui.value.selectedGuildId != guildId) return@launch
-            _ui.update { it.copy(isLoadingQueue = true) }
+            _ui.update {
+                it.copy(
+                    isLoadingQueue = true,
+                    queueLoadState = if (it.queue == null) QueueLoadState.LOADING else QueueLoadState.READY,
+                    queueLoadError = null,
+                )
+            }
             try {
                 val snapshot = fetchQueueSnapshot(guildId)
                 val applied = applyQueueSnapshot(snapshot)
@@ -419,7 +451,15 @@ class PlayerViewModel(
             } catch (e: Exception) {
                 _ui.update {
                     if (it.selectedGuildId != guildId) it
-                    else it.copy(isLoadingQueue = false, error = userMessageForError(e))
+                    else if (it.queue == null) {
+                        it.copy(
+                            isLoadingQueue = false,
+                            queueLoadState = QueueLoadState.ERROR,
+                            queueLoadError = userMessageForError(e),
+                        )
+                    } else {
+                        it.copy(isLoadingQueue = false, queueLoadState = QueueLoadState.READY, error = userMessageForError(e))
+                    }
                 }
             }
         }
@@ -432,8 +472,15 @@ class PlayerViewModel(
             applyQueueSnapshot(fetchQueueSnapshot(guildId))
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
-            // Reconnect or explicit actions can recover later.
+        } catch (e: Exception) {
+            _ui.update { current ->
+                if (current.selectedGuildId != guildId || current.queue != null) current
+                else current.copy(
+                    isLoadingQueue = false,
+                    queueLoadState = QueueLoadState.ERROR,
+                    queueLoadError = userMessageForError(e),
+                )
+            }
         }
     }
 
@@ -456,7 +503,14 @@ class PlayerViewModel(
         var likelyTrackTransition = false
         _ui.update { current ->
             if (shouldApplyQueueSnapshot(current.queue, snapshot, current.selectedGuildId)) {
-                if (current.queue == snapshot && !forcePresentationIdle) return@update current
+                if (current.queue == snapshot && !forcePresentationIdle) {
+                    applied = true
+                    return@update current.copy(
+                        isLoadingQueue = false,
+                        queueLoadState = QueueLoadState.READY,
+                        queueLoadError = null,
+                    )
+                }
                 applied = true
                 val nextPresentation = when {
                     snapshot.nowPlaying != null -> snapshot.nowPlayingPresentationOrNull()
@@ -477,6 +531,9 @@ class PlayerViewModel(
                 current.copy(
                     queue = snapshot,
                     presentedNowPlaying = nextPresentation,
+                    isLoadingQueue = false,
+                    queueLoadState = QueueLoadState.READY,
+                    queueLoadError = null,
                 )
             } else {
                 current

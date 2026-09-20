@@ -15,13 +15,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.ToggleFloatingActionButton
@@ -50,8 +50,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
+import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
+import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -194,15 +196,22 @@ fun FavoritesScreen(
                 }
             }
             if (ui.isLoading && ui.favorites.isEmpty()) {
-                item {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                        CircularProgressIndicator()
-                    }
+                items(4, key = { "favorite-skeleton-$it" }) {
+                    FavoriteSkeletonCard(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = motion.fastEffectsSpec(),
+                            fadeOutSpec = motion.defaultEffectsSpec(),
+                            placementSpec = motion.defaultSpatialSpec(),
+                        ),
+                    )
                 }
             } else if (ui.favorites.isEmpty()) {
                 item {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        modifier = Modifier
+                            .animateItem()
+                            .fillMaxWidth()
+                            .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -220,6 +229,11 @@ fun FavoritesScreen(
             } else {
                 items(ui.favorites, key = { it.contentUrl }) { fav ->
                     Card(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = motion.fastEffectsSpec(),
+                            fadeOutSpec = motion.fastEffectsSpec(),
+                            placementSpec = motion.fastSpatialSpec(),
+                        ),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainer,
                         ),
@@ -309,5 +323,33 @@ fun FavoritesScreen(
             },
             dismissButton = { TextButton(onClick = { addDialogOpen = false }) { Text("Anuluj") } },
         )
+    }
+}
+
+@Composable
+private fun FavoriteSkeletonCard(modifier: Modifier = Modifier) {
+    val pulse = rememberSkeletonPulse()
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SkeletonBlock(pulse, Modifier.size(64.dp), MaterialTheme.shapes.medium)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                SkeletonBlock(pulse, Modifier.fillMaxWidth(0.88f).height(17.dp))
+                SkeletonBlock(pulse, Modifier.fillMaxWidth(0.62f).height(17.dp))
+                SkeletonBlock(pulse, Modifier.width(96.dp).height(12.dp))
+            }
+            SkeletonBlock(pulse, Modifier.size(38.dp), MaterialTheme.shapes.extraLarge)
+        }
     }
 }

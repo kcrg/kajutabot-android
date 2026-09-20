@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -25,6 +24,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
 
 @Composable
 fun AccessCheckingScreen(isGuest: Boolean = false) {
@@ -39,7 +39,7 @@ fun AccessCheckingScreen(isGuest: Boolean = false) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                CircularProgressIndicator()
+                ExpressiveLoadingIndicator(modifier = Modifier.size(48.dp))
                 Text(
                     text = if (isGuest) "Sprawdzanie serwera demonstracyjnego…" else "Sprawdzanie dostępu do Discorda…",
                     style = MaterialTheme.typography.bodyMedium,

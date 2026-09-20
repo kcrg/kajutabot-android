@@ -4,7 +4,9 @@ import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -97,6 +99,30 @@ class PlayerStateProjectionTest {
         assertEquals(true, state?.slide?.hasTrack)
         assertEquals("Track", state?.slide?.title)
         assertEquals("Track", state?.track?.title)
+    }
+
+    @Test
+    fun `selected guild without first queue snapshot stays in initial loading state`() {
+        val state = PlayerScreenState(
+            selectedGuildId = "g1",
+            isLoadingGuilds = false,
+            queue = null,
+            queueLoadState = QueueLoadState.LOADING,
+        )
+
+        assertTrue(state.isInitialContentLoading)
+    }
+
+    @Test
+    fun `resolved empty queue is content not loading`() {
+        val state = PlayerScreenState(
+            selectedGuildId = "g1",
+            isLoadingGuilds = false,
+            queue = snapshot(nowPlaying = null),
+            queueLoadState = QueueLoadState.READY,
+        )
+
+        assertFalse(state.isInitialContentLoading)
     }
 
 }

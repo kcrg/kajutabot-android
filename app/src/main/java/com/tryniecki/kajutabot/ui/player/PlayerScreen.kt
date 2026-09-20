@@ -20,9 +20,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,9 +32,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
@@ -88,7 +90,9 @@ import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
+import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
+import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.components.TonalToggleIconButton
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
@@ -96,6 +100,12 @@ import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.theme.fadeThrough
 import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import coil3.compose.AsyncImage
+
+private enum class PlayerSurfaceState {
+    LOADING,
+    ERROR,
+    READY,
+}
 
 @Composable
 fun PlayerRoute(
@@ -129,6 +139,9 @@ fun PlayerRoute(
         favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
         onDismissMessage = viewModel::dismissMessage,
         onAddTrackOpen = onAddTrackOpen,
+        onRetryQueue = {
+            ui.selectedGuildId?.let(viewModel::refreshQueue)
+        },
     )
 }
 
@@ -175,6 +188,7 @@ fun PlayerScreen(
     favoritesBusy: Boolean,
     onDismissMessage: () -> Unit,
     onAddTrackOpen: () -> Unit,
+    onRetryQueue: () -> Unit = {},
 ) {
     val motion = MaterialTheme.motionScheme
     var confirmStop by remember { mutableStateOf(false) }
@@ -272,25 +286,42 @@ fun PlayerScreen(
             }
 
             item {
-                if (ui.isLoadingGuilds && ui.guilds.isEmpty()) {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                val surfaceState = when {
+                    ui.queue == null && ui.queueLoadState == QueueLoadState.ERROR -> PlayerSurfaceState.ERROR
+                    ui.isInitialContentLoading -> PlayerSurfaceState.LOADING
+                    else -> PlayerSurfaceState.READY
+                }
+                AnimatedContent(
+                    targetState = surfaceState,
+                    transitionSpec = {
+                        fadeThrough(
+                            enterSpec = motion.defaultEffectsSpec(),
+                            exitSpec = motion.fastEffectsSpec(),
+                        ).using(SizeTransform { _, _ -> motion.defaultSpatialSpec() })
+                    },
+                    label = "playerInitialState",
+                ) { state ->
+                    when (state) {
+                        PlayerSurfaceState.LOADING -> NowPlayingSkeletonCard()
+                        PlayerSurfaceState.ERROR -> PlayerLoadErrorCard(
+                            message = ui.queueLoadError ?: "Nie udało się pobrać stanu odtwarzacza.",
+                            onRetry = onRetryQueue,
+                        )
+                        PlayerSurfaceState.READY -> NowPlayingCard(
+                            queue = ui.queue,
+                            presentedNowPlaying = ui.presentedNowPlaying
+                                ?: ui.queue?.nowPlayingPresentationOrNull(),
+                            isMutating = ui.isMutating,
+                            activeControlAction = ui.activeControlAction,
+                            onSkip = onSkip,
+                            onStop = { confirmStop = true },
+                            isFavorite = isFavorite,
+                            onToggleFavorite = onToggleFavorite,
+                            favoritesBusy = favoritesBusy,
+                            onRepeatToggle = onRepeatToggle,
+                            onRadioToggle = onRadioToggle,
+                        )
                     }
-                } else {
-                    NowPlayingCard(
-                        queue = ui.queue,
-                        presentedNowPlaying = ui.presentedNowPlaying
-                            ?: ui.queue?.nowPlayingPresentationOrNull(),
-                        isMutating = ui.isMutating,
-                        activeControlAction = ui.activeControlAction,
-                        onSkip = onSkip,
-                        onStop = { confirmStop = true },
-                        isFavorite = isFavorite,
-                        onToggleFavorite = onToggleFavorite,
-                        favoritesBusy = favoritesBusy,
-                        onRepeatToggle = onRepeatToggle,
-                        onRadioToggle = onRadioToggle,
-                    )
                 }
             }
 
@@ -318,14 +349,26 @@ fun PlayerScreen(
             }
 
             val pending = previewOrder ?: ui.queue?.pendingEntries.orEmpty()
-            if (ui.isLoadingQueue && ui.queue == null) {
-                item {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+            if (ui.isInitialContentLoading) {
+                item(key = "queue-loading") {
+                    QueueSkeleton(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = motion.fastEffectsSpec(),
+                            fadeOutSpec = motion.defaultEffectsSpec(),
+                            placementSpec = motion.defaultSpatialSpec(),
+                        ),
+                    )
                 }
             } else if (pending.isEmpty()) {
-                item { EmptyQueueCard() }
+                item(key = "queue-empty") {
+                    EmptyQueueCard(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = motion.defaultEffectsSpec(),
+                            fadeOutSpec = motion.fastEffectsSpec(),
+                            placementSpec = motion.defaultSpatialSpec(),
+                        ),
+                    )
+                }
             } else {
                 items(pending, key = { it.entryId }) { entry ->
                     val dragged = draggingEntryId == entry.entryId
@@ -848,8 +891,9 @@ private fun ImageArtworkGlow(
 }
 
 @Composable
-private fun EmptyQueueCard() {
+private fun EmptyQueueCard(modifier: Modifier = Modifier) {
     Card(
+        modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
@@ -873,6 +917,123 @@ private fun EmptyQueueCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun NowPlayingSkeletonCard() {
+    val pulse = rememberSkeletonPulse()
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            SkeletonBlock(
+                pulse = pulse,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f),
+                shape = RoundedCornerShape(12.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SkeletonBlock(pulse, Modifier.width(116.dp).height(12.dp))
+                SkeletonBlock(pulse, Modifier.fillMaxWidth(0.78f).height(26.dp))
+                SkeletonBlock(pulse, Modifier.fillMaxWidth(0.56f).height(26.dp))
+            }
+            SkeletonBlock(
+                pulse,
+                Modifier.fillMaxWidth().height(6.dp),
+                RoundedCornerShape(999.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SkeletonBlock(pulse, Modifier.size(40.dp), RoundedCornerShape(999.dp))
+                SkeletonBlock(pulse, Modifier.size(56.dp), RoundedCornerShape(999.dp))
+                SkeletonBlock(pulse, Modifier.size(40.dp), RoundedCornerShape(999.dp))
+                SkeletonBlock(pulse, Modifier.size(40.dp), RoundedCornerShape(999.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun QueueSkeleton(modifier: Modifier = Modifier) {
+    val pulse = rememberSkeletonPulse()
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        repeat(3) { index ->
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SkeletonBlock(pulse, Modifier.size(56.dp), RoundedCornerShape(10.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
+                    ) {
+                        SkeletonBlock(
+                            pulse,
+                            Modifier
+                                .fillMaxWidth(if (index == 1) 0.72f else 0.88f)
+                                .height(16.dp),
+                        )
+                        SkeletonBlock(pulse, Modifier.width(72.dp).height(12.dp))
+                    }
+                    SkeletonBlock(pulse, Modifier.size(36.dp), RoundedCornerShape(999.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayerLoadErrorCard(
+    message: String,
+    onRetry: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_server_outline),
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                tint = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                "Nie udało się pobrać stanu odtwarzacza",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(onClick = onRetry) { Text("Spróbuj ponownie") }
         }
     }
 }
