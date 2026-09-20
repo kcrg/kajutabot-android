@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.api.client.KajutaBotApiErrors
+import com.tryniecki.kajutabot.api.client.KajutaBotRealtimeClientFactory
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
@@ -125,11 +126,6 @@ data class MiniPlayerState(
     val activeControlAction: PlayerControlAction?,
 )
 
-data class PlayerPollingKeys(
-    val guildId: String?,
-    val playbackKey: String?,
-)
-
 fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     guilds = guilds,
     voiceChannels = voiceChannels,
@@ -175,16 +171,6 @@ fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
     )
 }
 
-fun PlayerUiState.toPollingKeys(): PlayerPollingKeys {
-    val guildId = selectedGuildId ?: return PlayerPollingKeys(null, null)
-    val snapshot = queue
-    val track = snapshot?.nowPlaying
-    return PlayerPollingKeys(
-        guildId = guildId,
-        playbackKey = track?.let { playbackIdentity(it, snapshot.nowPlayingStartedAt) },
-    )
-}
-
 class PlayerViewModel(
     private val container: AppContainer,
 ) : ViewModel() {
@@ -199,11 +185,24 @@ class PlayerViewModel(
         ),
     )
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
+    private val realtimeGuildId = _ui.map { it.selectedGuildId }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.selectedGuildId)
+    private val realtime = PlayerRealtime(
+        scope = viewModelScope,
+        expectedIdentity = sessionIdentity,
+        sessionIdentity = sessionManager.sessionIdentity,
+        guildId = realtimeGuildId,
+        token = { sessionManager.accessTokenForSession(sessionIdentity) },
+        connect = { token -> KajutaBotRealtimeClientFactory.create(container.appConfig.apiBaseUrl, token) },
+        onSnapshot = { snapshot -> applyQueueSnapshot(snapshot) },
+        recoverQueue = ::recoverQueueOnce,
+    )
 
     /**
      * Narrow projections so collectors only recompose on their own slice:
      * typing in AddTrack search must not recompose the hidden Player screen,
-     * the shell or the MiniPlayer, and polling keys must not carry the queue.
+     * the shell or the MiniPlayer.
      */
 
     val entryState: StateFlow<PlayerEntryState> = _ui
@@ -231,11 +230,6 @@ class PlayerViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.error)
 
-    val pollingKeys: StateFlow<PlayerPollingKeys> = _ui
-        .map { it.toPollingKeys() }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toPollingKeys())
-
     private val _trackAdded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val trackAdded: SharedFlow<Unit> = _trackAdded.asSharedFlow()
 
@@ -247,9 +241,7 @@ class PlayerViewModel(
     private var presentationIdleJob: Job? = null
 
     /**
-     * Serializes all queue GETs (regular poll, expected-end refresh, explicit
-     * refresh, conflict refetch) so two fetches never run in parallel and the
-     * expected-end one-shot can't overlap the interval poll.
+     * Serializes recovery, explicit refresh and conflict refetch GETs.
      */
     private val queueFetchMutex = Mutex()
 
@@ -259,6 +251,13 @@ class PlayerViewModel(
 
     init {
         refreshGuilds()
+    }
+
+    fun setRealtimeOwner(owner: RealtimeOwner, active: Boolean) = realtime.setOwner(owner, active)
+
+    override fun onCleared() {
+        realtime.close()
+        super.onCleared()
     }
 
     fun setSearchQuery(query: String) {
@@ -310,6 +309,8 @@ class PlayerViewModel(
                         guilds = guilds,
                         selectedGuildId = selGuild,
                         selectedVoiceChannelId = selChannel,
+                        queue = if (it.selectedGuildId == selGuild) it.queue else null,
+                        presentedNowPlaying = if (it.selectedGuildId == selGuild) it.presentedNowPlaying else null,
                         isLoadingGuilds = false,
                         guildAccessState = if (guilds.isEmpty()) {
                             GuildAccessState.NONE
@@ -360,7 +361,6 @@ class PlayerViewModel(
     fun selectChannel(channelId: String) {
         selection.voiceChannelId = channelId
         _ui.update { it.copy(selectedVoiceChannelId = channelId, error = null) }
-        _ui.value.selectedGuildId?.let { refreshQueue(it) }
     }
 
     fun refreshChannels(guildId: String, preserveChannel: String?) {
@@ -380,7 +380,6 @@ class PlayerViewModel(
                         isLoadingVoiceChannels = false,
                     )
                 }
-                refreshQueue(guildId)
             } catch (e: Exception) {
                 _ui.update {
                     it.copy(
@@ -410,17 +409,13 @@ class PlayerViewModel(
         }
     }
 
-    /**
-     * Single queue fetch. Suspending — the Compose polling loop awaits it, so the
-     * next tick only starts after the request completes (request → delay → request).
-     * Silent on failure; explicit actions surface their own errors.
-     */
-    suspend fun pollQueueOnce() {
-        val guildId = _ui.value.selectedGuildId ?: return
+    /** One silent REST recovery when the hub cannot supply a concrete snapshot. */
+    private suspend fun recoverQueueOnce(guildId: String) {
+        if (_ui.value.selectedGuildId != guildId || sessionManager.sessionIdentity.value != sessionIdentity) return
         try {
             applyQueueSnapshot(fetchQueueSnapshot(guildId))
         } catch (_: Exception) {
-            // Silent on poll; errors surface on explicit actions.
+            // Reconnect or explicit actions can recover later.
         }
     }
 
@@ -487,17 +482,8 @@ class PlayerViewModel(
     ) {
         if (transitionRefreshJob?.isActive != true) {
             transitionRefreshJob = viewModelScope.launch {
-                val delays = if (likelyTrackTransition) {
-                    TRACK_TRANSITION_REFRESH_DELAYS_MS
-                } else {
-                    IDLE_CONFIRM_REFRESH_DELAYS_MS
-                }
-                for (waitMs in delays) {
-                    delay(waitMs)
-                    if (!isAwaitingNextTrack(guildId)) return@launch
-                    pollQueueOnce()
-                    if (!isAwaitingNextTrack(guildId)) return@launch
-                }
+                delay(if (likelyTrackTransition) 1_200L else 600L)
+                if (isAwaitingNextTrack(guildId)) recoverQueueOnce(guildId)
             }
         }
 
@@ -814,8 +800,6 @@ class PlayerViewModel(
 
     companion object {
         private val URL_REGEX = Regex("""https?://[^\s]+""")
-        private val TRACK_TRANSITION_REFRESH_DELAYS_MS = longArrayOf(80L, 180L, 350L, 700L)
-        private val IDLE_CONFIRM_REFRESH_DELAYS_MS = longArrayOf(120L, 300L)
         private const val TRACK_TRANSITION_GRACE_MS = 2_000L
         private const val PRESENTATION_IDLE_GRACE_MS = 900L
 

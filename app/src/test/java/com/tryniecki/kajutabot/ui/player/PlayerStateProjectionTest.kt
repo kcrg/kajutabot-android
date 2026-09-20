@@ -10,7 +10,7 @@ import org.junit.Test
 /**
  * Regression tests for the narrow state projections: each slice must carry
  * exactly its own fields, so typing in AddTrack search can't change the
- * player-screen, mini-player or polling slices (and vice versa).
+ * player-screen or mini-player slices (and vice versa).
  */
 class PlayerStateProjectionTest {
 
@@ -46,21 +46,6 @@ class PlayerStateProjectionTest {
     fun `typing in search does not change player screen slice`() {
         val before = PlayerUiState(searchQuery = "a").toPlayerScreenState()
         val after = PlayerUiState(searchQuery = "abcdefgh").toPlayerScreenState()
-        assertEquals(before, after)
-    }
-
-    @Test
-    fun `typing in search does not change polling keys`() {
-        val before = PlayerUiState(
-            selectedGuildId = "g1",
-            queue = snapshot(),
-            searchQuery = "a",
-        ).toPollingKeys()
-        val after = PlayerUiState(
-            selectedGuildId = "g1",
-            queue = snapshot(),
-            searchQuery = "abcdefgh",
-        ).toPollingKeys()
         assertEquals(before, after)
     }
 
@@ -114,28 +99,4 @@ class PlayerStateProjectionTest {
         assertEquals("Track", state?.track?.title)
     }
 
-    @Test
-    fun `polling keys carry guild and playback identity`() {
-        val keys = PlayerUiState(
-            selectedGuildId = "g1",
-            queue = snapshot(),
-        ).toPollingKeys()
-        assertEquals("g1", keys.guildId)
-        assertEquals(
-            playbackIdentity(track(), "2026-09-18T12:00:00Z"),
-            keys.playbackKey,
-        )
-    }
-
-    @Test
-    fun `polling keys are null without selection or track`() {
-        assertEquals(
-            PlayerPollingKeys(guildId = null, playbackKey = null),
-            PlayerUiState(queue = snapshot()).toPollingKeys(),
-        )
-        assertEquals(
-            PlayerPollingKeys(guildId = "g1", playbackKey = null),
-            PlayerUiState(selectedGuildId = "g1", queue = snapshot(nowPlaying = null)).toPollingKeys(),
-        )
-    }
 }

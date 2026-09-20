@@ -32,18 +32,6 @@ class MiniPlayerVisibilityTest {
     }
 
     @Test
-    fun `my audio with now playing shows mini player`() {
-        assertTrue(
-            shouldShowMiniPlayer(
-                isAuthenticated = true,
-                isBottomBarVisible = true,
-                destination = AppDestination.MY_AUDIO,
-                hasNowPlaying = true,
-            ),
-        )
-    }
-
-    @Test
     fun `player tab never shows mini player`() {
         assertFalse(
             shouldShowMiniPlayer(

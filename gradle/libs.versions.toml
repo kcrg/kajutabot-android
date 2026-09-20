@@ -20,6 +20,7 @@ navigation = "2.10.1"
 media3 = "1.11.1"
 turbine = "1.1.0"
 coil3 = "3.6.3"
+signalr = "10.0.12"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -54,6 +55,7 @@ coil3-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref
 coil3-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil3" }
 tabler-icons-outline-android = { group = "com.composables", name = "icons-tabler-outline-android", version.ref = "tablerIcons" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
+signalr = { group = "com.microsoft.signalr", name = "signalr", version.ref = "signalr" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

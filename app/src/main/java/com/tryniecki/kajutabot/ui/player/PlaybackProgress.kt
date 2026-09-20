@@ -13,8 +13,6 @@ import java.time.OffsetDateTime
  * in the Compose layer, which anchors [PlaybackProgressAnchor] once per playback
  * identity and then advances locally without network or timestamp parsing.
  */
-const val POLL_INTERVAL_MS = 2500L
-const val EXPECTED_END_GRACE_MS = 300L
 const val PROGRESS_TICK_MS = 200L
 
 data class PlaybackProgressAnchor(
@@ -78,8 +76,8 @@ fun remainingMs(startedAtRaw: String?, durationMs: Long, nowUtcMs: Long): Long? 
 }
 
 /**
- * Guards against stale queue snapshots overwriting fresher UI state, e.g. a slow
- * poll response arriving after a mutation already applied a newer version.
+ * Guards against stale queue snapshots overwriting fresher UI state, e.g. a
+ * SignalR event arriving after a mutation applied a newer version.
  *
  * Applies only snapshots of the currently selected guild with a version not older
  * than the one already shown.

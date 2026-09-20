@@ -164,6 +164,19 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `realtime token lookup is bound to current session identity`() = runTest {
+        val sm = manager(store = FakeSessionStore(sessionWith()))
+        sm.restore()
+        val identity = checkNotNull(sm.sessionIdentity.value)
+        assertEquals("access-1", sm.accessTokenForSession(identity))
+        try {
+            sm.accessTokenForSession(identity + 1)
+            org.junit.Assert.fail("Expected stale session to be rejected")
+        } catch (_: SessionSignedOutException) {
+        }
+    }
+
+    @Test
     fun `restore with expired access refreshes to SignedIn`() = runTest {
         val store = FakeSessionStore(sessionWith(accessExp = "2020-01-01T00:00:00Z"))
         val authApi = FakeAuthApi(refreshHandler = { authResponse() })

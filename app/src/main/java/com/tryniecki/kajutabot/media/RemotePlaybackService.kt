@@ -20,7 +20,7 @@ import com.tryniecki.kajutabot.KajutaBotApplication
 import com.tryniecki.kajutabot.MainActivity
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
-import com.tryniecki.kajutabot.ui.player.pollSelectedQueue
+import com.tryniecki.kajutabot.ui.player.RealtimeOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,6 +35,7 @@ class RemotePlaybackService : MediaSessionService() {
     private lateinit var container: AppContainer
     private var mediaSession: MediaSession? = null
     private var remotePlayer: RemoteQueuePlayer? = null
+    private var playerState: PlayerViewModel? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -45,6 +46,8 @@ class RemotePlaybackService : MediaSessionService() {
         }
         val owner = container.ownerForSession(identity)
         val playerState = ViewModelProvider(owner, PlayerViewModel.Factory(container))[PlayerViewModel::class.java]
+        this.playerState = playerState
+        playerState.setRealtimeOwner(RealtimeOwner.MEDIA_SERVICE, true)
         val favoritesState = ViewModelProvider(owner, FavoritesViewModel.Factory(container))[FavoritesViewModel::class.java]
         val player = RemoteQueuePlayer {
             val state = playerState.ui.value
@@ -83,7 +86,6 @@ class RemotePlaybackService : MediaSessionService() {
                 session.setMediaButtonPreferences(mediaButtons(playerState, favoritesState))
             }
         }
-        scope.launch { pollSelectedQueue(playerState) }
         scope.launch {
             container.sessionManager.sessionIdentity.collectLatest { current ->
                 if (current != identity) stopSelf()
@@ -94,6 +96,8 @@ class RemotePlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onDestroy() {
+        playerState?.setRealtimeOwner(RealtimeOwner.MEDIA_SERVICE, false)
+        playerState = null
         if (::container.isInitialized) container.setMediaServiceActive(false)
         scope.cancel()
         mediaSession?.release()

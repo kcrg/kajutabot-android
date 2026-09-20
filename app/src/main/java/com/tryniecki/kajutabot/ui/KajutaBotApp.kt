@@ -84,12 +84,13 @@ import com.tryniecki.kajutabot.ui.player.MiniPlayer
 import com.tryniecki.kajutabot.ui.player.MiniPlayerState
 import com.tryniecki.kajutabot.ui.player.PlayerRoute
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
+import com.tryniecki.kajutabot.ui.player.RealtimeOwner
 import com.tryniecki.kajutabot.ui.player.AddTrackRoute
 import com.tryniecki.kajutabot.ui.player.DiscordSelectionRoute
-import com.tryniecki.kajutabot.ui.player.pollSelectedQueue
 import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import com.tryniecki.kajutabot.ui.theme.KbMotion
+import kotlinx.coroutines.awaitCancellation
 
 @Composable
 fun KajutaBotApp(
@@ -354,10 +355,7 @@ private fun AuthenticatedContent(
         }
     }
 
-    // The single queue polling loop: runs while STARTED regardless of the
-    // active tab, so the MiniPlayer always has fresh state. No polling lives
-    // in individual screens anymore.
-    PlayerPollingEffect(playerViewModel, mediaServiceActive)
+    PlayerRealtimeEffect(playerViewModel)
     LaunchedEffect(miniPlayerState != null, mediaServiceActive) {
         if (miniPlayerState != null && !mediaServiceActive) {
             RemotePlaybackService.start(context)
@@ -554,17 +552,18 @@ private fun NavHostController.navigateToTopLevel(destination: AppDestination) {
     }
 }
 
-/**
- * The UI polls while foregrounded unless the MediaSessionService owns polling.
- */
 @Composable
-private fun PlayerPollingEffect(viewModel: PlayerViewModel, mediaServiceActive: Boolean) {
+private fun PlayerRealtimeEffect(viewModel: PlayerViewModel) {
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(mediaServiceActive, lifecycleOwner) {
-        if (mediaServiceActive) return@LaunchedEffect
+    LaunchedEffect(viewModel, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            pollSelectedQueue(viewModel)
+            viewModel.setRealtimeOwner(RealtimeOwner.UI, true)
+            try {
+                awaitCancellation()
+            } finally {
+                viewModel.setRealtimeOwner(RealtimeOwner.UI, false)
+            }
         }
     }
 }

@@ -157,6 +157,21 @@ class PlaybackProgressTest {
     }
 
     @Test
+    fun `REST and SignalR snapshots cannot roll back in either arrival order`() {
+        val mutation = snapshot(version = 12L)
+        val event = snapshot(version = 11L)
+        assertFalse(shouldApplyQueueSnapshot(mutation, event, "g1"))
+        assertTrue(shouldApplyQueueSnapshot(event, mutation, "g1"))
+    }
+
+    @Test
+    fun `same version with changed metadata applies`() {
+        val before = snapshot(nowPlaying = track().copy(thumbnailUrl = "old"))
+        val updated = snapshot(nowPlaying = track().copy(thumbnailUrl = "new"))
+        assertTrue(shouldApplyQueueSnapshot(before, updated, "g1"))
+    }
+
+    @Test
     fun `newer snapshot version applies`() {
         assertTrue(
             shouldApplyQueueSnapshot(

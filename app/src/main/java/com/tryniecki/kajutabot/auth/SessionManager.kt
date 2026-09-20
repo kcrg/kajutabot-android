@@ -69,6 +69,18 @@ class SessionManager(
 
     fun currentAccessToken(): String? = currentSession?.accessToken
 
+    /** Fresh token for a particular login, including SignalR reconnects. */
+    suspend fun accessTokenForSession(expectedIdentity: Long): String {
+        val epoch = synchronized(lock) {
+            if (_sessionIdentity.value != expectedIdentity) {
+                throw SessionSignedOutException("Sesja zmieniła się przed żądaniem.")
+            }
+            generation
+        }
+        ensureFreshToken(force = false, failedAccessToken = null, expectedGeneration = epoch)
+        return tokenForSession(epoch, expectedIdentity)
+    }
+
     fun currentUserSession(): UserSession? = currentSession
 
     suspend fun restore() {
