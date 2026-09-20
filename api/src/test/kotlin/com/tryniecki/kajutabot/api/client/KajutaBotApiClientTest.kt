@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.api.client
 
 import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.api.model.error.KajutaBotProblemDetailsParser
 import kotlinx.serialization.json.Json
 import okhttp3.mockwebserver.MockResponse
@@ -91,6 +92,23 @@ class KajutaBotApiClientTest {
             authApi.refresh(com.tryniecki.kajutabot.api.model.auth.RefreshUserSessionRequest("r"))
         }
         assertNull(server.takeRequest().getHeader("Authorization"))
+    }
+
+    @Test
+    fun `guest auth uses anonymous POST and parses nullable refresh fields`() {
+        server.enqueue(MockResponse().setBody(
+            """{"accessToken":"guest-jwt","accessTokenExpiresAtUtc":"2030-01-01T00:00:00Z","refreshToken":null,"refreshTokenExpiresAtUtc":null,"user":{"discordUserId":"guest","username":"guest","displayName":"Gość"},"sessionType":"guest"}""",
+        ))
+        val authApi = KajutaBotApiClientFactory.createAuth(server.url("/").toString())
+        val result = kotlinx.coroutines.runBlocking { authApi.guest() }
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/v1/auth/guest", request.path)
+        assertNull(request.getHeader("Authorization"))
+        assertEquals(0L, request.body.size)
+        assertEquals(SessionType.GUEST, result.sessionType)
+        assertNull(result.refreshToken)
+        assertNull(result.refreshTokenExpiresAtUtc)
     }
 
     @Test

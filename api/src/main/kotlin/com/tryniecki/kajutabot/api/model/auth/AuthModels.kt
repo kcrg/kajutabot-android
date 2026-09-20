@@ -1,6 +1,13 @@
 package com.tryniecki.kajutabot.api.model.auth
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+
+@Serializable
+enum class SessionType {
+    @SerialName("discord") DISCORD,
+    @SerialName("guest") GUEST,
+}
 
 @Serializable
 data class DiscordOAuthExchangeRequest(
@@ -26,7 +33,8 @@ data class AuthUserResponse(
 data class AuthSessionResponse(
     val accessToken: String,
     val accessTokenExpiresAtUtc: String,
-    val refreshToken: String,
-    val refreshTokenExpiresAtUtc: String,
+    val refreshToken: String? = null,
+    val refreshTokenExpiresAtUtc: String? = null,
     val user: AuthUserResponse,
+    val sessionType: SessionType = SessionType.DISCORD,
 )

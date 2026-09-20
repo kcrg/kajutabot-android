@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
+import com.tryniecki.kajutabot.auth.SessionManager
+import com.tryniecki.kajutabot.prefs.favoritesPreferenceOwnerKey
 import com.tryniecki.kajutabot.api.model.favorites.FavoriteResponse
 import com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
@@ -29,15 +31,24 @@ data class FavoritesUiState(
 )
 
 class FavoritesViewModel(
-    private val container: AppContainer,
+    private val sessionManager: SessionManager,
+    private val selectedGuildId: () -> String?,
+    private val selectedChannelId: () -> String?,
+    private val loadShuffle: (String) -> Boolean,
+    private val saveShuffle: (String, Boolean) -> Unit,
 ) : ViewModel() {
-    private val sessionManager = container.sessionManager
-    private val sessionIdentity = checkNotNull(sessionManager.sessionIdentity.value)
-    private val selection = container.selectionStore
-    private val userId = checkNotNull(sessionManager.currentUserSession()).user.discordUserId
-    private val preferences = container.favoritesPreferences
+    constructor(container: AppContainer) : this(
+        container.sessionManager,
+        { container.selectionStore.guildId },
+        { container.selectionStore.voiceChannelId },
+        container.favoritesPreferences::shuffle,
+        container.favoritesPreferences::setShuffle,
+    )
 
-    private val _ui = MutableStateFlow(FavoritesUiState(shuffle = preferences.shuffle(userId), isLoading = true))
+    private val sessionIdentity = checkNotNull(sessionManager.sessionIdentity.value)
+    private val preferenceOwnerKey = favoritesPreferenceOwnerKey(checkNotNull(sessionManager.currentUserSession()))
+
+    private val _ui = MutableStateFlow(FavoritesUiState(shuffle = loadShuffle(preferenceOwnerKey), isLoading = true))
     val ui: StateFlow<FavoritesUiState> = _ui.asStateFlow()
 
     private val _toggleMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
@@ -79,7 +90,7 @@ class FavoritesViewModel(
     }
 
     fun setShuffle(enabled: Boolean) {
-        preferences.setShuffle(userId, enabled)
+        saveShuffle(preferenceOwnerKey, enabled)
         _ui.update { it.copy(shuffle = enabled) }
         _toggleMessages.tryEmit(if (enabled) "Losowanie włączone" else "Losowanie wyłączone")
     }
@@ -164,8 +175,8 @@ class FavoritesViewModel(
 
     fun queueAll() {
         if (_ui.value.isMutating) return
-        val guildId = selection.guildId
-        val channelId = selection.voiceChannelId
+        val guildId = selectedGuildId()
+        val channelId = selectedChannelId()
         val shuffle = _ui.value.shuffle
         if (guildId == null || channelId == null) {
             _ui.update { it.copy(error = "Wybierz serwer i kanał głosowy w Odtwarzaczu, aby dodać ulubione.") }
@@ -189,8 +200,8 @@ class FavoritesViewModel(
 
     fun playSingle(contentUrl: String) {
         if (_ui.value.isMutating) return
-        val guildId = selection.guildId
-        val channelId = selection.voiceChannelId
+        val guildId = selectedGuildId()
+        val channelId = selectedChannelId()
         if (guildId == null || channelId == null) {
             _ui.update { it.copy(error = "Wybierz serwer i kanał głosowy w Odtwarzaczu, aby odtworzyć.") }
             return

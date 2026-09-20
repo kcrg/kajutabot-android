@@ -14,6 +14,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,9 +29,11 @@ import com.tryniecki.kajutabot.R
 @Composable
 fun LoginScreen(
     isSigningIn: Boolean,
+    isGuestSigningIn: Boolean = false,
     errorMessage: String?,
     isOAuthConfigured: Boolean,
     onLoginClick: () -> Unit,
+    onGuestClick: () -> Unit,
 ) {
     Scaffold { innerPadding ->
         Column(
@@ -55,7 +58,7 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Zaloguj się przez Discord, aby sterować muzyką na swoich serwerach.",
+                text = "Steruj KajutaBotem z telefonu. Zaloguj się przez Discord albo wypróbuj aplikację od razu w trybie gościa.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -96,7 +99,7 @@ fun LoginScreen(
                 enabled = !isSigningIn && isOAuthConfigured,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                if (isSigningIn) {
+                if (isSigningIn && !isGuestSigningIn) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,
@@ -105,6 +108,20 @@ fun LoginScreen(
                     Text("Logowanie…")
                 } else {
                     Text("Zaloguj przez Discord")
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onGuestClick,
+                enabled = !isSigningIn,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (isGuestSigningIn) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.size(8.dp))
+                    Text("Logowanie…")
+                } else {
+                    Text("Wypróbuj jako gość")
                 }
             }
         }

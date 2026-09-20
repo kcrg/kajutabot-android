@@ -10,6 +10,7 @@ import io.reactivex.rxjava3.core.Single
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -17,11 +18,16 @@ import kotlin.coroutines.resumeWithException
 /** Coroutine-only surface of one physical SignalR connection. */
 interface KajutaBotRealtimeClient {
     val updates: Flow<QueueSnapshotResponse>
-    val closed: Flow<Unit>
+    val heartbeats: Flow<Unit>
+    val closed: Flow<RealtimeDisconnect>
     suspend fun start()
-    suspend fun subscribeGuild(guildId: String)
+    /** True when the server had an initial queue snapshot to send. */
+    suspend fun subscribeGuild(guildId: String): Boolean
     suspend fun stop()
 }
+
+/** Only a safe error category crosses the transport boundary. */
+data class RealtimeDisconnect(val reason: String?)
 
 object KajutaBotRealtimeClientFactory {
     fun create(baseUrl: String, accessToken: String): KajutaBotRealtimeClient {
@@ -39,27 +45,42 @@ object KajutaBotRealtimeClientFactory {
 private class SignalRRealtimeClient(
     private val connection: com.microsoft.signalr.HubConnection,
 ) : KajutaBotRealtimeClient {
-    private val _updates = MutableSharedFlow<QueueSnapshotResponse>(extraBufferCapacity = 32)
+    // A queue event is full state. Each slow collector retains only the newest snapshot.
+    // No replay: SubscribeGuild must wait for a frame from the new subscription.
+    private val _updates = MutableSharedFlow<QueueSnapshotResponse>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
     override val updates: Flow<QueueSnapshotResponse> = _updates.asSharedFlow()
-    private val _closed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    override val closed: Flow<Unit> = _closed.asSharedFlow()
-    private val handler: Subscription = connection.on(
+    private val _heartbeats = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    override val heartbeats: Flow<Unit> = _heartbeats.asSharedFlow()
+    private val _closed = MutableSharedFlow<RealtimeDisconnect>(replay = 1)
+    override val closed: Flow<RealtimeDisconnect> = _closed.asSharedFlow()
+    private val queueHandler: Subscription = connection.on(
         "QueueUpdated",
-        { snapshot -> _updates.tryEmit(snapshot) },
+        Action1<QueueSnapshotResponse> { snapshot -> _updates.tryEmit(snapshot) },
         QueueSnapshotResponse::class.java,
+    )
+    private val heartbeatHandler: Subscription = connection.on(
+        "RealtimeHeartbeat",
+        Action1<Long> { _heartbeats.tryEmit(Unit) },
+        Long::class.javaObjectType,
     )
 
     init {
-        connection.onClosed { _closed.tryEmit(Unit) }
+        connection.onClosed { error ->
+            _closed.tryEmit(RealtimeDisconnect(error?.javaClass?.simpleName))
+        }
     }
 
     override suspend fun start() = connection.start().awaitCompletion()
 
-    override suspend fun subscribeGuild(guildId: String) =
-        connection.invoke("SubscribeGuild", guildId).awaitCompletion()
+    override suspend fun subscribeGuild(guildId: String): Boolean =
+        connection.invoke(Boolean::class.javaObjectType, "SubscribeGuild", guildId).awaitValue()
 
     override suspend fun stop() {
-        handler.unsubscribe()
+        queueHandler.unsubscribe()
+        heartbeatHandler.unsubscribe()
         try {
             connection.stop().awaitCompletion()
         } finally {
@@ -71,6 +92,14 @@ private class SignalRRealtimeClient(
 private suspend fun Completable.awaitCompletion(): Unit = suspendCancellableCoroutine { continuation ->
     val disposable = subscribe(
         { if (continuation.isActive) continuation.resume(Unit) },
+        { error -> if (continuation.isActive) continuation.resumeWithException(error) },
+    )
+    continuation.invokeOnCancellation { disposable.dispose() }
+}
+
+private suspend fun <T : Any> Single<T>.awaitValue(): T = suspendCancellableCoroutine { continuation ->
+    val disposable = subscribe(
+        { value -> if (continuation.isActive) continuation.resume(value) },
         { error -> if (continuation.isActive) continuation.resumeWithException(error) },
     )
     continuation.invokeOnCancellation { disposable.dispose() }

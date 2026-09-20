@@ -35,4 +35,18 @@ class SessionViewModelScopeTest {
         scope.end()
         assertEquals(2, clearedSelections)
     }
+
+    @Test fun `guest token renewal retains Favorites state and Discord switch clears it`() {
+        val scope = SessionViewModelScope { }
+        val guestOwner = scope.ownerFor(11)
+        val guestFavorites = AccountViewModel().apply { queue = "guest favorites" }
+        guestOwner.viewModelStore.put("favorites", guestFavorites)
+
+        assertSame(guestOwner, scope.ownerFor(11)) // JWT rotation keeps the identity.
+        assertSame(guestFavorites, scope.ownerFor(11).viewModelStore["favorites"])
+
+        val discordOwner = scope.ownerFor(12)
+        assertTrue(guestFavorites.wasCleared)
+        assertEquals(null, discordOwner.viewModelStore["favorites"])
+    }
 }

@@ -6,6 +6,7 @@ import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.DiscordOAuthExchangeRequest
 import com.tryniecki.kajutabot.api.model.auth.RefreshUserSessionRequest
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.api.model.common.HealthResponse
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
@@ -80,9 +81,16 @@ class FakePendingStorage(var pending: PendingOAuth? = null) : OAuthPendingStorag
 class FakeAuthApi(
     var refreshHandler: suspend (String) -> AuthSessionResponse = { throw IOException("no stub") },
     var exchangeHandler: suspend (DiscordOAuthExchangeRequest) -> AuthSessionResponse = { throw IOException("no stub") },
+    var guestHandler: suspend () -> AuthSessionResponse = { throw IOException("no stub") },
 ) : KajutaBotAuthApi {
     val refreshCount = AtomicInteger(0)
     val exchangeCount = AtomicInteger(0)
+    val guestCount = AtomicInteger(0)
+
+    override suspend fun guest(): AuthSessionResponse {
+        guestCount.incrementAndGet()
+        return guestHandler()
+    }
 
     override suspend fun exchange(request: DiscordOAuthExchangeRequest): AuthSessionResponse {
         exchangeCount.incrementAndGet()
@@ -115,6 +123,12 @@ private fun authResponse(
     user = testUser(),
 )
 
+private fun guestResponse(access: String = "guest-access", expires: String = "2030-01-01T00:00:00Z") =
+    AuthSessionResponse(access, expires, null, null, AuthUserResponse("guest", "guest", "Gość"), SessionType.GUEST)
+
+private fun guestSession(access: String = "guest-access", expires: String = "2030-01-01T00:00:00Z") =
+    UserSession(access, expires, null, null, AuthUserResponse("guest", "guest", "Gość"), SessionType.GUEST)
+
 fun httpError(code: Int, errorCode: String?): HttpException {
     val body = if (errorCode != null) {
         """{"errorCode":"$errorCode"}"""
@@ -144,6 +158,126 @@ class SessionManagerTest {
             clock = { Instant.parse("2026-09-18T12:00:00Z") },
             refreshScope = refreshScope ?: CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO),
         )
+    }
+
+    @Test
+    fun `guest login stores a valid session without refresh credentials`() = runTest {
+        val store = FakeSessionStore()
+        val auth = FakeAuthApi(guestHandler = { guestResponse() })
+        val sm = manager(store = store, authApi = auth)
+        sm.restore()
+        assertEquals(GuestLoginResult.SignedIn, sm.continueAsGuest())
+        assertEquals(SessionType.GUEST, store.session?.sessionType)
+        assertNull(store.session?.refreshToken)
+        assertNull(store.session?.refreshTokenExpiresAtUtc)
+        assertTrue(sm.authState.value is AuthState.SignedIn)
+        assertEquals(1, auth.guestCount.get())
+    }
+
+    @Test
+    fun `discord session without refresh token is rejected on restore`() = runTest {
+        val store = FakeSessionStore(sessionWith().copy(refreshToken = null))
+        val sm = manager(store = store)
+        sm.restore()
+        assertTrue(sm.authState.value is AuthState.SignedOut)
+        assertNull(store.session)
+    }
+
+    @Test
+    fun `expired guest restore renews with guest endpoint and preserves identity`() = runTest {
+        val store = FakeSessionStore(guestSession(expires = "2020-01-01T00:00:00Z"))
+        val auth = FakeAuthApi(guestHandler = { guestResponse(access = "renewed") })
+        val sm = manager(store = store, authApi = auth)
+        sm.restore()
+        assertEquals("renewed", store.session?.accessToken)
+        assertEquals(SessionType.GUEST, store.session?.sessionType)
+        assertEquals(1, auth.guestCount.get())
+        assertEquals(0, auth.refreshCount.get())
+        assertTrue(sm.authState.value is AuthState.SignedIn)
+        val identity = checkNotNull(sm.sessionIdentity.value)
+        assertEquals("renewed", sm.accessTokenForSession(identity))
+    }
+
+    @Test
+    fun `concurrent guest renewals share one flight`() = runTest {
+        val reply = CompletableDeferred<AuthSessionResponse>()
+        val store = FakeSessionStore(guestSession(expires = "2020-01-01T00:00:00Z"))
+        val auth = FakeAuthApi(guestHandler = { reply.await() })
+        val api = object : KajutaBotApi by unsupportedApi() {
+            override suspend fun getQueue(guildId: String) = emptySnapshot(guildId)
+        }
+        val sm = manager(store = store, authApi = auth, apiProvider = { api }, refreshScope = backgroundScope)
+        val jobs = (1..8).map {
+            async(start = CoroutineStart.UNDISPATCHED) { sm.withApi { it.getQueue("demo") } }
+        }
+        runCurrent()
+        assertEquals(1, auth.guestCount.get())
+        reply.complete(guestResponse("renewed"))
+        jobs.awaitAll()
+        assertEquals(1, auth.guestCount.get())
+    }
+
+    @Test
+    fun `disabled guest access clears restored session while network error keeps it`() = runTest {
+        val disabledStore = FakeSessionStore(guestSession(expires = "2020-01-01T00:00:00Z"))
+        val disabled = manager(disabledStore, authApi = FakeAuthApi(guestHandler = {
+            throw httpError(404, "guest_access_disabled")
+        }))
+        disabled.restore()
+        assertTrue(disabled.authState.value is AuthState.SignedOut)
+        assertNull(disabledStore.session)
+
+        val offlineStore = FakeSessionStore(guestSession(expires = "2020-01-01T00:00:00Z"))
+        val offline = manager(offlineStore, authApi = FakeAuthApi(guestHandler = { throw IOException("offline") }))
+        offline.restore()
+        assertTrue(offline.authState.value is AuthState.RecoverableError)
+        assertEquals(SessionType.GUEST, offlineStore.session?.sessionType)
+    }
+
+    @Test
+    fun `guest logout is local and Discord login gets a new session identity`() = runTest {
+        val store = FakeSessionStore()
+        val pending = FakePendingStorage()
+        val auth = FakeAuthApi(
+            guestHandler = { guestResponse() },
+            exchangeHandler = { authResponse() },
+        )
+        val sm = manager(store = store, pending = pending, authApi = auth)
+        sm.restore()
+        sm.continueAsGuest()
+        val guestIdentity = sm.sessionIdentity.value
+        assertEquals(LogoutResult.SignedOut, sm.logout())
+        assertNull(store.session)
+        assertNull(sm.sessionIdentity.value)
+        assertEquals(0, auth.refreshCount.get())
+        pending.pending = PendingOAuth("discord-state", "verifier", System.currentTimeMillis())
+        assertEquals(OAuthCallbackResult.Exchanged, sm.handleOAuthCallback("code", "discord-state", null))
+        assertEquals(SessionType.DISCORD, store.session?.sessionType)
+        assertTrue(guestIdentity != sm.sessionIdentity.value)
+    }
+
+    @Test
+    fun `guest renewal finishing after logout cannot resurrect session`() = runTest {
+        val reply = CompletableDeferred<AuthSessionResponse>()
+        val store = FakeSessionStore(guestSession(expires = "2020-01-01T00:00:00Z"))
+        val auth = FakeAuthApi(guestHandler = { reply.await() })
+        val sm = manager(store = store, authApi = auth, refreshScope = backgroundScope)
+        val renewal = async(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                sm.withApi { it.getQueue("demo") }
+                false
+            } catch (_: SessionSignedOutException) {
+                true
+            }
+        }
+        runCurrent()
+        assertEquals(1, auth.guestCount.get())
+        assertEquals(LogoutResult.SignedOut, sm.logout())
+        reply.complete(guestResponse("late-token"))
+        runCurrent()
+        assertTrue(renewal.await())
+        assertNull(store.session)
+        assertNull(sm.sessionIdentity.value)
     }
 
     @Test

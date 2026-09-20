@@ -1,5 +1,6 @@
 package com.tryniecki.kajutabot.ui.more
 
+import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,21 +46,29 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import coil3.compose.AsyncImage
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
 import com.tryniecki.kajutabot.auth.LogoutResult
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.browser.openCustomTab
 import com.tryniecki.kajutabot.browser.rememberCustomTabColors
 import com.tryniecki.kajutabot.ui.app.AppViewModel
+import com.tryniecki.kajutabot.ui.player.PlayerViewModel
+import com.tryniecki.kajutabot.ui.player.RealtimeConnectionState
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
+import kotlinx.coroutines.delay
 
 @Composable
 fun MoreRootScreen(
     container: AppContainer,
     appViewModel: AppViewModel,
+    playerViewModel: PlayerViewModel,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     onOpenOnboarding: () -> Unit,
@@ -68,6 +78,7 @@ fun MoreRootScreen(
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
     var isLoggingOut by remember { mutableStateOf(false) }
     var logoutError by remember { mutableStateOf<String?>(null) }
+    val isGuest = container.sessionManager.currentUserSession()?.sessionType == SessionType.GUEST
 
     Scaffold(
         //topBar = { TopAppBar(title = { Text("Więcej") }) },
@@ -125,7 +136,9 @@ fun MoreRootScreen(
                                 )
 
                                 Text(
-                                    text = if (user != null) {
+                                    text = if (isGuest) {
+                                        "Tryb gościa"
+                                    } else if (user != null) {
                                         "@${user.username}"
                                     } else {
                                         "Niezalogowany"
@@ -163,6 +176,17 @@ fun MoreRootScreen(
                             }
                         }
 
+                        if (isGuest) {
+                            OutlinedButton(
+                                onClick = {
+                                    logoutError = null
+                                    appViewModel.switchGuestToDiscord { logoutError = it }
+                                },
+                                enabled = !isLoggingOut,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("Zaloguj przez Discord") }
+                        }
+
                         if (logoutError != null) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -197,6 +221,10 @@ fun MoreRootScreen(
                     }
                 }
             }
+
+            item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+            item { SectionTitle("Połączenie realtime") }
+            item { RealtimeStatusCard(playerViewModel) }
 
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
             item { SectionTitle("Motyw") }
@@ -258,6 +286,65 @@ fun MoreRootScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun RealtimeStatusCard(playerViewModel: PlayerViewModel) {
+    val diagnostics by playerViewModel.realtimeDiagnostics.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var nowMs by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                nowMs = SystemClock.elapsedRealtime()
+                delay(1_000)
+            }
+        }
+    }
+    val status = when (diagnostics.state) {
+        RealtimeConnectionState.DISCONNECTED -> "Rozłączono"
+        RealtimeConnectionState.CONNECTING -> "Łączenie…"
+        RealtimeConnectionState.CONNECTED_NO_GUILD -> "Połączono · brak wybranego serwera"
+        RealtimeConnectionState.SUBSCRIBING -> "Subskrybowanie serwera…"
+        RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED -> "Połączono"
+        RealtimeConnectionState.RECONNECTING -> "Ponowne łączenie…"
+    }
+    val statusColor = if (diagnostics.state == RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("●", color = statusColor, style = MaterialTheme.typography.bodyMedium)
+                Text(status, style = MaterialTheme.typography.titleSmall)
+            }
+            Text(
+                "Ostatnia ramka: ${realtimeAgeLabel(diagnostics.lastFrameAtMs, nowMs)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "Ostatnia aktualizacja danych: ${realtimeAgeLabel(diagnostics.lastQueueUpdateAtMs, nowMs)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+internal fun realtimeAgeLabel(timestampMs: Long?, nowMs: Long): String {
+    if (timestampMs == null) return "brak danych"
+    val seconds = ((nowMs - timestampMs).coerceAtLeast(0L)) / 1_000L
+    return when {
+        seconds < 60 -> "$seconds s temu"
+        seconds < 3_600 -> "${seconds / 60} min temu"
+        else -> "${seconds / 3_600} godz. temu"
     }
 }
 
@@ -415,6 +502,7 @@ private val LIBRARIES = listOf(
     LibraryInfo("Tabler Icons", "Ikony interfejsu", "MIT"),
     LibraryInfo("Kotlin Coroutines", "Operacje asynchroniczne i przepływy stanu", "Apache 2.0"),
     LibraryInfo("Retrofit", "Wywołania KajutaBot Control API", "Apache 2.0"),
+    LibraryInfo("SignalR Java Client", "Aktualizacje kolejki w czasie rzeczywistym", "MIT"),
     LibraryInfo("OkHttp", "Połączenia HTTP dla API i obrazów", "Apache 2.0"),
     LibraryInfo("kotlinx.serialization", "Odczyt i zapis danych JSON", "Apache 2.0"),
 )

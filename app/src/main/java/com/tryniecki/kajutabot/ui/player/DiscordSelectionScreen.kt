@@ -27,6 +27,7 @@ import com.tryniecki.kajutabot.ui.components.DiscordTargetPicker
 fun DiscordSelectionRoute(
     viewModel: PlayerViewModel,
     onBack: () -> Unit,
+    isGuest: Boolean = false,
 ) {
     val ui by viewModel.entryState.collectAsStateWithLifecycle()
 
@@ -35,6 +36,7 @@ fun DiscordSelectionRoute(
         onGuildSelect = viewModel::selectGuild,
         onChannelSelect = viewModel::selectChannel,
         onBack = onBack,
+        isGuest = isGuest,
     )
 }
 
@@ -45,6 +47,7 @@ private fun DiscordSelectionScreen(
     onGuildSelect: (String) -> Unit,
     onChannelSelect: (String) -> Unit,
     onBack: () -> Unit,
+    isGuest: Boolean,
 ) {
     Scaffold(
         topBar = {
@@ -74,7 +77,8 @@ private fun DiscordSelectionScreen(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Wybierz serwer Discord, a potem kanał głosowy używany przez odtwarzacz.",
+                text = if (isGuest) "Wybierz kanał głosowy na serwerze demonstracyjnym."
+                    else "Wybierz serwer Discord, a potem kanał głosowy używany przez odtwarzacz.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -88,6 +92,7 @@ private fun DiscordSelectionScreen(
                 isLoadingVoiceChannels = ui.isLoadingVoiceChannels,
                 onGuildSelect = onGuildSelect,
                 onChannelSelect = onChannelSelect,
+                showGuildPicker = !isGuest,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),

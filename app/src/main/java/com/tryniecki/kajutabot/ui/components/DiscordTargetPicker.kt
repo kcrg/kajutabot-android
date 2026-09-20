@@ -45,31 +45,33 @@ fun DiscordTargetPicker(
     onGuildSelect: (String) -> Unit,
     onChannelSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
+    showGuildPicker: Boolean = true,
 ) {
     Column(modifier = modifier) {
-        Text(
-            text = "Serwer Discord",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.size(8.dp))
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(end = 8.dp),
-        ) {
-            items(guilds, key = { it.id }) { guild ->
-                GuildChoiceCard(
-                    guild = guild,
-                    selected = guild.id == selectedGuildId,
-                    onClick = {
-                        if (guild.id != selectedGuildId) onGuildSelect(guild.id)
-                    },
-                )
+        if (showGuildPicker) {
+            Text(
+                text = "Serwer Discord",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.size(8.dp))
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(end = 8.dp),
+            ) {
+                items(guilds, key = { it.id }) { guild ->
+                    GuildChoiceCard(
+                        guild = guild,
+                        selected = guild.id == selectedGuildId,
+                        onClick = {
+                            if (guild.id != selectedGuildId) onGuildSelect(guild.id)
+                        },
+                    )
+                }
             }
+            Spacer(Modifier.size(18.dp))
         }
-
-        Spacer(Modifier.size(18.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,

@@ -62,6 +62,7 @@ import androidx.navigation.compose.rememberNavController
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.media.RemotePlaybackService
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.app.AppViewModel
@@ -76,6 +77,8 @@ import com.tryniecki.kajutabot.ui.more.MoreRootScreen
 import com.tryniecki.kajutabot.ui.myaudio.MyAudioScreen
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
 import com.tryniecki.kajutabot.ui.navigation.AppRoute
+import com.tryniecki.kajutabot.ui.navigation.visibleDestinations
+import com.tryniecki.kajutabot.ui.navigation.canUseUserMedia
 import com.tryniecki.kajutabot.ui.onboarding.AccessCheckingScreen
 import com.tryniecki.kajutabot.ui.onboarding.AccessErrorScreen
 import com.tryniecki.kajutabot.ui.onboarding.NoAccessScreen
@@ -102,6 +105,7 @@ fun KajutaBotApp(
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
     val sessionIdentity by appViewModel.sessionIdentity.collectAsStateWithLifecycle()
     val isSigningIn by appViewModel.isSigningIn.collectAsStateWithLifecycle()
+    val isGuestSigningIn by appViewModel.isGuestSigningIn.collectAsStateWithLifecycle()
     val openCustomTab = rememberOpenCustomTab()
 
     LaunchedEffect(appViewModel) {
@@ -114,9 +118,11 @@ fun KajutaBotApp(
         AuthState.Restoring -> RestoringScreen()
         is AuthState.SignedOut -> LoginScreen(
             isSigningIn = isSigningIn,
+            isGuestSigningIn = isGuestSigningIn,
             errorMessage = state.message,
             isOAuthConfigured = container.appConfig.isOAuthConfigured,
             onLoginClick = { appViewModel.startLogin() },
+            onGuestClick = { appViewModel.continueAsGuest() },
         )
         is AuthState.RecoverableError -> RestoreErrorScreen(
             message = state.message,
@@ -129,6 +135,7 @@ fun KajutaBotApp(
                         container = container,
                         appViewModel = appViewModel,
                         discordUserId = state.user.discordUserId,
+                        sessionType = container.sessionManager.currentUserSession()?.sessionType ?: SessionType.DISCORD,
                         themeMode = themeMode,
                         onThemeModeChange = onThemeModeChange,
                     )
@@ -184,6 +191,7 @@ private fun AuthenticatedShell(
     container: AppContainer,
     appViewModel: AppViewModel,
     discordUserId: String,
+    sessionType: SessionType,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
 ) {
@@ -195,10 +203,10 @@ private fun AuthenticatedShell(
     )
     val navController = rememberNavController()
     val entryState by playerViewModel.entryState.collectAsStateWithLifecycle()
-    var onboardingCompleted by remember(discordUserId) {
-        mutableStateOf(container.onboardingPreferences.isCompletedFor(discordUserId))
+    var onboardingCompleted by remember(discordUserId, sessionType) {
+        mutableStateOf(container.onboardingPreferences.isCompletedFor(sessionType, discordUserId))
     }
-    var manualOnboardingRequested by remember(discordUserId) { mutableStateOf(false) }
+    var manualOnboardingRequested by remember(discordUserId, sessionType) { mutableStateOf(false) }
 
     val gate = resolveAuthenticatedGate(
         guildAccessState = entryState.guildAccessState,
@@ -237,15 +245,17 @@ private fun AuthenticatedShell(
             label = "onboardingTransition",
         ) { activeGate ->
             when (activeGate) {
-                AuthenticatedGate.CHECKING_ACCESS -> AccessCheckingScreen()
+                AuthenticatedGate.CHECKING_ACCESS -> AccessCheckingScreen(isGuest = sessionType == SessionType.GUEST)
                 AuthenticatedGate.ACCESS_ERROR -> AccessErrorScreen(
                     message = entryState.guildAccessError,
                     onRetry = playerViewModel::refreshGuilds,
                     onLogout = { appViewModel.logout() },
+                    isGuest = sessionType == SessionType.GUEST,
                 )
                 AuthenticatedGate.NO_ACCESS -> NoAccessScreen(
                     onRetry = playerViewModel::refreshGuilds,
                     onLogout = { appViewModel.logout() },
+                    isGuest = sessionType == SessionType.GUEST,
                 )
                 AuthenticatedGate.ONBOARDING -> {
                     // Keep the close affordance stable while this screen slides out.
@@ -260,10 +270,11 @@ private fun AuthenticatedShell(
                         isLoadingVoiceChannels = entryState.isLoadingVoiceChannels,
                         canDismiss = canDismissOnboarding,
                         backEnabled = gate == AuthenticatedGate.ONBOARDING,
+                        sessionType = sessionType,
                         onGuildSelect = playerViewModel::selectGuild,
                         onChannelSelect = playerViewModel::selectChannel,
                         onComplete = {
-                            container.onboardingPreferences.setCompletedFor(discordUserId)
+                            container.onboardingPreferences.setCompletedFor(sessionType, discordUserId)
                             onboardingCompleted = true
                             manualOnboardingRequested = false
                         },
@@ -278,6 +289,7 @@ private fun AuthenticatedShell(
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange,
                     onOpenOnboarding = { manualOnboardingRequested = true },
+                    sessionType = sessionType,
                 )
             }
         }
@@ -293,6 +305,7 @@ private fun AuthenticatedContent(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     onOpenOnboarding: () -> Unit,
+    sessionType: SessionType,
 ) {
 
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -400,7 +413,7 @@ private fun AuthenticatedContent(
                         }
                     }
                     NavigationBar {
-                        AppDestination.entries.forEach { destination ->
+                        visibleDestinations(sessionType).forEach { destination ->
                             NavigationBarItem(
                                 selected = currentDestination == destination,
                                 onClick = {
@@ -489,12 +502,20 @@ private fun AuthenticatedContent(
                     onDiscordSelectionOpen = { navController.navigate(AppRoute.DiscordSelection) },
                 )
             }
-            composable<AppRoute.MyAudio> { MyAudioScreen() }
+            composable<AppRoute.MyAudio> {
+                if (sessionType.canUseUserMedia) {
+                    MyAudioScreen()
+                } else {
+                    LaunchedEffect(Unit) { navController.navigateToTopLevel(AppDestination.PLAYER) }
+                    Text("Moje Audio jest dostępne po zalogowaniu przez Discord.")
+                }
+            }
             composable<AppRoute.Favorites> { FavoritesRoute(viewModel = favoritesViewModel) }
             composable<AppRoute.More> {
                 MoreRootScreen(
                     container = container,
                     appViewModel = appViewModel,
+                    playerViewModel = playerViewModel,
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange,
                     onOpenOnboarding = onOpenOnboarding,
@@ -523,6 +544,7 @@ private fun AuthenticatedContent(
                 DiscordSelectionRoute(
                     viewModel = playerViewModel,
                     onBack = { navController.popBackStack() },
+                    isGuest = sessionType == SessionType.GUEST,
                 )
             }
         }

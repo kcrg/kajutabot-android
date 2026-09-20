@@ -59,6 +59,7 @@ import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.DiscordTargetPicker
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 import kotlinx.coroutines.launch
 
 private data class OnboardingPage(
@@ -95,6 +96,10 @@ private val onboardingPages = listOf(
     ),
 )
 
+private val guestIntroPage = onboardingPages[0].copy(
+    description = "Aplikacja nie odtwarza muzyki lokalnie. Steruje KajutaBotem na serwerze demonstracyjnym Discord — szybko i bez wpisywania komend.",
+)
+
 private const val selectionPageIndex = 4
 private const val pageCount = 5
 
@@ -107,6 +112,7 @@ fun OnboardingScreen(
     isLoadingVoiceChannels: Boolean,
     canDismiss: Boolean,
     backEnabled: Boolean = true,
+    sessionType: SessionType = SessionType.DISCORD,
     onGuildSelect: (String) -> Unit,
     onChannelSelect: (String) -> Unit,
     onComplete: () -> Unit,
@@ -176,7 +182,10 @@ fun OnboardingScreen(
             ) { page ->
                 if (page < selectionPageIndex) {
                     OnboardingFeaturePage(
-                        page = onboardingPages[page],
+                        page = when {
+                            sessionType == SessionType.GUEST && page == 0 -> guestIntroPage
+                            else -> onboardingPages[page]
+                        },
                         isActive = pagerState.targetPage == page,
                     )
                 } else {
@@ -186,6 +195,7 @@ fun OnboardingScreen(
                         selectedGuildId = selectedGuildId,
                         selectedChannelId = selectedChannelId,
                         isLoadingVoiceChannels = isLoadingVoiceChannels,
+                        sessionType = sessionType,
                         onGuildSelect = onGuildSelect,
                         onChannelSelect = onChannelSelect,
                     )
@@ -330,6 +340,7 @@ private fun OnboardingSelectionPage(
     selectedGuildId: String?,
     selectedChannelId: String?,
     isLoadingVoiceChannels: Boolean,
+    sessionType: SessionType,
     onGuildSelect: (String) -> Unit,
     onChannelSelect: (String) -> Unit,
 ) {
@@ -355,7 +366,8 @@ private fun OnboardingSelectionPage(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Wybierz serwer Discord, a potem kanał głosowy. Ten wybór możesz później zmienić z ekranu odtwarzacza.",
+            text = if (sessionType == SessionType.GUEST) "Serwer demonstracyjny jest już wybrany. Wybierz kanał głosowy; możesz go później zmienić z ekranu odtwarzacza."
+                else "Wybierz serwer Discord, a potem kanał głosowy. Ten wybór możesz później zmienić z ekranu odtwarzacza.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -367,6 +379,7 @@ private fun OnboardingSelectionPage(
             selectedGuildId = selectedGuildId,
             selectedChannelId = selectedChannelId,
             isLoadingVoiceChannels = isLoadingVoiceChannels,
+            showGuildPicker = sessionType != SessionType.GUEST,
             onGuildSelect = onGuildSelect,
             onChannelSelect = onChannelSelect,
             modifier = Modifier

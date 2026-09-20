@@ -6,6 +6,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 import org.json.JSONObject
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -48,6 +49,7 @@ class SecureSessionStore(context: Context) : SessionStore {
             .put(KEY_USERNAME, session.user.username)
             .put(KEY_DISPLAY_NAME, session.user.displayName)
             .put(KEY_AVATAR, session.user.avatarUrl)
+            .put(KEY_SESSION_TYPE, session.sessionType.name)
             .toString()
         val encrypted = encrypt(payload)
         check(secretPrefs.edit()
@@ -63,8 +65,13 @@ class SecureSessionStore(context: Context) : SessionStore {
             return UserSession(
                 accessToken = payload.getString(KEY_ACCESS),
                 accessTokenExpiresAtUtc = payload.getString(KEY_ACCESS_EXP),
-                refreshToken = payload.getString(KEY_REFRESH),
-                refreshTokenExpiresAtUtc = payload.getString(KEY_REFRESH_EXP),
+                refreshToken = if (payload.isNull(KEY_REFRESH)) null else payload.getString(KEY_REFRESH),
+                refreshTokenExpiresAtUtc = if (payload.isNull(KEY_REFRESH_EXP)) null else payload.getString(KEY_REFRESH_EXP),
+                sessionType = if (payload.has(KEY_SESSION_TYPE)) {
+                    SessionType.valueOf(payload.getString(KEY_SESSION_TYPE))
+                } else {
+                    SessionType.DISCORD
+                },
                 user = AuthUserResponse(
                     discordUserId = payload.getString(KEY_USER_ID),
                     username = payload.getString(KEY_USERNAME),
@@ -171,5 +178,6 @@ class SecureSessionStore(context: Context) : SessionStore {
         private const val KEY_USERNAME = "username"
         private const val KEY_DISPLAY_NAME = "display_name"
         private const val KEY_AVATAR = "avatar_url"
+        private const val KEY_SESSION_TYPE = "session_type"
     }
 }

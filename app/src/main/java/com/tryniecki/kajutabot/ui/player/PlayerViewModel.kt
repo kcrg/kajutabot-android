@@ -1,5 +1,7 @@
 package com.tryniecki.kajutabot.ui.player
 
+import android.os.SystemClock
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -17,6 +19,7 @@ import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
 import com.tryniecki.kajutabot.ui.userMessageForError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -197,7 +200,10 @@ class PlayerViewModel(
         connect = { token -> KajutaBotRealtimeClientFactory.create(container.appConfig.apiBaseUrl, token) },
         onSnapshot = { snapshot -> applyQueueSnapshot(snapshot) },
         recoverQueue = ::recoverQueueOnce,
+        elapsedRealtimeMs = SystemClock::elapsedRealtime,
+        log = { message -> Log.d("KajutaBotRealtime", message) },
     )
+    val realtimeDiagnostics: StateFlow<RealtimeDiagnostics> = realtime.diagnostics
 
     /**
      * Narrow projections so collectors only recompose on their own slice:
@@ -350,6 +356,7 @@ class PlayerViewModel(
             it.copy(
                 selectedGuildId = guildId,
                 selectedVoiceChannelId = null,
+                voiceChannels = emptyList(),
                 queue = null,
                 presentedNowPlaying = null,
                 searchResults = emptyList(),
@@ -368,6 +375,7 @@ class PlayerViewModel(
             _ui.update { it.copy(isLoadingVoiceChannels = true, error = null) }
             try {
                 val channels = sessionManager.withApiForSession(sessionIdentity) { it.getVoiceChannels(guildId) }
+                if (_ui.value.selectedGuildId != guildId) return@launch
                 var selChannel = preserveChannel
                 if (selChannel != null && channels.none { c -> c.id == selChannel }) {
                     selChannel = null
@@ -380,9 +388,11 @@ class PlayerViewModel(
                         isLoadingVoiceChannels = false,
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _ui.update {
-                    it.copy(
+                    if (it.selectedGuildId != guildId) it else it.copy(
                         isLoadingVoiceChannels = false,
                         error = userMessageForError(e),
                     )
@@ -393,18 +403,24 @@ class PlayerViewModel(
 
     fun refreshQueue(guildId: String) {
         viewModelScope.launch {
+            if (_ui.value.selectedGuildId != guildId) return@launch
             _ui.update { it.copy(isLoadingQueue = true) }
             try {
                 val snapshot = fetchQueueSnapshot(guildId)
                 val applied = applyQueueSnapshot(snapshot)
                 _ui.update {
-                    it.copy(
+                    if (it.selectedGuildId != guildId) it else it.copy(
                         isLoadingQueue = false,
                         error = if (applied) null else it.error,
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _ui.update { it.copy(isLoadingQueue = false, error = userMessageForError(e)) }
+                _ui.update {
+                    if (it.selectedGuildId != guildId) it
+                    else it.copy(isLoadingQueue = false, error = userMessageForError(e))
+                }
             }
         }
     }
@@ -414,6 +430,8 @@ class PlayerViewModel(
         if (_ui.value.selectedGuildId != guildId || sessionManager.sessionIdentity.value != sessionIdentity) return
         try {
             applyQueueSnapshot(fetchQueueSnapshot(guildId))
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             // Reconnect or explicit actions can recover later.
         }
@@ -438,6 +456,7 @@ class PlayerViewModel(
         var likelyTrackTransition = false
         _ui.update { current ->
             if (shouldApplyQueueSnapshot(current.queue, snapshot, current.selectedGuildId)) {
+                if (current.queue == snapshot && !forcePresentationIdle) return@update current
                 applied = true
                 val nextPresentation = when {
                     snapshot.nowPlaying != null -> snapshot.nowPlayingPresentationOrNull()
@@ -480,9 +499,9 @@ class PlayerViewModel(
         guildId: String,
         likelyTrackTransition: Boolean,
     ) {
-        if (transitionRefreshJob?.isActive != true) {
+        if (likelyTrackTransition && transitionRefreshJob?.isActive != true) {
             transitionRefreshJob = viewModelScope.launch {
-                delay(if (likelyTrackTransition) 1_200L else 600L)
+                delay(TRACK_TRANSITION_RECOVERY_MS)
                 if (isAwaitingNextTrack(guildId)) recoverQueueOnce(guildId)
             }
         }
@@ -800,7 +819,8 @@ class PlayerViewModel(
 
     companion object {
         private val URL_REGEX = Regex("""https?://[^\s]+""")
-        private const val TRACK_TRANSITION_GRACE_MS = 2_000L
+        private const val TRACK_TRANSITION_RECOVERY_MS = 1_500L
+        private const val TRACK_TRANSITION_GRACE_MS = 2_500L
         private const val PRESENTATION_IDLE_GRACE_MS = 900L
 
         fun looksLikeUrl(input: String): Boolean =

@@ -13,6 +13,9 @@ import retrofit2.http.POST
  * Paths are relative to a base URL ending with `/api/v1/`.
  */
 interface KajutaBotAuthApi {
+    @POST("auth/guest")
+    suspend fun guest(): AuthSessionResponse
+
     @POST("auth/discord/exchange")
     suspend fun exchange(
         @Body request: DiscordOAuthExchangeRequest,

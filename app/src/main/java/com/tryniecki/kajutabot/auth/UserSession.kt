@@ -1,13 +1,15 @@
 package com.tryniecki.kajutabot.auth
 
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 
 data class UserSession(
     val accessToken: String,
     val accessTokenExpiresAtUtc: String,
-    val refreshToken: String,
-    val refreshTokenExpiresAtUtc: String,
+    val refreshToken: String?,
+    val refreshTokenExpiresAtUtc: String?,
     val user: AuthUserResponse,
+    val sessionType: SessionType = SessionType.DISCORD,
 )
 
 sealed interface AuthState {

@@ -32,6 +32,8 @@ class AppViewModel(
 
     private val _isSigningIn = MutableStateFlow(false)
     val isSigningIn: StateFlow<Boolean> = _isSigningIn.asStateFlow()
+    private val _isGuestSigningIn = MutableStateFlow(false)
+    val isGuestSigningIn: StateFlow<Boolean> = _isGuestSigningIn.asStateFlow()
 
     private val _openUrl = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val openUrl: SharedFlow<String> = _openUrl.asSharedFlow()
@@ -62,6 +64,7 @@ class AppViewModel(
     }
 
     fun startLogin() {
+        if (_isSigningIn.value) return
         when (val result = container.sessionManager.startLogin()) {
             is OAuthStartResult.Ready -> _openUrl.tryEmit(result.url)
             is OAuthStartResult.Misconfigured -> {
@@ -69,6 +72,46 @@ class AppViewModel(
                 // SessionManager does not change state on start, so emit is handled by UI reading result.
                 // As a fallback, login screen reads misconfiguration from AppConfig directly.
             }
+        }
+    }
+
+    fun continueAsGuest() {
+        if (_isSigningIn.value) return
+        _isSigningIn.value = true
+        _isGuestSigningIn.value = true
+        viewModelScope.launch {
+            try {
+                container.sessionManager.continueAsGuest()
+            } finally {
+                _isSigningIn.value = false
+                _isGuestSigningIn.value = false
+            }
+        }
+    }
+
+    fun switchGuestToDiscord(onFailure: (String) -> Unit) {
+        if (_isSigningIn.value) return
+        _isSigningIn.value = true
+        viewModelScope.launch {
+            try {
+                when (val result = container.sessionManager.logout()) {
+                    is LogoutResult.NeedsRetry -> onFailure(result.message)
+                    else -> {
+                        container.selectionStore.clear()
+                        resetSessionUi()
+                        startLoginAfterGuestLogout(onFailure)
+                    }
+                }
+            } finally {
+                _isSigningIn.value = false
+            }
+        }
+    }
+
+    private fun startLoginAfterGuestLogout(onFailure: (String) -> Unit) {
+        when (val result = container.sessionManager.startLogin()) {
+            is OAuthStartResult.Ready -> _openUrl.tryEmit(result.url)
+            is OAuthStartResult.Misconfigured -> onFailure(result.message)
         }
     }
 

@@ -165,6 +165,19 @@ fun FavoritesScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Ulubione", style = MaterialTheme.typography.titleLarge)
+                    TextButton(
+                        onClick = onRefresh,
+                        enabled = !ui.isLoading && !ui.isMutating,
+                    ) { Text("Odśwież") }
+                }
+            }
             if (ui.error != null || ui.info != null) {
                 item {
                     Card(

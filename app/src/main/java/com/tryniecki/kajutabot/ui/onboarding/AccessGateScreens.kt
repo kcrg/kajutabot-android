@@ -27,7 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun AccessCheckingScreen() {
+fun AccessCheckingScreen(isGuest: Boolean = false) {
     Scaffold { innerPadding ->
         Box(
             modifier = Modifier
@@ -41,7 +41,7 @@ fun AccessCheckingScreen() {
             ) {
                 CircularProgressIndicator()
                 Text(
-                    text = "Sprawdzanie dostępu do Discorda…",
+                    text = if (isGuest) "Sprawdzanie serwera demonstracyjnego…" else "Sprawdzanie dostępu do Discorda…",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -54,10 +54,12 @@ fun AccessCheckingScreen() {
 fun NoAccessScreen(
     onRetry: () -> Unit,
     onLogout: () -> Unit,
+    isGuest: Boolean = false,
 ) {
     AccessMessageScreen(
         title = "Brak dostępu",
-        message = "Nie masz dostępu do żadnego serwera Discord, na którym znajduje się KajutaBot. Do aplikacji wejdziesz, gdy pojawi się co najmniej jeden wspólny serwer.",
+        message = if (isGuest) "Serwer demonstracyjny jest obecnie niedostępny. Spróbuj ponownie później."
+            else "Nie masz dostępu do żadnego serwera Discord, na którym znajduje się KajutaBot. Do aplikacji wejdziesz, gdy pojawi się co najmniej jeden wspólny serwer.",
         primaryLabel = "Sprawdź ponownie",
         onPrimary = onRetry,
         onLogout = onLogout,
@@ -69,10 +71,12 @@ fun AccessErrorScreen(
     message: String?,
     onRetry: () -> Unit,
     onLogout: () -> Unit,
+    isGuest: Boolean = false,
 ) {
     AccessMessageScreen(
         title = "Nie udało się sprawdzić dostępu",
-        message = message ?: "Nie można teraz pobrać listy serwerów Discord. Sprawdź połączenie i spróbuj ponownie.",
+        message = message ?: if (isGuest) "Nie można teraz pobrać serwera demonstracyjnego. Sprawdź połączenie i spróbuj ponownie."
+            else "Nie można teraz pobrać listy serwerów Discord. Sprawdź połączenie i spróbuj ponownie.",
         primaryLabel = "Spróbuj ponownie",
         onPrimary = onRetry,
         onLogout = onLogout,
