@@ -13,7 +13,9 @@ Native Android client for controlling KajutaBot, a Discord music bot, through it
 
 ## Screenshots
 
-No screenshots are checked in. The guest flow below is the quickest way to inspect the UI on a device.
+| Player and queue | Favorites | More and realtime status |
+| :---: | :---: | :---: |
+| <a href="docs/screenshots/player.png"><img src="docs/screenshots/player.png" alt="Player and queue" width="240"></a> | <a href="docs/screenshots/favorites.png"><img src="docs/screenshots/favorites.png" alt="Favorites" width="240"></a> | <a href="docs/screenshots/more.png"><img src="docs/screenshots/more.png" alt="More and realtime status" width="240"></a> |
 
 ## Tech stack
 
