@@ -2,44 +2,34 @@ package com.tryniecki.kajutabot.ui.onboarding
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,58 +40,74 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
-import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.DiscordTargetPicker
-import com.tryniecki.kajutabot.api.model.auth.SessionType
 import kotlinx.coroutines.launch
 
 private data class OnboardingPage(
     val title: String,
     val description: String,
-    val screenshotLabel: String,
-    @DrawableRes val icon: Int,
+    val visual: OnboardingVisual,
 )
+
+private enum class OnboardingVisual {
+    PLAYER,
+    QUEUE,
+    SHARE,
+    FAVORITES,
+    RADIO,
+    MINIPLAYER,
+    SYSTEM_MEDIA,
+}
 
 private val onboardingPages = listOf(
     OnboardingPage(
-        title = "Steruj KajutaBotem z telefonu",
-        description = "Aplikacja nie odtwarza muzyki lokalnie. Steruje KajutaBotem działającym na Twoim serwerze Discord - szybko i bez potrzeby wpisywania komend w Discordzie.",
-        screenshotLabel = "Odtwarzacz i aktualny utwór",
-        icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_outline,
+        title = "Steruj tym, co gra na Discordzie",
+        description = "Telefon działa jak pilot do KajutaBota na wybranym kanale głosowym. Widzisz aktualny utwór i postęp, możesz pominąć lub zatrzymać odtwarzanie, włączyć powtarzanie i zapisać utwór do ulubionych.",
+        visual = OnboardingVisual.PLAYER,
     ),
     OnboardingPage(
-        title = "Dodawaj muzykę bez kombinowania",
-        description = "Wyszukuj utwory, wklejaj linki albo udostępniaj je bezpośrednio z innych aplikacji. KajutaBot doda je do kolejki na wybranym kanale.",
-        screenshotLabel = "Wyszukiwanie i dodawanie utworów",
-        icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_music_outline,
+        title = "Kolejka pod pełną kontrolą",
+        description = "Przytrzymaj i przeciągnij utwór, aby zmienić jego pozycję. Możesz usuwać pojedyncze pozycje, wyczyścić całą kolejkę albo szybko otworzyć wyszukiwanie z poziomu odtwarzacza.",
+        visual = OnboardingVisual.QUEUE,
+    ),
+    OnboardingPage(
+        title = "Dodawaj muzykę na swój sposób",
+        description = "Wpisz nazwę utworu, wklej bezpośredni link albo wybierz KajutaBot w systemowym menu Udostępnij, np. w YouTube. Link trafia od razu do ekranu dodawania i nie musisz kopiować go ręcznie między aplikacjami.",
+        visual = OnboardingVisual.SHARE,
     ),
     OnboardingPage(
         title = "Ulubione zawsze pod ręką",
-        description = "Zapisuj ulubione utwory i wrzucaj je ponownie do kolejki bez ponownego szukania. Również z możliwością przelosowania kolejności.",
-        screenshotLabel = "Lista ulubionych",
-        icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_hearts_outline,
+        description = "Zapisuj utwory na później i dodawaj je ponownie jednym stuknięciem. Możesz też wrzucić wszystkie ulubione do kolejki naraz i opcjonalnie wymieszać ich kolejność.",
+        visual = OnboardingVisual.FAVORITES,
     ),
     OnboardingPage(
-        title = "Sterowanie na każdym ekranie",
-        description = "Miniplayer pokazuje aktualny utwór także poza ekranem odtwarzacza, dzięki czemu najważniejsze akcje są zawsze blisko.",
-        screenshotLabel = "Miniplayer i dolna nawigacja",
-        icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_skip_forward_outline,
+        title = "Radio, gdy skończy się kolejka",
+        description = "Włącz Radio przyciskiem z ikoną radia w odtwarzaczu. Gdy zwykła kolejka się opróżni, KajutaBot automatycznie dobiera losowy utwór z cache, dzięki czemu muzyka może grać dalej bez ręcznego dokładania kolejnych pozycji.",
+        visual = OnboardingVisual.RADIO,
+    ),
+    OnboardingPage(
+        title = "Sterowanie zostaje z Tobą",
+        description = "Gdy coś gra, miniplayer pozostaje nad dolną nawigacją na pozostałych zakładkach. Pokazuje postęp i pozwala szybko dodać utwór do ulubionych, pominąć go albo wrócić do pełnego odtwarzacza.",
+        visual = OnboardingVisual.MINIPLAYER,
+    ),
+    OnboardingPage(
+        title = "Steruj też z poziomu Androida",
+        description = "Podczas odtwarzania Android pokazuje systemową kartę multimediów. Możesz podejrzeć aktualny utwór i używać szybkich akcji bez wracania do aplikacji.",
+        visual = OnboardingVisual.SYSTEM_MEDIA,
     ),
 )
 
 private val guestIntroPage = onboardingPages[0].copy(
-    description = "Aplikacja nie odtwarza muzyki lokalnie. Steruje KajutaBotem na serwerze demonstracyjnym Discord — szybko i bez wpisywania komend.",
+    description = "Telefon jest pilotem do KajutaBota na serwerze demonstracyjnym Discord. Podejrzysz aktualny utwór i postęp oraz skorzystasz z tych samych podstawowych kontrolek bez wpisywania komend.",
 )
-
-private const val selectionPageIndex = 4
-private const val pageCount = 5
 
 @Composable
 fun OnboardingScreen(
@@ -118,6 +124,8 @@ fun OnboardingScreen(
     onComplete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val selectionPageIndex = onboardingPages.size
+    val pageCount = selectionPageIndex + 1
     val pagerState = rememberPagerState(pageCount = { pageCount })
     val scope = rememberCoroutineScope()
     val motion = MaterialTheme.motionScheme
@@ -301,20 +309,26 @@ private fun OnboardingFeaturePage(page: OnboardingPage, isActive: Boolean) {
             .padding(horizontal = 4.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ScreenshotSlot(
-            label = page.screenshotLabel,
-            icon = page.icon,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .heightIn(min = 220.dp)
-                .graphicsLayer {
-                    scaleX = heroScale
-                    scaleY = heroScale
-                },
-        )
+                .weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            FeatureVisual(
+                visual = page.visual,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .graphicsLayer {
+                        scaleX = heroScale
+                        scaleY = heroScale
+                    },
+            )
+        }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
         Text(
             text = page.title,
@@ -349,13 +363,10 @@ private fun OnboardingSelectionPage(
             .fillMaxSize()
             .padding(horizontal = 4.dp, vertical = 8.dp),
     ) {
-        ScreenshotSlot(
-            label = "Połączenie z Discordem",
-            icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_discord_outline,
+        DiscordSelectionHero(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(132.dp),
-            compact = true,
         )
 
         Spacer(Modifier.height(18.dp))
@@ -390,12 +401,46 @@ private fun OnboardingSelectionPage(
 }
 
 @Composable
-private fun ScreenshotSlot(
-    label: String,
-    @DrawableRes icon: Int,
+private fun FeatureVisual(
+    visual: OnboardingVisual,
     modifier: Modifier = Modifier,
-    compact: Boolean = false,
 ) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        val drawable = when (visual) {
+            OnboardingVisual.PLAYER -> com.tryniecki.kajutabot.R.drawable.onboarding_player
+            OnboardingVisual.QUEUE -> com.tryniecki.kajutabot.R.drawable.onboarding_queue
+            OnboardingVisual.SHARE -> com.tryniecki.kajutabot.R.drawable.onboarding_share
+            OnboardingVisual.FAVORITES -> com.tryniecki.kajutabot.R.drawable.onboarding_favorites
+            OnboardingVisual.RADIO -> com.tryniecki.kajutabot.R.drawable.onboarding_radio
+            OnboardingVisual.MINIPLAYER -> com.tryniecki.kajutabot.R.drawable.onboarding_miniplayer
+            OnboardingVisual.SYSTEM_MEDIA -> com.tryniecki.kajutabot.R.drawable.onboarding_system_media
+        }
+        ScreenshotHero(
+            drawable = drawable,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+private fun ScreenshotHero(
+    @DrawableRes drawable: Int,
+    modifier: Modifier = Modifier,
+) {
+    Image(
+        painter = painterResource(drawable),
+        contentDescription = null,
+        modifier = modifier,
+        contentScale = ContentScale.Fit,
+        alignment = Alignment.Center,
+    )
+}
+
+@Composable
+private fun DiscordSelectionHero(modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.extraLarge,
@@ -407,7 +452,7 @@ private fun ScreenshotSlot(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(if (compact) 16.dp else 24.dp),
+                .padding(16.dp),
             contentAlignment = Alignment.Center,
         ) {
             Column(
@@ -419,28 +464,20 @@ private fun ScreenshotSlot(
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
-                        painter = painterResource(icon),
+                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_discord_outline),
                         contentDescription = null,
                         modifier = Modifier
                             .padding(14.dp)
-                            .size(if (compact) 28.dp else 36.dp),
+                            .size(28.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
                 Text(
-                    text = label,
-                    style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                    text = "Połączenie z Discordem",
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
                 )
-                if (!compact) {
-                    Text(
-                        text = "Miejsce na zrzut ekranu aplikacji",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
-                }
             }
         }
     }
