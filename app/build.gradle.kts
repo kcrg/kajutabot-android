@@ -38,6 +38,7 @@ android {
         release {
             // Local compilation check only: no release signing is configured.
             proguardFiles("proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
             optimization {
                 enable = true
             }
@@ -80,6 +81,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.junit)

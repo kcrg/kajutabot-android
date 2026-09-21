@@ -162,6 +162,7 @@ fun AddTrackRoute(
         ui = ui,
         onClose = onClose,
         onQueryChange = viewModel::setSearchQuery,
+        onSearchSourceChange = viewModel::setSearchSource,
         onSubmit = viewModel::submitSmartInput,
         onResultClick = viewModel::enqueueSearchResult,
         isFavorite = favoritesViewModel::isFavorite,

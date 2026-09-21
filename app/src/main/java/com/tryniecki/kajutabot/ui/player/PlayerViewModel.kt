@@ -60,6 +60,15 @@ enum class QueueLoadState {
     ERROR,
 }
 
+enum class SearchSourceOption(
+    val apiValue: String,
+    val displayName: String,
+) {
+    YOUTUBE("YouTube", "YouTube"),
+    SOUNDCLOUD("SoundCloud", "SoundCloud"),
+    DATABASE("Database", "Baza danych"),
+}
+
 data class PlayerUiState(
     val guilds: List<DiscordGuildResponse> = emptyList(),
     val voiceChannels: List<DiscordVoiceChannelResponse> = emptyList(),
@@ -68,7 +77,9 @@ data class PlayerUiState(
     val queue: QueueSnapshotResponse? = null,
     val presentedNowPlaying: NowPlayingPresentation? = null,
     val searchQuery: String = "",
+    val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
     val searchResults: List<SearchItemResponse> = emptyList(),
+    val lastCompletedSearchQuery: String? = null,
     val isLoadingGuilds: Boolean = true,
     val isLoadingVoiceChannels: Boolean = false,
     val guildAccessState: GuildAccessState = GuildAccessState.CHECKING,
@@ -129,7 +140,9 @@ data class PlayerEntryState(
 
 data class AddTrackUiState(
     val searchQuery: String = "",
+    val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
     val searchResults: List<SearchItemResponse> = emptyList(),
+    val lastCompletedSearchQuery: String? = null,
     val isSearching: Boolean = false,
     val isMutating: Boolean = false,
     val error: String? = null,
@@ -173,7 +186,9 @@ fun PlayerUiState.toPlayerEntryState(): PlayerEntryState = PlayerEntryState(
 
 fun PlayerUiState.toAddTrackUiState(): AddTrackUiState = AddTrackUiState(
     searchQuery = searchQuery,
+    searchSource = searchSource,
     searchResults = searchResults,
+    lastCompletedSearchQuery = lastCompletedSearchQuery,
     isSearching = isSearching,
     isMutating = isMutating,
     error = error,
@@ -291,7 +306,30 @@ class PlayerViewModel(
     }
 
     fun setSearchQuery(query: String) {
-        _ui.update { it.copy(searchQuery = query) }
+        if (query == _ui.value.searchQuery) return
+        searchJob?.cancel()
+        _ui.update {
+            it.copy(
+                searchQuery = query,
+                searchResults = emptyList(),
+                lastCompletedSearchQuery = null,
+                isSearching = false,
+            )
+        }
+    }
+
+    fun setSearchSource(source: SearchSourceOption) {
+        if (source == _ui.value.searchSource) return
+        searchJob?.cancel()
+        _ui.update {
+            it.copy(
+                searchSource = source,
+                searchResults = emptyList(),
+                lastCompletedSearchQuery = null,
+                isSearching = false,
+                error = null,
+            )
+        }
     }
 
     fun dismissMessage() {
@@ -304,6 +342,7 @@ class PlayerViewModel(
             it.copy(
                 searchQuery = "",
                 searchResults = emptyList(),
+                lastCompletedSearchQuery = null,
                 isSearching = false,
                 error = null,
                 info = null,
@@ -612,24 +651,52 @@ class PlayerViewModel(
 
     fun search(query: String) {
         val trimmed = query.trim()
-        if (trimmed.isBlank()) {
-            _ui.update { it.copy(searchResults = emptyList(), isSearching = false) }
+        if (trimmed.isBlank() || looksLikeUrl(trimmed)) {
+            searchJob?.cancel()
+            _ui.update {
+                it.copy(
+                    searchResults = emptyList(),
+                    lastCompletedSearchQuery = null,
+                    isSearching = false,
+                )
+            }
             return
         }
-        if (looksLikeUrl(trimmed)) {
-            _ui.update { it.copy(searchResults = emptyList(), isSearching = false) }
-            return
-        }
+
         searchJob?.cancel()
+        val source = _ui.value.searchSource
         searchJob = viewModelScope.launch {
-            _ui.update { it.copy(isSearching = true, error = null) }
+            _ui.update {
+                it.copy(
+                    searchResults = emptyList(),
+                    lastCompletedSearchQuery = null,
+                    isSearching = true,
+                    error = null,
+                )
+            }
             try {
                 val response = sessionManager.withApiForSession(sessionIdentity) {
-                    it.search(query = trimmed, source = "YouTube", maxResults = 10)
+                    it.search(query = trimmed, source = source.apiValue, maxResults = 10)
                 }
-                _ui.update { it.copy(searchResults = response.items, isSearching = false) }
+                _ui.update { current ->
+                    if (current.searchQuery.trim() != trimmed || current.searchSource != source) current
+                    else current.copy(
+                        searchResults = response.items,
+                        lastCompletedSearchQuery = trimmed,
+                        isSearching = false,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _ui.update { it.copy(isSearching = false, error = userMessageForError(e)) }
+                _ui.update { current ->
+                    if (current.searchQuery.trim() != trimmed || current.searchSource != source) current
+                    else current.copy(
+                        isSearching = false,
+                        lastCompletedSearchQuery = null,
+                        error = userMessageForError(e),
+                    )
+                }
             }
         }
     }

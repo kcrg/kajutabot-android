@@ -24,8 +24,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.time.Instant
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 @OptIn(ExperimentalCoroutinesApi::class)
 class GuestFavoritesViewModelTest {
     private val favoriteJson = """{"discordUserId":"guest-owner","contentUrl":"https://example.com/track","title":"Demo","addedAt":"2026-09-20T00:00:00Z"}"""

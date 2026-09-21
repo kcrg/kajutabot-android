@@ -1,23 +1,32 @@
 package com.tryniecki.kajutabot.ui.player
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,25 +39,38 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.tryniecki.kajutabot.R
-import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
+import coil3.compose.AsyncImage
+import com.tryniecki.kajutabot.BuildConfig
 import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
-import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
+import java.text.NumberFormat
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.util.Locale
 
 /**
  * Full-screen modal "add track" page shown above the player.
  * Reuses [PlayerViewModel] smart input: URLs enqueue directly, text searches via
- * `GET /search`. Artwork comes exclusively from `SearchItemResponse.track.thumbnailUrl`.
+ * `GET /search`. Search-result artwork comes exclusively from the backend-provided
+ * `SearchItemResponse.track.thumbnailUrl`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +78,7 @@ fun AddTrackScreen(
     ui: AddTrackUiState,
     onClose: () -> Unit,
     onQueryChange: (String) -> Unit,
+    onSearchSourceChange: (SearchSourceOption) -> Unit,
     onSubmit: () -> Unit,
     onResultClick: (SearchItemResponse) -> Unit,
     isFavorite: (TrackResponse) -> Boolean,
@@ -65,6 +88,15 @@ fun AddTrackScreen(
 ) {
     val trimmed = ui.searchQuery.trim()
     val isUrlInput = PlayerViewModel.looksLikeUrl(trimmed)
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val submitAndHideKeyboard = remember(onSubmit, keyboardController, focusManager) {
+        {
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+            onSubmit()
+        }
+    }
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -79,7 +111,32 @@ fun AddTrackScreen(
                             )
                         }
                     },
+                    actions = {
+                        SearchSourceDropdown(
+                            selected = ui.searchSource,
+                            onSelected = onSearchSourceChange,
+                        )
+                    },
                 )
+            },
+            bottomBar = {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .imePadding(),
+                    tonalElevation = 3.dp,
+                ) {
+                    Button(
+                        onClick = submitAndHideKeyboard,
+                        enabled = !ui.isMutating && !ui.isSearching && trimmed.isNotBlank(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Text(if (isUrlInput) "Dodaj do kolejki" else "Szukaj")
+                    }
+                }
             },
         ) { innerPadding ->
             LazyColumn(
@@ -88,7 +145,7 @@ fun AddTrackScreen(
                     start = 16.dp,
                     top = innerPadding.calculateTopPadding() + 8.dp,
                     end = 16.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 24.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 16.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -115,20 +172,10 @@ fun AddTrackScreen(
                             imeAction = if (isUrlInput) ImeAction.Go else ImeAction.Search,
                         ),
                         keyboardActions = KeyboardActions(
-                            onSearch = { onSubmit() },
-                            onGo = { onSubmit() },
+                            onSearch = { submitAndHideKeyboard() },
+                            onGo = { submitAndHideKeyboard() },
                         ),
                     )
-                }
-
-                item {
-                    Button(
-                        onClick = onSubmit,
-                        enabled = !ui.isMutating && trimmed.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(if (isUrlInput) "Dodaj do kolejki" else "Szukaj")
-                    }
                 }
 
                 if (ui.error != null || ui.info != null) {
@@ -188,12 +235,33 @@ fun AddTrackScreen(
                             ListItem(
                                 verticalAlignment = Alignment.CenterVertically,
                                 leadingContent = {
-                                    TrackArtwork(
+                                    SearchResultArtwork(
                                         imageUrl = item.track.thumbnailUrl,
                                         modifier = Modifier.size(64.dp),
                                     )
                                 },
-                                supportingContent = { Text(item.metricCaption) },
+                                supportingContent = {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    ) {
+                                        searchResultUploadLabel(item)?.let { uploadLabel ->
+                                            Text(
+                                                text = uploadLabel,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        Text(
+                                            text = formatSearchResultMetric(item),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                },
                                 trailingContent = {
                                     FavoriteTrackButton(
                                         track = item.track,
@@ -211,7 +279,7 @@ fun AddTrackScreen(
                             }
                         }
                     }
-                } else if (!ui.isSearching && !isUrlInput && trimmed.isNotBlank()) {
+                } else if (shouldShowSearchEmptyState(ui, trimmed, isUrlInput)) {
                     item {
                         Column(
                             modifier = Modifier
@@ -233,6 +301,138 @@ fun AddTrackScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchSourceDropdown(
+    selected: SearchSourceOption,
+    onSelected: (SearchSourceOption) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        label = "searchSourceChevronRotation",
+    )
+
+    Box {
+        TextButton(
+            onClick = { expanded = true },
+        ) {
+            Text(
+                text = selected.displayName,
+                maxLines = 1,
+            )
+
+            Spacer(Modifier.width(4.dp))
+
+            Icon(
+                painter = painterResource(
+                    com.composables.icons.tabler.outline.R.drawable.tabler_ic_chevron_down_outline,
+                ),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(18.dp)
+                    .rotate(chevronRotation),
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            SearchSourceOption.entries.forEach { source ->
+                DropdownMenuItem(
+                    text = { Text(source.displayName) },
+                    onClick = {
+                        expanded = false
+                        onSelected(source)
+                    },
+                )
+            }
+        }
+    }
+}
+
+internal fun shouldShowSearchEmptyState(
+    ui: AddTrackUiState,
+    trimmedQuery: String,
+    isUrlInput: Boolean,
+): Boolean = !ui.isSearching &&
+    !isUrlInput &&
+    trimmedQuery.isNotBlank() &&
+    ui.searchResults.isEmpty() &&
+    ui.lastCompletedSearchQuery == trimmedQuery
+
+internal fun searchResultUploadLabel(item: SearchItemResponse): String? =
+    item.dateLabel?.takeIf { it.isNotBlank() }
+        ?: item.metricLabel?.takeIf { it.isNotBlank() }
+
+internal fun formatSearchResultMetric(
+    item: SearchItemResponse,
+    locale: Locale = Locale.getDefault(),
+): String {
+    val count = NumberFormat.getIntegerInstance(locale).format(item.metricCount)
+    return item.metricCaption
+        .takeIf { it.isNotBlank() }
+        ?.let { "$count $it" }
+        ?: count
+}
+
+/**
+ * Uses the backend URL directly. Coil is the authority on whether the returned value can be
+ * fetched/decoded; the search UI does not pre-reject valid CDN URLs or manufacture provider
+ * fallbacks. Protocol-relative CDN URLs are normalized to HTTPS.
+ */
+internal fun normalizeSearchThumbnailUrl(
+    raw: String?,
+    apiBaseUrl: String = BuildConfig.KAJUTABOT_API_BASE_URL,
+): String? {
+    val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val apiRoot = apiBaseUrl.trim().trimEnd('/').toHttpUrlOrNull()
+
+    if (value.startsWith("//")) {
+        return "${apiRoot?.scheme ?: "https"}:$value"
+    }
+    if (value.toHttpUrlOrNull() != null) return value
+
+    // A relative thumbnail URL is still backend-provided data. Resolve it against the
+    // configured API origin instead of inventing a provider-specific fallback.
+    return apiRoot?.resolve(value)?.toString() ?: value
+}
+
+@Composable
+private fun SearchResultArtwork(
+    imageUrl: String?,
+    modifier: Modifier = Modifier,
+) {
+    val model = remember(imageUrl) { normalizeSearchThumbnailUrl(imageUrl) }
+    var failed by remember(model) { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (model != null && !failed) {
+            AsyncImage(
+                model = model,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                onSuccess = { failed = false },
+                onError = { failed = true },
+            )
+        } else {
+            Icon(
+                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_file_music_outline),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

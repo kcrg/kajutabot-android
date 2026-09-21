@@ -122,14 +122,21 @@ class GuestUiTest {
             MaterialTheme {
                 AddTrackScreen(
                     ui = AddTrackUiState(searchQuery = "Demo", searchResults = listOf(
-                        SearchItemResponse("Demo", playing, 1, null, "Odtworzenia"),
+                        SearchItemResponse(
+                            input = "Demo",
+                            track = playing,
+                            metricCount = 7,
+                            metricLabel = null,
+                            metricCaption = "wyświetleń",
+                        ),
                     )),
-                    onClose = {}, onQueryChange = {}, onSubmit = {}, onResultClick = {},
+                    onClose = {}, onQueryChange = {}, onSearchSourceChange = {}, onSubmit = {}, onResultClick = {},
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
                     onDismissMessage = {},
                 )
             }
         }
         compose.onNodeWithContentDescription("Dodaj do ulubionych").assertExists()
+        compose.onNodeWithText("7 wyświetleń").assertExists()
     }
 }

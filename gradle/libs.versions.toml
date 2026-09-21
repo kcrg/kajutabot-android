@@ -21,6 +21,7 @@ media3 = "1.11.1"
 turbine = "1.2.1"
 coil3 = "3.6.3"
 signalr = "10.0.12"
+robolectric = "4.17"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -54,6 +55,7 @@ tabler-icons-outline-android = { group = "com.composables", name = "icons-tabler
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 signalr = { group = "com.microsoft.signalr", name = "signalr", version.ref = "signalr" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
