@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "KajutaBot"
 include(":app", ":api")
+include(":baselineprofile")

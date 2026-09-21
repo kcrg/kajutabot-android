@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.baselineprofile)
 }
 
 val kajutaApiBaseUrl: String =
@@ -43,6 +44,7 @@ android {
                 enable = true
             }
         }
+
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -54,8 +56,16 @@ android {
     }
 }
 
+// Keep generated profiles under source control, but do not make every local
+// release build depend on having a benchmark-capable device connected.
+baselineProfile {
+    saveInSrc = true
+    automaticGenerationDuringBuild = false
+}
+
 dependencies {
     implementation(project(":api"))
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.retrofit)
     implementation(libs.okhttp)
     implementation(platform(libs.androidx.compose.bom))
@@ -74,6 +84,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.media3.session)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil3.compose)
     implementation(libs.coil3.network.okhttp)
     implementation(libs.tabler.icons.outline.android)
@@ -85,5 +96,6 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.junit)
+    "baselineProfile"(project(":baselineprofile"))
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
