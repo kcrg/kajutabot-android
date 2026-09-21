@@ -39,7 +39,7 @@ Kotlin, Jetpack Compose, Material 3, Coroutines/Flow, Retrofit, OkHttp, kotlinx.
 ### Requirements
 
 - Android Studio with Android SDK Platform 37 installed. The project uses Android Gradle Plugin 9.4.1 and the checked-in Gradle 9.7.1 wrapper.
-- JDK 25 for the Gradle daemon. The checked-in daemon criteria can provision it through Foojay on first sync; an internet connection is needed for this and initial dependency downloads. The `:api` compilation toolchain is JDK 11.
+- JDK 25 for the Gradle daemon. The checked-in daemon criteria can provision it through Foojay on first sync; an internet connection is needed for this and initial dependency downloads. The `:api` compilation toolchain is JDK 17.
 - Emulator or physical device running Android 10 (API 29) or newer.
 
 ### Clone
