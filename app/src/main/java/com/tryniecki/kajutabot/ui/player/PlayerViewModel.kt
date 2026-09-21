@@ -244,6 +244,16 @@ class PlayerViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toMiniPlayerState())
 
+    /**
+     * Authoritative remote playback state from the latest queue snapshot.
+     * Unlike [miniPlayerState], this intentionally ignores the short-lived
+     * presentation hold used to smooth track transitions in the app UI.
+     */
+    val remotePlaybackActive: StateFlow<Boolean> = _ui
+        .map { it.queue?.nowPlaying != null }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.queue?.nowPlaying != null)
+
     val playerError: StateFlow<String?> = _ui
         .map { it.error ?: it.queueLoadError }
         .distinctUntilChanged()
@@ -699,6 +709,11 @@ class PlayerViewModel(
     fun toggleRadio() {
         mutate(
             controlAction = PlayerControlAction.RADIO,
+            // If radio was the only playback source, disabling it can stop and
+            // disconnect the bot immediately. Do not keep that ended radio track
+            // alive in the presentation grace window, otherwise the UI may try to
+            // restart the media service for a track that no longer exists.
+            forcePresentationIdleOnSuccess = true,
             successMessage = { response ->
                 if (response.snapshot.radio.isEnabled) "Radio włączone" else "Radio wyłączone"
             },

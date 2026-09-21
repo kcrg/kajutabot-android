@@ -325,6 +325,7 @@ private fun AuthenticatedContent(
     // line and the polling keys — typing in AddTrack search must not
     // recompose the shell or the MiniPlayer.
     val miniPlayerState by playerViewModel.miniPlayerState.collectAsStateWithLifecycle()
+    val remotePlaybackActive by playerViewModel.remotePlaybackActive.collectAsStateWithLifecycle()
     val mediaServiceActive by container.mediaServiceActive.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
@@ -373,8 +374,8 @@ private fun AuthenticatedContent(
     }
 
     PlayerRealtimeEffect(playerViewModel)
-    LaunchedEffect(miniPlayerState != null, mediaServiceActive) {
-        if (miniPlayerState != null && !mediaServiceActive) {
+    LaunchedEffect(remotePlaybackActive, mediaServiceActive) {
+        if (remotePlaybackActive && !mediaServiceActive) {
             RemotePlaybackService.start(context)
         }
     }

@@ -4,7 +4,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -22,6 +21,7 @@ import com.tryniecki.kajutabot.MainActivity
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.RealtimeOwner
+import com.tryniecki.kajutabot.ui.player.nowPlayingPresentationOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -55,7 +55,7 @@ class RemotePlaybackService : MediaSessionService() {
             if (!state.isMutating || state.activeControlAction != null) playerState.skip()
         }
         remotePlayer = player
-        player.update(playerState.ui.value.effectiveNowPlaying)
+        player.update(playerState.ui.value.queue?.nowPlayingPresentationOrNull())
         val session = MediaSession.Builder(this, player)
             .setCallback(RemoteSessionCallback(playerState, favoritesState))
             .setMediaButtonPreferences(mediaButtons(playerState, favoritesState))
@@ -74,7 +74,7 @@ class RemotePlaybackService : MediaSessionService() {
 
         scope.launch {
             playerState.ui.collectLatest { state ->
-                player.update(state.effectiveNowPlaying)
+                player.update(state.queue?.nowPlayingPresentationOrNull())
                 session.setMediaButtonPreferences(mediaButtons(playerState, favoritesState))
                 // Stop foreground playback promptly when the bot disconnects.
                 if (state.queue != null && state.queue.nowPlaying == null && state.queue.voiceChannelId == null) {
@@ -179,10 +179,12 @@ class RemotePlaybackService : MediaSessionService() {
         val FAVORITE = SessionCommand(ACTION_FAVORITE, Bundle.EMPTY)
 
         fun start(context: Context) {
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, RemotePlaybackService::class.java),
-            )
+            // The app starts this while its UI is in the foreground. MediaSessionService
+            // promotes itself to a media-playback foreground service as soon as the
+            // Player exposes a MediaItem. Using startForegroundService() here creates a
+            // race: remote playback can end before onCreate() publishes a notification,
+            // which triggers ForegroundServiceDidNotStartInTimeException.
+            context.startService(Intent(context, RemotePlaybackService::class.java))
         }
 
         fun mediaButtons(player: PlayerViewModel, favorites: FavoritesViewModel): List<CommandButton> {
