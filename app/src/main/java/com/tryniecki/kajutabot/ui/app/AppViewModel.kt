@@ -2,6 +2,8 @@ package com.tryniecki.kajutabot.ui.app
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.auth.AuthState
@@ -143,10 +145,12 @@ class AppViewModel(
         }
     }
 
-    @Suppress("UNCHECKED_CAST")
-    class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return AppViewModel(container) as T
-        }
+    companion object {
+        fun factory(container: AppContainer): ViewModelProvider.Factory =
+            viewModelFactory {
+                initializer {
+                    AppViewModel(container)
+                }
+            }
     }
 }

@@ -3,6 +3,8 @@ package com.tryniecki.kajutabot.ui.player
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.api.client.KajutaBotApiErrors
@@ -895,12 +897,12 @@ class PlayerViewModel(
         fun looksLikeUrl(input: String): Boolean =
             input.startsWith("http://", ignoreCase = true) ||
                 input.startsWith("https://", ignoreCase = true)
-    }
 
-    @Suppress("UNCHECKED_CAST")
-    class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return PlayerViewModel(container) as T
-        }
+        fun factory(container: AppContainer): ViewModelProvider.Factory =
+            viewModelFactory {
+                initializer {
+                    PlayerViewModel(container)
+                }
+            }
     }
 }

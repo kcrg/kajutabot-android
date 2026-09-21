@@ -1,5 +1,6 @@
 package com.tryniecki.kajutabot.api.client
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -8,9 +9,11 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.create
 
+@OptIn(ExperimentalSerializationApi::class)
 internal val KajutaBotJson = Json {
     ignoreUnknownKeys = true
     explicitNulls = false
+    exceptionsWithDebugInfo = false
 }
 
 object KajutaBotApiClientFactory {

@@ -46,10 +46,10 @@ class RemotePlaybackService : MediaSessionService() {
             return
         }
         val owner = container.ownerForSession(identity)
-        val playerState = ViewModelProvider(owner, PlayerViewModel.Factory(container))[PlayerViewModel::class.java]
+        val playerState = ViewModelProvider(owner, PlayerViewModel.factory(container))[PlayerViewModel::class.java]
         this.playerState = playerState
         playerState.setRealtimeOwner(RealtimeOwner.MEDIA_SERVICE, true)
-        val favoritesState = ViewModelProvider(owner, FavoritesViewModel.Factory(container))[FavoritesViewModel::class.java]
+        val favoritesState = ViewModelProvider(owner, FavoritesViewModel.factory(container))[FavoritesViewModel::class.java]
         val player = RemoteQueuePlayer {
             val state = playerState.ui.value
             if (!state.isMutating || state.activeControlAction != null) playerState.skip()

@@ -202,7 +202,7 @@ private fun AuthenticatedShell(
     // screen, MiniPlayer, share flow. Scoped to the activity, so switching
     // bottom tabs never recreates it and queue state survives within this session.
     val playerViewModel: PlayerViewModel = viewModel(
-        factory = PlayerViewModel.Factory(container),
+        factory = PlayerViewModel.factory(container),
     )
     val navController = rememberNavController()
     val entryState by playerViewModel.entryState.collectAsStateWithLifecycle()
@@ -319,7 +319,7 @@ private fun AuthenticatedContent(
     val isDiscordSelectionOpen = currentRoute?.hasRoute<AppRoute.DiscordSelection>() == true
     val isFullScreenDetailOpen = isAddTrackOpen || isDiscordSelectionOpen
     val favoritesViewModel: FavoritesViewModel = viewModel(
-        factory = FavoritesViewModel.Factory(container),
+        factory = FavoritesViewModel.factory(container),
     )
     // Narrow slices: the shell only needs the mini-player state, the error
     // line and the polling keys — typing in AddTrack search must not

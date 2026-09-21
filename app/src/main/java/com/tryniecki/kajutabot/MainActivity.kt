@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
         container = (application as KajutaBotApplication).container
         appViewModel = ViewModelProvider(
             this,
-            AppViewModel.Factory(container),
+            AppViewModel.factory(container),
         )[AppViewModel::class.java]
 
         handleIntent(intent)

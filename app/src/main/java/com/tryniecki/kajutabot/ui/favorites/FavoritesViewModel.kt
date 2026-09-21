@@ -2,6 +2,8 @@ package com.tryniecki.kajutabot.ui.favorites
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.auth.SessionManager
@@ -223,10 +225,12 @@ class FavoritesViewModel(
         }
     }
 
-    @Suppress("UNCHECKED_CAST")
-    class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return FavoritesViewModel(container) as T
-        }
+    companion object {
+        fun factory(container: AppContainer): ViewModelProvider.Factory =
+            viewModelFactory {
+                initializer {
+                    FavoritesViewModel(container)
+                }
+            }
     }
 }
