@@ -87,6 +87,17 @@ class PlayerStateProjectionTest {
     }
 
     @Test
+    fun `search history is carried only by add track slice`() {
+        val state = PlayerUiState(searchHistory = listOf("one", "two"))
+
+        assertEquals(listOf("one", "two"), state.toAddTrackUiState().searchHistory)
+        assertEquals(
+            PlayerUiState().toPlayerScreenState(),
+            state.toPlayerScreenState(),
+        )
+    }
+
+    @Test
     fun `mini player slice is null without queue or without track`() {
         assertNull(PlayerUiState(queue = null).toMiniPlayerState())
         assertNull(PlayerUiState(queue = snapshot(nowPlaying = null)).toMiniPlayerState())

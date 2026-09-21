@@ -498,6 +498,31 @@ private fun AuthenticatedContent(
                         scaleOut(motion.fastSpatialSpec(), targetScale = 0.98f)
                 }
             },
+            // Navigation 2.10+ uses dedicated transitions while handling system / predictive Back.
+            // Mirror the regular pop transitions so hardware/gesture Back looks identical to
+            // the in-app back buttons on all hierarchical detail screens.
+            predictivePopEnterTransition = { _ ->
+                if (initialState.destination.isDetailRoute()) {
+                    fadeIn(motion.defaultEffectsSpec()) +
+                        slideInHorizontally(motion.defaultSpatialSpec()) {
+                            -(it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                        }
+                } else {
+                    fadeIn(motion.fastEffectsSpec()) +
+                        scaleIn(motion.fastSpatialSpec(), initialScale = 0.98f)
+                }
+            },
+            predictivePopExitTransition = { _ ->
+                if (initialState.destination.isDetailRoute()) {
+                    fadeOut(motion.fastEffectsSpec()) +
+                        slideOutHorizontally(motion.defaultSpatialSpec()) {
+                            (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
+                        }
+                } else {
+                    fadeOut(motion.fastEffectsSpec()) +
+                        scaleOut(motion.fastSpatialSpec(), targetScale = 0.98f)
+                }
+            },
         ) {
             composable<AppRoute.Player> {
                 PlayerRoute(

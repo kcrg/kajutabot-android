@@ -58,6 +58,8 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+private val favoriteDateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
 @Composable
 fun FavoritesRoute(viewModel: FavoritesViewModel) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
@@ -254,10 +256,13 @@ fun FavoritesScreen(
                                 )
                             },
                             supportingContent = {
-                                val date = runCatching {
-                                    OffsetDateTime.parse(fav.addedAt).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
-                                        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-                                }.getOrDefault(fav.addedAt)
+                                val zoneId = ZoneId.systemDefault()
+                                val date = remember(fav.addedAt, zoneId) {
+                                    runCatching {
+                                        OffsetDateTime.parse(fav.addedAt).atZoneSameInstant(zoneId).toLocalDate()
+                                            .format(favoriteDateFormatter)
+                                    }.getOrDefault(fav.addedAt)
+                                }
                                 Text("Zapisano $date")
                             },
                             trailingContent = {

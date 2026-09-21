@@ -15,6 +15,7 @@ import com.tryniecki.kajutabot.auth.SessionStore
 import com.tryniecki.kajutabot.prefs.GuildSelectionStore
 import com.tryniecki.kajutabot.prefs.OnboardingPreferences
 import com.tryniecki.kajutabot.prefs.FavoritesPreferences
+import com.tryniecki.kajutabot.prefs.SearchHistoryPreferences
 import com.tryniecki.kajutabot.ui.app.SessionViewModelScope
 import com.tryniecki.kajutabot.ui.app.SessionViewModelOwner
 import kotlinx.coroutines.CoroutineScope
@@ -42,6 +43,7 @@ class AppContainer(context: Context) {
     val selectionStore = GuildSelectionStore(appContext)
     val onboardingPreferences = OnboardingPreferences(appContext)
     val favoritesPreferences = FavoritesPreferences(appContext)
+    val searchHistoryPreferences = SearchHistoryPreferences(appContext)
     val pkceGenerator = PkceGenerator()
 
     val authApi: KajutaBotAuthApi =

@@ -57,6 +57,7 @@ class FavoritesViewModel(
     val toggleMessages: SharedFlow<String> = _toggleMessages.asSharedFlow()
     private var refreshGeneration = 0L
     private var mutationRevision = 0L
+    private var favoriteIdentities: Set<String> = emptySet()
 
     init {
         refresh()
@@ -71,9 +72,13 @@ class FavoritesViewModel(
             try {
                 val items = sessionManager.withApiForSession(sessionIdentity) { it.getFavorites() }
                 if (generation == refreshGeneration) {
-                    _ui.update {
-                        if (revision == mutationRevision) it.copy(favorites = items, isLoading = false)
-                        else it.copy(isLoading = false)
+                    if (revision == mutationRevision) {
+                        favoriteIdentities = items.asSequence()
+                            .map { favoriteIdentity(it.contentUrl) }
+                            .toSet()
+                        _ui.update { it.copy(favorites = items, isLoading = false) }
+                    } else {
+                        _ui.update { it.copy(isLoading = false) }
                     }
                 }
             } catch (e: Exception) {
@@ -97,10 +102,8 @@ class FavoritesViewModel(
         _toggleMessages.tryEmit(if (enabled) "Losowanie włączone" else "Losowanie wyłączone")
     }
 
-    fun isFavorite(track: TrackResponse): Boolean {
-        val identities = track.favoriteIdentities()
-        return _ui.value.favorites.any { favoriteIdentity(it.contentUrl) in identities }
-    }
+    fun isFavorite(track: TrackResponse): Boolean =
+        track.favoriteIdentities().any(favoriteIdentities::contains)
 
     fun toggle(track: TrackResponse) {
         if (_ui.value.isMutating || _ui.value.isLoading) return
@@ -129,8 +132,9 @@ class FavoritesViewModel(
                     it.addFavorite(AddFavoriteRequest(contentUrl, title, thumbnailUrl))
                 }
                 mutationRevision++
+                val identity = favoriteIdentity(added.contentUrl)
+                favoriteIdentities = favoriteIdentities + identity
                 _ui.update { current ->
-                    val identity = favoriteIdentity(added.contentUrl)
                     current.copy(
                         favorites = listOf(added) + current.favorites.filterNot {
                             favoriteIdentity(it.contentUrl) == identity
@@ -159,6 +163,7 @@ class FavoritesViewModel(
                 sessionManager.withApiForSession(sessionIdentity) { it.deleteFavorite(contentUrl) }
                 mutationRevision++
                 val identity = favoriteIdentity(contentUrl)
+                favoriteIdentities = favoriteIdentities - identity
                 _ui.update { current ->
                     current.copy(
                         favorites = current.favorites.filterNot { favoriteIdentity(it.contentUrl) == identity },

@@ -79,6 +79,7 @@ data class PlayerUiState(
     val searchQuery: String = "",
     val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
     val searchResults: List<SearchItemResponse> = emptyList(),
+    val searchHistory: List<String> = emptyList(),
     val lastCompletedSearchQuery: String? = null,
     val isLoadingGuilds: Boolean = true,
     val isLoadingVoiceChannels: Boolean = false,
@@ -142,6 +143,7 @@ data class AddTrackUiState(
     val searchQuery: String = "",
     val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
     val searchResults: List<SearchItemResponse> = emptyList(),
+    val searchHistory: List<String> = emptyList(),
     val lastCompletedSearchQuery: String? = null,
     val isSearching: Boolean = false,
     val isMutating: Boolean = false,
@@ -188,6 +190,7 @@ fun PlayerUiState.toAddTrackUiState(): AddTrackUiState = AddTrackUiState(
     searchQuery = searchQuery,
     searchSource = searchSource,
     searchResults = searchResults,
+    searchHistory = searchHistory,
     lastCompletedSearchQuery = lastCompletedSearchQuery,
     isSearching = isSearching,
     isMutating = isMutating,
@@ -211,11 +214,13 @@ class PlayerViewModel(
     private val sessionManager = container.sessionManager
     private val sessionIdentity = checkNotNull(sessionManager.sessionIdentity.value)
     private val selection = container.selectionStore
+    private val searchHistory = container.searchHistoryPreferences
 
     private val _ui = MutableStateFlow(
         PlayerUiState(
             selectedGuildId = selection.guildId,
             selectedVoiceChannelId = selection.voiceChannelId,
+            searchHistory = searchHistory.entries(),
         ),
     )
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
@@ -664,6 +669,8 @@ class PlayerViewModel(
         }
 
         searchJob?.cancel()
+        val updatedHistory = searchHistory.add(trimmed)
+        _ui.update { it.copy(searchHistory = updatedHistory) }
         val source = _ui.value.searchSource
         searchJob = viewModelScope.launch {
             _ui.update {
@@ -699,6 +706,11 @@ class PlayerViewModel(
                 }
             }
         }
+    }
+
+    fun searchFromHistory(query: String) {
+        setSearchQuery(query)
+        search(query)
     }
 
     fun submitSmartInput() {

@@ -80,6 +80,7 @@ fun AddTrackScreen(
     onQueryChange: (String) -> Unit,
     onSearchSourceChange: (SearchSourceOption) -> Unit,
     onSubmit: () -> Unit,
+    onHistoryClick: (String) -> Unit,
     onResultClick: (SearchItemResponse) -> Unit,
     isFavorite: (TrackResponse) -> Boolean,
     onToggleFavorite: (TrackResponse) -> Unit,
@@ -95,6 +96,13 @@ fun AddTrackScreen(
             keyboardController?.hide()
             focusManager.clearFocus(force = true)
             onSubmit()
+        }
+    }
+    val historySearchAndHideKeyboard = remember(onHistoryClick, keyboardController, focusManager) {
+        { query: String ->
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+            onHistoryClick(query)
         }
     }
 
@@ -176,6 +184,43 @@ fun AddTrackScreen(
                             onGo = { submitAndHideKeyboard() },
                         ),
                     )
+                }
+
+                if (trimmed.isBlank() && ui.searchHistory.isNotEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            ui.searchHistory.forEach { query ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { historySearchAndHideKeyboard(query) }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(
+                                            com.composables.icons.tabler.outline.R.drawable.tabler_ic_history_outline,
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        text = query,
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (ui.error != null || ui.info != null) {

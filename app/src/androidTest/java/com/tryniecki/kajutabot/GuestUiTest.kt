@@ -130,7 +130,8 @@ class GuestUiTest {
                             metricCaption = "wyświetleń",
                         ),
                     )),
-                    onClose = {}, onQueryChange = {}, onSearchSourceChange = {}, onSubmit = {}, onResultClick = {},
+                    onClose = {}, onQueryChange = {}, onSearchSourceChange = {}, onSubmit = {},
+                    onHistoryClick = {}, onResultClick = {},
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
                     onDismissMessage = {},
                 )
@@ -139,4 +140,31 @@ class GuestUiTest {
         compose.onNodeWithContentDescription("Dodaj do ulubionych").assertExists()
         compose.onNodeWithText("7 wyświetleń").assertExists()
     }
+
+    @Test
+    fun addTrackShowsAndUsesSearchHistoryWhenQueryIsEmpty() {
+        var clicked: String? = null
+
+        compose.setContent {
+            MaterialTheme {
+                AddTrackScreen(
+                    ui = AddTrackUiState(searchHistory = listOf("first query", "second query")),
+                    onClose = {},
+                    onQueryChange = {},
+                    onSearchSourceChange = {},
+                    onSubmit = {},
+                    onHistoryClick = { clicked = it },
+                    onResultClick = {},
+                    isFavorite = { false },
+                    onToggleFavorite = {},
+                    favoritesBusy = false,
+                    onDismissMessage = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("first query").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals("first query", clicked) }
+    }
+
 }

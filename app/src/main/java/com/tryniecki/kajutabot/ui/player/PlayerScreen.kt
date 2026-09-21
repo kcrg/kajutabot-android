@@ -101,6 +101,8 @@ import com.tryniecki.kajutabot.ui.theme.fadeThrough
 import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import coil3.compose.AsyncImage
 
+private val artworkAccentColorRegex = Regex("#[0-9a-fA-F]{6}")
+
 private enum class PlayerSurfaceState {
     LOADING,
     ERROR,
@@ -164,6 +166,7 @@ fun AddTrackRoute(
         onQueryChange = viewModel::setSearchQuery,
         onSearchSourceChange = viewModel::setSearchSource,
         onSubmit = viewModel::submitSmartInput,
+        onHistoryClick = viewModel::searchFromHistory,
         onResultClick = viewModel::enqueueSearchResult,
         isFavorite = favoritesViewModel::isFavorite,
         onToggleFavorite = favoritesViewModel::toggle,
@@ -206,6 +209,15 @@ fun PlayerScreen(
     LaunchedEffect(ui.error) {
         if (ui.error != null) previewOrder = null
     }
+    val pending = previewOrder ?: ui.queue?.pendingEntries.orEmpty()
+    val pendingIndexById = remember(pending) {
+        buildMap(pending.size) {
+            pending.forEachIndexed { index, entry ->
+                if (!containsKey(entry.entryId)) put(entry.entryId, index)
+            }
+        }
+    }
+    val pendingEntryIds = pendingIndexById.keys
     Scaffold(
         //topBar = { TopAppBar(title = { Text("Odtwarzacz") }) },
         floatingActionButton = {
@@ -349,7 +361,6 @@ fun PlayerScreen(
                 }
             }
 
-            val pending = previewOrder ?: ui.queue?.pendingEntries.orEmpty()
             if (ui.isInitialContentLoading) {
                 item(key = "queue-loading") {
                     QueueSkeleton(
@@ -372,8 +383,9 @@ fun PlayerScreen(
                 }
             } else {
                 items(pending, key = { it.entryId }) { entry ->
+                    val entryIndex = pendingIndexById[entry.entryId] ?: -1
                     val dragged = draggingEntryId == entry.entryId
-                    val target = dragTargetIndex == pending.indexOfFirst { it.entryId == entry.entryId }
+                    val target = dragTargetIndex == entryIndex
                     Card(
                         modifier = Modifier
                             .zIndex(if (dragged) 1f else 0f)
@@ -401,7 +413,7 @@ fun PlayerScreen(
                                             .testTag("queue-drag-${entry.entryId}")
                                             .semantics {
                                                 contentDescription = "Przeciągnij, aby zmienić pozycję utworu ${entry.track.title}"
-                                                val index = pending.indexOfFirst { it.entryId == entry.entryId }
+                                                val index = entryIndex
                                                 customActions = listOf(
                                                     CustomAccessibilityAction("Przenieś w górę") {
                                                         if (index > 0 && !ui.isMutating && ui.queue != null) {
@@ -417,13 +429,13 @@ fun PlayerScreen(
                                                     },
                                                 )
                                             }
-                                            .pointerInput(entry.entryId, pending.size, ui.queue?.version, ui.isMutating) {
+                                            .pointerInput(entry.entryId, pendingIndexById, ui.queue?.version, ui.isMutating) {
                                                 if (ui.isMutating || pending.size < 2) return@pointerInput
                                                 detectDragGesturesAfterLongPress(
                                                     onDragStart = {
                                                         draggingEntryId = entry.entryId
                                                         dragOffsetPx = 0f
-                                                        dragTargetIndex = pending.indexOfFirst { it.entryId == entry.entryId }
+                                                        dragTargetIndex = entryIndex
                                                         dragExpectedVersion = ui.queue?.version
                                                     },
                                                     onDrag = { change, amount ->
@@ -434,16 +446,22 @@ fun PlayerScreen(
                                                             ?: return@detectDragGesturesAfterLongPress
                                                         val center = source.offset + source.size / 2f + dragOffsetPx
                                                         val closest = listState.layoutInfo.visibleItemsInfo
-                                                            .filter { info -> pending.any { it.entryId == info.key } }
+                                                            .filter { info ->
+                                                                val key = info.key as? String
+                                                                key != null && key in pendingEntryIds
+                                                            }
                                                             .minByOrNull { info ->
                                                                 kotlin.math.abs(center - (info.offset + info.size / 2f))
                                                             }
                                                         if (closest != null) {
-                                                            dragTargetIndex = pending.indexOfFirst { it.entryId == closest.key }
+                                                            val closestEntryId = closest.key as? String
+                                                            dragTargetIndex = closestEntryId
+                                                                ?.let { pendingIndexById[it] }
+                                                                ?: -1
                                                         }
                                                     },
                                                     onDragEnd = {
-                                                        val sourceIndex = pending.indexOfFirst { it.entryId == entry.entryId }
+                                                        val sourceIndex = entryIndex
                                                         val newIndex = dragTargetIndex
                                                         val version = dragExpectedVersion
                                                         if (sourceIndex >= 0 && newIndex >= 0 && sourceIndex != newIndex && version != null) {
@@ -475,7 +493,7 @@ fun PlayerScreen(
                                                 modifier = Modifier.size(20.dp),
                                             )
                                             Text(
-                                                text = "${pending.indexOfFirst { it.entryId == entry.entryId } + 1}",
+                                                text = "${entryIndex + 1}",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.primary,
                                             )
@@ -780,7 +798,7 @@ private fun SmoothArtworkGlow(
 
 private fun String?.toArtworkAccentColor(): Color? =
     this
-        ?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) }
+        ?.takeIf { it.matches(artworkAccentColorRegex) }
         ?.let { Color(0xFF000000L or it.substring(1).toLong(16)) }
 
 @Composable
@@ -807,6 +825,25 @@ private fun AccentArtworkGlow(
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
+    val ambientBrush = remember(accent) {
+        Brush.radialGradient(
+            colorStops = arrayOf(
+                0.00f to accent.copy(alpha = 0.42f),
+                0.42f to accent.copy(alpha = 0.26f),
+                0.72f to accent.copy(alpha = 0.10f),
+                1.00f to Color.Transparent,
+            ),
+        )
+    }
+    val lowerGlowBrush = remember(accent) {
+        Brush.radialGradient(
+            colorStops = arrayOf(
+                0.00f to accent.copy(alpha = 0.38f),
+                0.55f to accent.copy(alpha = 0.16f),
+                1.00f to Color.Transparent,
+            ),
+        )
+    }
     Box(modifier = modifier) {
         // Główny ambient wychodzący poza artwork ze wszystkich stron.
         Box(
@@ -817,16 +854,7 @@ private fun AccentArtworkGlow(
                     radius = 44.dp,
                     edgeTreatment = BlurredEdgeTreatment.Unbounded,
                 )
-                .background(
-                    brush = Brush.radialGradient(
-                        colorStops = arrayOf(
-                            0.00f to accent.copy(alpha = 0.42f),
-                            0.42f to accent.copy(alpha = 0.26f),
-                            0.72f to accent.copy(alpha = 0.10f),
-                            1.00f to Color.Transparent,
-                        ),
-                    ),
-                ),
+                .background(brush = ambientBrush),
         )
 
         // Lekko mocniejsze światło w dolnej połowie.
@@ -840,15 +868,7 @@ private fun AccentArtworkGlow(
                     radius = 34.dp,
                     edgeTreatment = BlurredEdgeTreatment.Unbounded,
                 )
-                .background(
-                    brush = Brush.radialGradient(
-                        colorStops = arrayOf(
-                            0.00f to accent.copy(alpha = 0.38f),
-                            0.55f to accent.copy(alpha = 0.16f),
-                            1.00f to Color.Transparent,
-                        ),
-                    ),
-                ),
+                .background(brush = lowerGlowBrush),
         )
     }
 }

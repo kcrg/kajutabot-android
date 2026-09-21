@@ -28,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -155,6 +157,9 @@ private fun GuildChoiceCard(
     Card(
         modifier = Modifier
             .widthIn(min = 190.dp, max = 260.dp)
+            .semantics {
+                contentDescription = "Serwer Discord: ${guild.name}"
+            }
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
@@ -196,6 +201,9 @@ private fun ChannelChoiceCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .semantics {
+                contentDescription = "Kanał głosowy: ${channel.name}"
+            }
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
