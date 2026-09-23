@@ -34,7 +34,7 @@ object KajutaBotRealtimeClientFactory {
         val root = baseUrl.trimEnd('/')
         require(root.startsWith("https://")) { "Realtime requires an HTTPS server root." }
         require(accessToken.isNotBlank()) { "Access token is required." }
-        val connection = HubConnectionBuilder.create("$root/hubs/playback")
+        val connection = HubConnectionBuilder.create("$root/api/v1/app/hubs/playback")
             .withTransport(TransportEnum.WEBSOCKETS)
             .withAccessTokenProvider(Single.just(accessToken))
             .build()

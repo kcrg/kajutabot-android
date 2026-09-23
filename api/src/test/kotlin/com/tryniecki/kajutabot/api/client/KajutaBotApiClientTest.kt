@@ -35,15 +35,15 @@ class KajutaBotApiClientTest {
     @Test
     fun `normalizeBaseUrl appends api v1`() {
         assertEquals(
-            "https://api.kajuta.tryniecki.eu/api/v1/",
+            "https://api.kajuta.tryniecki.eu/api/v1/app/",
             KajutaBotApiClientFactory.normalizeBaseUrl("https://api.kajuta.tryniecki.eu"),
         )
         assertEquals(
-            "https://api.kajuta.tryniecki.eu/api/v1/",
+            "https://api.kajuta.tryniecki.eu/api/v1/app/",
             KajutaBotApiClientFactory.normalizeBaseUrl("https://api.kajuta.tryniecki.eu/"),
         )
         assertEquals(
-            "http://localhost:5000/api/v1/",
+            "http://localhost:5000/api/v1/app/",
             KajutaBotApiClientFactory.normalizeBaseUrl("  http://localhost:5000/  "),
         )
     }
@@ -103,7 +103,7 @@ class KajutaBotApiClientTest {
         val result = kotlinx.coroutines.runBlocking { authApi.guest() }
         val request = server.takeRequest()
         assertEquals("POST", request.method)
-        assertEquals("/api/v1/auth/guest", request.path)
+        assertEquals("/api/v1/app/auth/guest", request.path)
         assertNull(request.getHeader("Authorization"))
         assertEquals(0L, request.body.size)
         assertEquals(SessionType.GUEST, result.sessionType)
@@ -116,11 +116,11 @@ class KajutaBotApiClientTest {
         server.enqueue(MockResponse().setBody("[]"))
         val api = KajutaBotApiClientFactory.create(server.url("/").toString()) { "t" }
         kotlinx.coroutines.runBlocking { api.getMyGuilds() }
-        assertEquals("/api/v1/users/me/guilds", server.takeRequest().path)
+        assertEquals("/api/v1/app/users/me/guilds", server.takeRequest().path)
 
         server.enqueue(MockResponse().setBody("[]"))
         kotlinx.coroutines.runBlocking { api.getFavorites() }
-        assertEquals("/api/v1/users/me/favorites", server.takeRequest().path)
+        assertEquals("/api/v1/app/users/me/favorites", server.takeRequest().path)
 
         server.enqueue(
             MockResponse().setBody(
@@ -130,12 +130,12 @@ class KajutaBotApiClientTest {
         kotlinx.coroutines.runBlocking {
             api.addFavorite(com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest("https://x"))
         }
-        assertEquals("/api/v1/users/me/favorites", server.takeRequest().path)
+        assertEquals("/api/v1/app/users/me/favorites", server.takeRequest().path)
 
         server.enqueue(MockResponse().setResponseCode(204))
         kotlinx.coroutines.runBlocking { api.deleteFavorite("https://youtu.be/abc") }
         val delete = server.takeRequest()
-        assertTrue(delete.path!!.startsWith("/api/v1/users/me/favorites?"))
+        assertTrue(delete.path!!.startsWith("/api/v1/app/users/me/favorites?"))
         assertTrue(delete.path!!.contains("contentUrl="))
     }
 

@@ -79,6 +79,6 @@ object KajutaBotApiClientFactory {
     internal fun normalizeBaseUrl(baseUrl: String): String {
         val root = baseUrl.trim().trimEnd('/')
         require(root.isNotEmpty()) { "baseUrl cannot be blank." }
-        return "$root/api/v1/"
+        return "$root/api/v1/app/"
     }
 }

@@ -1,6 +1,6 @@
 package com.tryniecki.kajutabot.ui.player
 
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
 import org.junit.Assert.assertEquals
@@ -16,22 +16,20 @@ import org.junit.Test
  */
 class PlayerStateProjectionTest {
 
-    private fun track(title: String = "Track") = TrackResponse(
+    private fun track(title: String = "Track") = PlaybackTrackResponse(
         contentId = "vid-1",
         contentType = "youtube",
         title = title,
         url = "https://example.com/watch?v=vid-1",
         durationMilliseconds = 120_000L,
-        thumbnailUrl = null,
+        artworkUrl = null,
         playCount = 0,
-        cachedAt = null,
-        lastPlayedAt = null,
     )
 
     private fun snapshot(
         guildId: String = "g1",
         version: Long = 10L,
-        nowPlaying: TrackResponse? = track(),
+        nowPlaying: PlaybackTrackResponse? = track(),
     ) = QueueSnapshotResponse(
         guildId = guildId,
         voiceChannelId = "c1",

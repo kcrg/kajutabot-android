@@ -12,7 +12,6 @@ class SearchModelsTest {
             """
             {
               "query": "demo",
-              "source": "YouTube",
               "items": [
                 {
                   "input": "https://www.youtube.com/watch?v=abc",
@@ -22,13 +21,9 @@ class SearchModelsTest {
                     "title": "Demo",
                     "url": "https://www.youtube.com/watch?v=abc",
                     "durationMilliseconds": 60000,
-                    "thumbnailUrl": "https://i.ytimg.com/vi/abc/hqdefault.jpg",
-                    "playCount": 0,
-                    "cachedAt": null,
-                    "lastPlayedAt": null
+                    "artworkUrl": "https://i.ytimg.com/vi/abc/hqdefault.jpg"
                   },
                   "metricCount": 1234,
-                  "metricLabel": null,
                   "metricCaption": "views",
                   "dateLabel": "2026"
                 }
@@ -39,7 +34,7 @@ class SearchModelsTest {
 
         assertEquals(
             "https://i.ytimg.com/vi/abc/hqdefault.jpg",
-            response.items.single().track.thumbnailUrl,
+            response.items.single().track.artworkUrl,
         )
     }
 }

@@ -16,7 +16,7 @@ import androidx.compose.ui.test.moveBy
 import androidx.compose.ui.test.up
 import androidx.compose.ui.test.advanceEventTime
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
@@ -31,16 +31,14 @@ import org.junit.runner.RunWith
 class PlayerActionsTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    private fun track(title: String) = TrackResponse(
+    private fun track(title: String) = PlaybackTrackResponse(
         contentId = title,
         contentType = "YouTube",
         title = title,
         url = "https://www.youtube.com/watch?v=$title",
         durationMilliseconds = 60_000,
-        thumbnailUrl = null,
+        artworkUrl = null,
         playCount = 0,
-        cachedAt = null,
-        lastPlayedAt = null,
     )
 
     private fun state(nowPlaying: Boolean = false) = PlayerScreenState(

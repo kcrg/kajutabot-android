@@ -1,7 +1,6 @@
 package com.tryniecki.kajutabot.api.model.queue
 
-import com.tryniecki.kajutabot.api.model.common.ApiOperationResponse
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
 import kotlinx.serialization.Serializable
 
@@ -9,14 +8,14 @@ import kotlinx.serialization.Serializable
 data class QueueEntryResponse(
     val entryId: String,
     val position: Int,
-    val track: TrackResponse,
+    val track: PlaybackTrackResponse,
 )
 
 @Serializable
 data class QueueSnapshotResponse(
     val guildId: String,
     val voiceChannelId: String?,
-    val nowPlaying: TrackResponse?,
+    val nowPlaying: PlaybackTrackResponse?,
     val nowPlayingFromRadio: Boolean,
     val radio: RadioStateResponse,
     val pendingEntries: List<QueueEntryResponse>,
@@ -34,19 +33,12 @@ data class EnqueueRequest(
 )
 
 @Serializable
-data class EnqueueResponse(
-    val operation: ApiOperationResponse,
-    val snapshot: QueueSnapshotResponse,
-)
-
-@Serializable
 data class QueueMutationRequest(
     val expectedVersion: Long? = null,
 )
 
 @Serializable
 data class MoveQueueEntryRequest(
-    val entryId: String,
     val newPosition: Int,
     val expectedVersion: Long? = null,
 )
@@ -63,8 +55,3 @@ data class SetQueueRepeatRequest(
     val expectedVersion: Long? = null,
 )
 
-@Serializable
-data class QueueMutationResponse(
-    val operation: ApiOperationResponse,
-    val snapshot: QueueSnapshotResponse,
-)

@@ -1,6 +1,6 @@
 package com.tryniecki.kajutabot.ui.player
 
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -23,7 +23,7 @@ data class PlaybackProgressAnchor(
 )
 
 /** Stable key of one concrete playback instance (track + its start moment). */
-fun playbackIdentity(track: TrackResponse, startedAt: String?): String =
+fun playbackIdentity(track: PlaybackTrackResponse, startedAt: String?): String =
     "${track.contentType}:${track.contentId}:$startedAt"
 
 /** Parses a backend ISO-8601 timestamp to epoch millis, or null when unusable. */
@@ -112,7 +112,7 @@ data class NowPlayingSlide(
  * track until the next concrete track is known instead of flashing an idle state.
  */
 data class NowPlayingPresentation(
-    val track: TrackResponse,
+    val track: PlaybackTrackResponse,
     val startedAt: String?,
 )
 
@@ -146,7 +146,7 @@ fun nowPlayingSlide(
         hasTrack = true,
         title = track.title,
         hint = formatDuration(track.durationMilliseconds),
-        thumbnailUrl = track.thumbnailUrl,
+        thumbnailUrl = track.artworkUrl,
         artworkAccentColor = track.artworkAccentColor,
         durationMs = track.durationMilliseconds,
         startedAt = presentation.startedAt,

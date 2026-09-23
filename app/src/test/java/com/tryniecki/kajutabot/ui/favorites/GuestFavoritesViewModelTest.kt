@@ -4,7 +4,7 @@ import com.tryniecki.kajutabot.api.client.KajutaBotApiClientFactory
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
 import com.tryniecki.kajutabot.api.model.auth.SessionType
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.auth.AppConfig
 import com.tryniecki.kajutabot.auth.FakeAuthApi
 import com.tryniecki.kajutabot.auth.FakePendingStorage
@@ -33,10 +33,10 @@ import java.time.Instant
 @Config(sdk = [36])
 @OptIn(ExperimentalCoroutinesApi::class)
 class GuestFavoritesViewModelTest {
-    private val favoriteJson = """{"discordUserId":"guest-owner","contentUrl":"https://example.com/track","title":"Demo","addedAt":"2026-09-20T00:00:00Z"}"""
-    private val track = TrackResponse(
+    private val favoriteJson = """{"contentUrl":"https://example.com/track","title":"Demo","addedAt":"2026-09-20T00:00:00Z"}"""
+    private val track = PlaybackTrackResponse(
         "demo", "YouTube", "Demo", "https://example.com/track", 60_000,
-        null, 0, null, null,
+        null, 0,
     )
 
     @Test
@@ -66,11 +66,11 @@ class GuestFavoritesViewModelTest {
                 { key, value -> savedShuffle[key] = value },
             )
             withTimeout(5_000) { viewModel.ui.first { !it.isLoading } }
-            assertEquals("/api/v1/users/me/favorites", server.takeRequest().path)
+            assertEquals("/api/v1/app/users/me/favorites", server.takeRequest().path)
             server.enqueue(MockResponse().setBody("[]"))
             viewModel.refresh()
             withTimeout(5_000) { viewModel.ui.first { !it.isLoading } }
-            assertEquals("/api/v1/users/me/favorites", server.takeRequest().path)
+            assertEquals("/api/v1/app/users/me/favorites", server.takeRequest().path)
             viewModel.setShuffle(true)
             assertEquals(true, savedShuffle["guest"])
 
@@ -79,7 +79,7 @@ class GuestFavoritesViewModelTest {
             withTimeout(5_000) { viewModel.ui.first { it.favorites.size == 1 && !it.isMutating } }
             val add = server.takeRequest()
             assertEquals("POST", add.method)
-            assertEquals("/api/v1/users/me/favorites", add.path)
+            assertEquals("/api/v1/app/users/me/favorites", add.path)
             assertEquals("Bearer guest-jwt", add.getHeader("Authorization"))
             assertTrue(viewModel.isFavorite(track))
 
@@ -87,7 +87,7 @@ class GuestFavoritesViewModelTest {
             viewModel.queueAll()
             withTimeout(5_000) { viewModel.ui.first { it.info == "Dodano ulubione do kolejki." } }
             val queue = server.takeRequest()
-            assertEquals("/api/v1/users/me/favorites/queue", queue.path)
+            assertEquals("/api/v1/app/users/me/favorites/queue", queue.path)
             assertTrue(queue.body.readUtf8().contains("\"shuffle\":true"))
 
             server.enqueue(MockResponse().setResponseCode(204))
@@ -95,7 +95,7 @@ class GuestFavoritesViewModelTest {
             withTimeout(5_000) { viewModel.ui.first { it.favorites.isEmpty() && !it.isMutating } }
             val delete = server.takeRequest()
             assertEquals("DELETE", delete.method)
-            assertTrue(delete.path!!.startsWith("/api/v1/users/me/favorites?"))
+            assertTrue(delete.path!!.startsWith("/api/v1/app/users/me/favorites?"))
             assertFalse(viewModel.isFavorite(track))
         } finally {
             server.shutdown()
@@ -150,5 +150,5 @@ class GuestFavoritesViewModelTest {
         }
     }
 
-    private fun queueResponseJson() = """{"operation":{"succeeded":true},"snapshot":{"guildId":"demo-guild","voiceChannelId":"voice","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingDurationMilliseconds":0,"version":1}}"""
+    private fun queueResponseJson() = """{"guildId":"demo-guild","voiceChannelId":"voice","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingDurationMilliseconds":0,"version":1}"""
 }

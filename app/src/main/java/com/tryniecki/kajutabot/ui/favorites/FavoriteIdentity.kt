@@ -1,6 +1,6 @@
 package com.tryniecki.kajutabot.ui.favorites
 
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -29,7 +29,7 @@ internal fun favoriteIdentity(value: String?): String {
     return input
 }
 
-internal fun TrackResponse.favoriteIdentities(): Set<String> = buildSet {
+internal fun PlaybackTrackResponse.favoriteIdentities(): Set<String> = buildSet {
     add(favoriteIdentity(url))
     when (contentType.lowercase(Locale.ROOT)) {
         "youtube" -> add(favoriteIdentity("yt:$contentId"))

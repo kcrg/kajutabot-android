@@ -4,7 +4,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class FavoriteResponse(
-    val discordUserId: String,
     val contentUrl: String,
     val title: String,
     val addedAt: String,

@@ -88,7 +88,7 @@ import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
@@ -187,8 +187,8 @@ fun PlayerScreen(
     onRemoveEntry: (String) -> Unit,
     onMoveEntry: (String, Int, Long) -> Unit,
     onClearQueue: () -> Unit,
-    isFavorite: (TrackResponse) -> Boolean,
-    onToggleFavorite: (TrackResponse) -> Unit,
+    isFavorite: (PlaybackTrackResponse) -> Boolean,
+    onToggleFavorite: (PlaybackTrackResponse) -> Unit,
     favoritesBusy: Boolean,
     onDismissMessage: () -> Unit,
     onAddTrackOpen: () -> Unit,
@@ -500,7 +500,7 @@ fun PlayerScreen(
                                         }
                                     }
                                     TrackArtwork(
-                                        imageUrl = entry.track.thumbnailUrl,
+                                        imageUrl = entry.track.artworkUrl,
                                         modifier = Modifier.size(56.dp),
                                     )
                                 }
@@ -581,8 +581,8 @@ private fun NowPlayingCard(
     activeControlAction: PlayerControlAction?,
     onSkip: () -> Unit,
     onStop: () -> Unit,
-    isFavorite: (TrackResponse) -> Boolean,
-    onToggleFavorite: (TrackResponse) -> Unit,
+    isFavorite: (PlaybackTrackResponse) -> Boolean,
+    onToggleFavorite: (PlaybackTrackResponse) -> Unit,
     favoritesBusy: Boolean,
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,

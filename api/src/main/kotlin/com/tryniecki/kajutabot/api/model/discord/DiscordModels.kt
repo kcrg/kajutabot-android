@@ -18,11 +18,3 @@ data class DiscordVoiceChannelResponse(
     val userCount: Int,
     val isConnected: Boolean,
 )
-
-@Serializable
-data class DiscordStatusResponse(
-    val isConnected: Boolean,
-    val startedAt: String?,
-    val guildCount: Int,
-    val cacheInitialized: Boolean,
-)

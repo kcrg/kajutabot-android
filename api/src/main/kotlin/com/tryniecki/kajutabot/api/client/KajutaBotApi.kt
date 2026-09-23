@@ -1,22 +1,17 @@
 package com.tryniecki.kajutabot.api.client
 
-import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
-import com.tryniecki.kajutabot.api.model.common.HealthResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest
 import com.tryniecki.kajutabot.api.model.favorites.FavoriteResponse
 import com.tryniecki.kajutabot.api.model.favorites.QueueFavoritesRequest
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
-import com.tryniecki.kajutabot.api.model.queue.EnqueueResponse
 import com.tryniecki.kajutabot.api.model.queue.MoveQueueEntryRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
-import com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
 import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
 import com.tryniecki.kajutabot.api.model.radio.EnableRadioRequest
-import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
 import com.tryniecki.kajutabot.api.model.search.SearchResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -29,19 +24,13 @@ import retrofit2.http.Query
 /**
  * Retrofit contract for the mobile-facing, user-scoped subset of KajutaBot Control API v1.
  *
- * Paths are relative to a base URL ending with `/api/v1/`.
+ * Paths are relative to a base URL ending with `/api/v1/app/`.
  * All calls expect `Authorization: Bearer <access-token>` (added by the factory interceptor).
  * The mobile client never sends its own discordUserId for self-scoped data; identity comes from JWT.
  */
 interface KajutaBotApi {
-    @GET("health")
-    suspend fun getHealth(): HealthResponse
-
     @POST("auth/logout")
     suspend fun logout()
-
-    @GET("auth/me")
-    suspend fun getMe(): AuthUserResponse
 
     @GET("users/me/guilds")
     suspend fun getMyGuilds(): List<DiscordGuildResponse>
@@ -60,62 +49,57 @@ interface KajutaBotApi {
     suspend fun enqueue(
         @Path("guildId") guildId: String,
         @Body request: EnqueueRequest,
-    ): EnqueueResponse
+    ): QueueSnapshotResponse
 
     @DELETE("guilds/{guildId}/queue/items/{entryId}")
     suspend fun removeQueueEntry(
         @Path("guildId") guildId: String,
         @Path("entryId") entryId: String,
         @Query("expectedVersion") expectedVersion: Long? = null,
-    ): QueueMutationResponse
+    ): QueueSnapshotResponse
 
     @PUT("guilds/{guildId}/queue/items/{entryId}/position")
     suspend fun moveQueueEntry(
         @Path("guildId") guildId: String,
         @Path("entryId") entryId: String,
         @Body request: MoveQueueEntryRequest,
-    ): QueueMutationResponse
+    ): QueueSnapshotResponse
 
     @DELETE("guilds/{guildId}/queue/items")
     suspend fun clearPendingQueue(
         @Path("guildId") guildId: String,
         @Query("expectedVersion") expectedVersion: Long? = null,
-    ): QueueMutationResponse
+    ): QueueSnapshotResponse
 
     @POST("guilds/{guildId}/queue/skip")
     suspend fun skip(
         @Path("guildId") guildId: String,
         @Body request: SkipQueueRequest,
-    ): QueueMutationResponse
+    ): QueueSnapshotResponse
 
     @PUT("guilds/{guildId}/queue/repeat")
     suspend fun setRepeat(
         @Path("guildId") guildId: String,
         @Body request: SetQueueRepeatRequest,
-    ): QueueMutationResponse
+    ): QueueSnapshotResponse
 
     @POST("guilds/{guildId}/queue/stop")
     suspend fun stop(
         @Path("guildId") guildId: String,
         @Body request: QueueMutationRequest,
-    ): QueueMutationResponse
-
-    @GET("guilds/{guildId}/radio")
-    suspend fun getRadioState(
-        @Path("guildId") guildId: String,
-    ): RadioStateResponse
+    ): QueueSnapshotResponse
 
     @PUT("guilds/{guildId}/radio")
     suspend fun enableRadio(
         @Path("guildId") guildId: String,
         @Body request: EnableRadioRequest,
-    ): QueueMutationResponse
+    ): QueueSnapshotResponse
 
     @DELETE("guilds/{guildId}/radio")
     suspend fun disableRadio(
         @Path("guildId") guildId: String,
         @Query("expectedVersion") expectedVersion: Long? = null,
-    ): QueueMutationResponse
+    ): QueueSnapshotResponse
 
     @GET("search")
     suspend fun search(
@@ -140,5 +124,5 @@ interface KajutaBotApi {
     @POST("users/me/favorites/queue")
     suspend fun queueFavorites(
         @Body request: QueueFavoritesRequest,
-    ): QueueMutationResponse
+    ): QueueSnapshotResponse
 }

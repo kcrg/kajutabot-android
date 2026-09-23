@@ -10,7 +10,7 @@ import com.tryniecki.kajutabot.auth.SessionManager
 import com.tryniecki.kajutabot.prefs.favoritesPreferenceOwnerKey
 import com.tryniecki.kajutabot.api.model.favorites.FavoriteResponse
 import com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.favorites.QueueFavoritesRequest
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
 import com.tryniecki.kajutabot.ui.userMessageForError
@@ -102,17 +102,17 @@ class FavoritesViewModel(
         _toggleMessages.tryEmit(if (enabled) "Losowanie włączone" else "Losowanie wyłączone")
     }
 
-    fun isFavorite(track: TrackResponse): Boolean =
+    fun isFavorite(track: PlaybackTrackResponse): Boolean =
         track.favoriteIdentities().any(favoriteIdentities::contains)
 
-    fun toggle(track: TrackResponse) {
+    fun toggle(track: PlaybackTrackResponse) {
         if (_ui.value.isMutating || _ui.value.isLoading) return
         val identities = track.favoriteIdentities()
         val existing = _ui.value.favorites.firstOrNull { favoriteIdentity(it.contentUrl) in identities }
         if (existing != null) {
             delete(existing.contentUrl, toggleFeedback = true)
         } else {
-            add(track.url, track.title, track.thumbnailUrl, toggleFeedback = true)
+            add(track.url, track.title, track.artworkUrl, toggleFeedback = true)
         }
     }
 
@@ -195,10 +195,7 @@ class FavoritesViewModel(
                 val response = sessionManager.withApiForSession(sessionIdentity) {
                     it.queueFavorites(QueueFavoritesRequest(guildId, channelId, shuffle = shuffle))
                 }
-                _ui.update {
-                    if (response.operation.succeeded) it.copy(isMutating = false, info = "Dodano ulubione do kolejki.")
-                    else it.copy(isMutating = false, error = response.operation.message ?: "Nie udało się dodać ulubionych.")
-                }
+                _ui.update { it.copy(isMutating = false, info = "Dodano ulubione do kolejki.") }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
             }
@@ -220,10 +217,7 @@ class FavoritesViewModel(
                     val queue = api.getQueue(guildId)
                     api.enqueue(guildId, EnqueueRequest(channelId, listOf(contentUrl), queue.version))
                 }
-                _ui.update {
-                    if (response.operation.succeeded) it.copy(isMutating = false, info = "Dodano do kolejki.")
-                    else it.copy(isMutating = false, error = response.operation.message ?: "Nie udało się dodać utworu.")
-                }
+                _ui.update { it.copy(isMutating = false, info = "Dodano do kolejki.") }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
             }

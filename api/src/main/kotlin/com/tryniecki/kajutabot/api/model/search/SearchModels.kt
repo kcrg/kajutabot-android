@@ -1,14 +1,13 @@
 package com.tryniecki.kajutabot.api.model.search
 
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.SearchTrackResponse
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class SearchItemResponse(
     val input: String,
-    val track: TrackResponse,
+    val track: SearchTrackResponse,
     val metricCount: Long,
-    val metricLabel: String?,
     val metricCaption: String,
     val dateLabel: String? = null,
 )
@@ -16,6 +15,5 @@ data class SearchItemResponse(
 @Serializable
 data class SearchResponse(
     val query: String,
-    val source: String,
     val items: List<SearchItemResponse>,
 )

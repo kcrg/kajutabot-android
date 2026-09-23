@@ -16,7 +16,7 @@ import com.tryniecki.kajutabot.ui.player.NowPlayingSlide
 import com.tryniecki.kajutabot.ui.player.AddTrackScreen
 import com.tryniecki.kajutabot.ui.player.AddTrackUiState
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
 import org.junit.Assert.assertEquals
@@ -28,10 +28,9 @@ import org.junit.runner.RunWith
 class GuestUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    private val playing = TrackResponse(
+    private val playing = PlaybackTrackResponse(
         contentId = "demo", contentType = "YouTube", title = "Demo", url = "https://example.com/demo",
-        durationMilliseconds = 60_000, thumbnailUrl = null, playCount = 0,
-        cachedAt = null, lastPlayedAt = null,
+        durationMilliseconds = 60_000, artworkUrl = null, playCount = 0,
     )
 
     private fun playingState() = PlayerScreenState(
@@ -102,7 +101,10 @@ class GuestUiTest {
             MaterialTheme {
                 MiniPlayer(
                     slide = NowPlayingSlide("demo", true, "Demo", "", null, null, 60_000, null),
-                    track = playing,
+                    track = com.tryniecki.kajutabot.api.model.common.SearchTrackResponse(
+                                playing.contentId, playing.contentType, playing.title, playing.url,
+                                playing.durationMilliseconds, playing.artworkUrl,
+                            ),
                     isMutating = false,
                     activeControlAction = null,
                     isFavorite = false,
@@ -124,9 +126,11 @@ class GuestUiTest {
                     ui = AddTrackUiState(searchQuery = "Demo", searchResults = listOf(
                         SearchItemResponse(
                             input = "Demo",
-                            track = playing,
+                            track = com.tryniecki.kajutabot.api.model.common.SearchTrackResponse(
+                                playing.contentId, playing.contentType, playing.title, playing.url,
+                                playing.durationMilliseconds, playing.artworkUrl,
+                            ),
                             metricCount = 7,
-                            metricLabel = null,
                             metricCaption = "wyświetleń",
                         ),
                     )),

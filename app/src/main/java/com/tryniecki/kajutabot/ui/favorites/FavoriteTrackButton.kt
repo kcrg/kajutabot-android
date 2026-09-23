@@ -3,15 +3,15 @@ package com.tryniecki.kajutabot.ui.favorites
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.components.TonalToggleIconButton
 
 @Composable
 fun FavoriteTrackButton(
-    track: TrackResponse,
+    track: PlaybackTrackResponse,
     checked: Boolean,
     enabled: Boolean,
-    onToggle: (TrackResponse) -> Unit,
+    onToggle: (PlaybackTrackResponse) -> Unit,
 ) {
     TonalToggleIconButton(
         checked = checked,

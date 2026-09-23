@@ -29,7 +29,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
@@ -66,12 +66,12 @@ fun shouldShowMiniPlayer(
 @Composable
 fun MiniPlayer(
     slide: NowPlayingSlide,
-    track: TrackResponse,
+    track: PlaybackTrackResponse,
     isMutating: Boolean,
     activeControlAction: PlayerControlAction?,
     isFavorite: Boolean,
     favoritesBusy: Boolean,
-    onToggleFavorite: (TrackResponse) -> Unit,
+    onToggleFavorite: (PlaybackTrackResponse) -> Unit,
     onOpenPlayer: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,

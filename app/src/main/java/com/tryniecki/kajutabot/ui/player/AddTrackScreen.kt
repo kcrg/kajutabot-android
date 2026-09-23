@@ -56,7 +56,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.tryniecki.kajutabot.BuildConfig
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
+import com.tryniecki.kajutabot.api.model.common.SearchTrackResponse
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
@@ -70,7 +71,7 @@ import java.util.Locale
  * Full-screen modal "add track" page shown above the player.
  * Reuses [PlayerViewModel] smart input: URLs enqueue directly, text searches via
  * `GET /search`. Search-result artwork comes exclusively from the backend-provided
- * `SearchItemResponse.track.thumbnailUrl`.
+ * `SearchItemResponse.track.artworkUrl`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,8 +83,8 @@ fun AddTrackScreen(
     onSubmit: () -> Unit,
     onHistoryClick: (String) -> Unit,
     onResultClick: (SearchItemResponse) -> Unit,
-    isFavorite: (TrackResponse) -> Boolean,
-    onToggleFavorite: (TrackResponse) -> Unit,
+    isFavorite: (PlaybackTrackResponse) -> Boolean,
+    onToggleFavorite: (PlaybackTrackResponse) -> Unit,
     favoritesBusy: Boolean,
     onDismissMessage: () -> Unit,
 ) {
@@ -268,6 +269,7 @@ fun AddTrackScreen(
                     }
                 } else if (ui.searchResults.isNotEmpty()) {
                     items(ui.searchResults, key = { it.input }) { item ->
+                        val favoriteTrack = item.track.asFavoriteTrack()
                         Card(
                             modifier = Modifier
                                 .animateItem()
@@ -281,7 +283,7 @@ fun AddTrackScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 leadingContent = {
                                     SearchResultArtwork(
-                                        imageUrl = item.track.thumbnailUrl,
+                                        imageUrl = item.track.artworkUrl,
                                         modifier = Modifier.size(64.dp),
                                     )
                                 },
@@ -309,8 +311,8 @@ fun AddTrackScreen(
                                 },
                                 trailingContent = {
                                     FavoriteTrackButton(
-                                        track = item.track,
-                                        checked = isFavorite(item.track),
+                                        track = favoriteTrack,
+                                        checked = isFavorite(favoriteTrack),
                                         enabled = !favoritesBusy,
                                         onToggle = onToggleFavorite,
                                     )
@@ -413,7 +415,6 @@ internal fun shouldShowSearchEmptyState(
 
 internal fun searchResultUploadLabel(item: SearchItemResponse): String? =
     item.dateLabel?.takeIf { it.isNotBlank() }
-        ?: item.metricLabel?.takeIf { it.isNotBlank() }
 
 internal fun formatSearchResultMetric(
     item: SearchItemResponse,
@@ -504,3 +505,7 @@ private fun SearchResultSkeleton(modifier: Modifier = Modifier) {
         }
     }
 }
+
+private fun SearchTrackResponse.asFavoriteTrack(): PlaybackTrackResponse = PlaybackTrackResponse(
+    contentId, contentType, title, url, durationMilliseconds, artworkUrl, playCount = 0,
+)

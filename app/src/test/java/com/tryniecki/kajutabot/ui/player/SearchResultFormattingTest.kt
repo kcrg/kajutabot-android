@@ -1,6 +1,6 @@
 package com.tryniecki.kajutabot.ui.player
 
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.SearchTrackResponse
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import java.util.Locale
 import org.junit.Assert.assertEquals
@@ -11,16 +11,13 @@ import org.junit.Test
 
 class SearchResultFormattingTest {
 
-    private val track = TrackResponse(
+    private val track = SearchTrackResponse(
         contentId = "video-id",
         contentType = "YouTube",
         title = "Demo",
         url = "https://www.youtube.com/watch?v=video-id",
         durationMilliseconds = 60_000,
-        thumbnailUrl = null,
-        playCount = 0,
-        cachedAt = null,
-        lastPlayedAt = null,
+        artworkUrl = null,
     )
 
     @Test
@@ -29,7 +26,6 @@ class SearchResultFormattingTest {
             input = track.url,
             track = track,
             metricCount = 1_234_567,
-            metricLabel = "Upload 2026-09-21",
             metricCaption = "views",
             dateLabel = "Upload 2026-09-21",
         )
@@ -39,17 +35,16 @@ class SearchResultFormattingTest {
     }
 
     @Test
-    fun `falls back to metric label when date label is absent`() {
+    fun `omits upload label when date label is absent`() {
         val item = SearchItemResponse(
             input = track.url,
             track = track,
             metricCount = 42,
-            metricLabel = "Upload 1987-10-25",
             metricCaption = "views",
             dateLabel = null,
         )
 
-        assertEquals("Upload 1987-10-25", searchResultUploadLabel(item))
+        assertNull(searchResultUploadLabel(item))
     }
 
     @Test

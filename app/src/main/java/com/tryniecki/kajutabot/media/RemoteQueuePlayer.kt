@@ -48,9 +48,9 @@ class RemoteQueuePlayer(
             .setTitle(track.title)
             .setDisplayTitle(track.title)
             .apply {
-                val artwork = resolveArtworkSource(track.thumbnailUrl)
+                val artwork = resolveArtworkSource(track.artworkUrl)
                 if (artwork is ArtworkSource.Remote) setArtworkUri(Uri.parse(artwork.url))
-                // The Control API's TrackResponse has no artist/author field.
+                // The Control API's PlaybackTrackResponse has no artist/author field.
             }
             .build()
         val item = MediaItem.Builder()

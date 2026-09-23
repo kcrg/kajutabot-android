@@ -18,7 +18,7 @@ import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
 import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
-import com.tryniecki.kajutabot.api.model.common.TrackResponse
+import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.userMessageForError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -153,7 +153,7 @@ data class AddTrackUiState(
 
 data class MiniPlayerState(
     val slide: NowPlayingSlide,
-    val track: TrackResponse,
+    val track: PlaybackTrackResponse,
     val isMutating: Boolean,
     val activeControlAction: PlayerControlAction?,
 )
@@ -747,7 +747,7 @@ class PlayerViewModel(
                 val response = sessionManager.withApiForSession(sessionIdentity) {
                     it.enqueue(guildId, EnqueueRequest(channelId, inputs, version))
                 }
-                applyQueueSnapshot(response.snapshot)
+                applyQueueSnapshot(response)
                 // Query/results stay intact so the AddTrack exit transition renders stable
                 // content; the shell clears them after the AddTrack route closes.
                 _ui.update { it.copy(isMutating = false) }
@@ -779,7 +779,7 @@ class PlayerViewModel(
         mutate(
             controlAction = PlayerControlAction.REPEAT,
             successMessage = { response ->
-                if (response.snapshot.isRepeatEnabled) "Powtarzanie włączone" else "Powtarzanie wyłączone"
+                if (response.isRepeatEnabled) "Powtarzanie włączone" else "Powtarzanie wyłączone"
             },
         ) { api, version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
@@ -796,7 +796,7 @@ class PlayerViewModel(
             // restart the media service for a track that no longer exists.
             forcePresentationIdleOnSuccess = true,
             successMessage = { response ->
-                if (response.snapshot.radio.isEnabled) "Radio włączone" else "Radio wyłączone"
+                if (response.radio.isEnabled) "Radio włączone" else "Radio wyłączone"
             },
         ) { api, _ ->
             val queue = _ui.value.queue ?: return@mutate null
@@ -821,11 +821,8 @@ class PlayerViewModel(
                 val response = sessionManager.withApiForSession(sessionIdentity) {
                     it.removeQueueEntry(guildId, entryId, version)
                 }
-                applyQueueSnapshot(response.snapshot)
-                _ui.update {
-                    if (response.operation.succeeded) it.copy(isMutating = false)
-                    else it.copy(isMutating = false, error = response.operation.message ?: "Nie udało się usunąć utworu z kolejki.")
-                }
+                applyQueueSnapshot(response)
+                _ui.update { it.copy(isMutating = false) }
             } catch (e: Exception) {
                 handleMutationError(e)
             }
@@ -845,14 +842,11 @@ class PlayerViewModel(
                     it.moveQueueEntry(
                         guildId,
                         entryId,
-                        MoveQueueEntryRequest(entryId, newPosition, expectedVersion),
+                        MoveQueueEntryRequest(newPosition, expectedVersion),
                     )
                 }
-                applyQueueSnapshot(response.snapshot)
-                _ui.update {
-                    if (response.operation.succeeded) it.copy(isMutating = false)
-                    else it.copy(isMutating = false, error = response.operation.message ?: "Nie udało się zmienić pozycji utworu.")
-                }
+                applyQueueSnapshot(response)
+                _ui.update { it.copy(isMutating = false) }
             } catch (e: Exception) {
                 handleMutationError(e)
             }
@@ -869,8 +863,8 @@ class PlayerViewModel(
     private fun mutate(
         controlAction: PlayerControlAction? = null,
         forcePresentationIdleOnSuccess: Boolean = false,
-        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse) -> String?)? = null,
-        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse?,
+        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse) -> String?)? = null,
+        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse?,
     ) {
         if (controlAction != null) {
             val accepted = synchronized(pendingControlActions) {
@@ -901,8 +895,8 @@ class PlayerViewModel(
     private suspend fun performMutation(
         controlAction: PlayerControlAction?,
         forcePresentationIdleOnSuccess: Boolean,
-        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse) -> String?)?,
-        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueMutationResponse?,
+        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse) -> String?)?,
+        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse?,
     ) {
         _ui.update {
             it.copy(
@@ -918,7 +912,7 @@ class PlayerViewModel(
                 return
             }
             applyQueueSnapshot(
-                response.snapshot,
+                response,
                 forcePresentationIdle = forcePresentationIdleOnSuccess,
             )
             _ui.update { it.copy(isMutating = false, activeControlAction = null) }
