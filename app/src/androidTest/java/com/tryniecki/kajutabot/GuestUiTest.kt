@@ -101,10 +101,7 @@ class GuestUiTest {
             MaterialTheme {
                 MiniPlayer(
                     slide = NowPlayingSlide("demo", true, "Demo", null, null, 60_000, null),
-                    track = com.tryniecki.kajutabot.api.model.common.SearchTrackResponse(
-                                playing.contentId, playing.contentType, playing.title, playing.url,
-                                playing.durationMilliseconds, playing.artworkUrl,
-                            ),
+                    track = playing,
                     isMutating = false,
                     activeControlAction = null,
                     isFavorite = false,

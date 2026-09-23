@@ -1,5 +1,7 @@
 package com.tryniecki.kajutabot.ui.favorites
 
+import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.text.uiText
 import com.tryniecki.kajutabot.api.client.KajutaBotApiClientFactory
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
@@ -85,7 +87,7 @@ class GuestFavoritesViewModelTest {
 
             server.enqueue(MockResponse().setBody(queueResponseJson()))
             viewModel.queueAll()
-            withTimeout(5_000) { viewModel.ui.first { it.info == "Dodano ulubione do kolejki." } }
+            withTimeout(5_000) { viewModel.ui.first { it.info == uiText(R.string.favorites_queued_all) } }
             val queue = server.takeRequest()
             assertEquals("/api/v1/app/users/me/favorites/queue", queue.path)
             assertTrue(queue.body.readUtf8().contains("\"shuffle\":true"))
