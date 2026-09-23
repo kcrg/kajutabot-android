@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
@@ -22,7 +23,6 @@ import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.RealtimeOwner
-import com.tryniecki.kajutabot.ui.player.nowPlayingPresentationOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,6 +41,11 @@ class RemotePlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this)
+                .build()
+                .apply { setSmallIcon(R.drawable.ic_notification_kajutabot) },
+        )
         container = (application as KajutaBotApplication).container
         val identity = container.sessionManager.sessionIdentity.value ?: run {
             stopSelf()
@@ -56,7 +61,9 @@ class RemotePlaybackService : MediaSessionService() {
             if (!state.isMutating || state.activeControlAction != null) playerState.skip()
         }
         remotePlayer = player
-        player.update(playerState.ui.value.queue?.nowPlayingPresentationOrNull())
+        // Project the same transition-stabilized item as the app UI. Queue mutation
+        // responses may briefly expose nowPlaying=null while the next track starts.
+        player.update(playerState.ui.value.effectiveNowPlaying)
         val session = MediaSession.Builder(this, player)
             .setCallback(RemoteSessionCallback(playerState, favoritesState))
             .setMediaButtonPreferences(mediaButtons(this, playerState, favoritesState))
@@ -75,10 +82,11 @@ class RemotePlaybackService : MediaSessionService() {
 
         scope.launch {
             playerState.ui.collectLatest { state ->
-                player.update(state.queue?.nowPlayingPresentationOrNull())
+                // Never bounce Media3 through STATE_IDLE during a normal track transition.
+                player.update(state.effectiveNowPlaying)
                 session.setMediaButtonPreferences(mediaButtons(this@RemotePlaybackService, playerState, favoritesState))
                 // Stop foreground playback promptly when the bot disconnects.
-                if (state.queue != null && state.queue.nowPlaying == null && state.queue.voiceChannelId == null) {
+                if (state.queue != null && state.effectiveNowPlaying == null && state.queue.voiceChannelId == null) {
                     stopSelf()
                 }
             }
@@ -196,21 +204,43 @@ class RemotePlaybackService : MediaSessionService() {
             val isFavorite = favorites.isFavorite(track)
             return listOf(
                 CommandButton.Builder(CommandButton.ICON_NEXT)
+                    .setCustomIconResId(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_skip_forward_outline)
                     .setDisplayName(context.getString(R.string.action_skip_track))
                     .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT)
                     .setEnabled(!playbackControlsBlocked)
                     .build(),
                 CommandButton.Builder(if (queue.isRepeatEnabled) CommandButton.ICON_REPEAT_ALL else CommandButton.ICON_REPEAT_OFF)
+                    .setCustomIconResId(
+                        if (queue.isRepeatEnabled) {
+                            com.composables.icons.tabler.outline.R.drawable.tabler_ic_repeat_outline
+                        } else {
+                            com.composables.icons.tabler.outline.R.drawable.tabler_ic_repeat_off_outline
+                        },
+                    )
                     .setDisplayName(context.getString(if (queue.isRepeatEnabled) R.string.player_repeat_disable else R.string.player_repeat_enable))
                     .setSessionCommand(REPEAT)
                     .setEnabled(!playbackControlsBlocked)
                     .build(),
                 CommandButton.Builder(CommandButton.ICON_RADIO)
+                    .setCustomIconResId(
+                        if (queue.radio.isEnabled) {
+                            com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline
+                        } else {
+                            com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_off_outline
+                        },
+                    )
                     .setDisplayName(context.getString(if (queue.radio.isEnabled) R.string.player_radio_disable else R.string.player_radio_enable))
                     .setSessionCommand(RADIO)
                     .setEnabled(!playbackControlsBlocked && (queue.radio.isEnabled || state.selectedVoiceChannelId != null))
                     .build(),
                 CommandButton.Builder(if (isFavorite) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                    .setCustomIconResId(
+                        if (isFavorite) {
+                            com.composables.icons.tabler.outline.R.drawable.tabler_ic_heart_outline
+                        } else {
+                            com.composables.icons.tabler.outline.R.drawable.tabler_ic_heart_plus_outline
+                        },
+                    )
                     .setDisplayName(context.getString(if (isFavorite) R.string.action_remove_favorite else R.string.action_add_favorite))
                     .setSessionCommand(FAVORITE)
                     .setEnabled(!playbackControlsBlocked && !favorites.ui.value.isMutating && !favorites.ui.value.isLoading)
