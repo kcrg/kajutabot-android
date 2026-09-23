@@ -7,6 +7,7 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import com.tryniecki.kajutabot.auth.GuestLoginResult
+import com.tryniecki.kajutabot.ui.text.resolve
 import kotlinx.coroutines.launch
 
 /**
@@ -37,13 +38,13 @@ class BaselineProfileSetupActivity : ComponentActivity() {
         if (sessionManager.currentUserSession() == null) {
             when (val result = sessionManager.continueAsGuest()) {
                 GuestLoginResult.SignedIn -> Unit
-                is GuestLoginResult.Failed -> error(result.message)
-                GuestLoginResult.Superseded -> error("Logowanie gościa zostało zastąpione przez inną zmianę sesji.")
+                is GuestLoginResult.Failed -> error(result.message.resolve(this))
+                GuestLoginResult.Superseded -> error("Guest login was superseded by another session change.")
             }
         }
 
         val session = checkNotNull(sessionManager.currentUserSession()) {
-            "Brak aktywnej sesji po przygotowaniu Baseline Profile."
+            "No active session after Baseline Profile setup."
         }
 
         // The generator profiles the returning-user path, not first-run onboarding. Keep selection

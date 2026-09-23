@@ -2,6 +2,7 @@ package com.tryniecki.kajutabot.ui.onboarding
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
@@ -42,9 +43,11 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
@@ -52,8 +55,8 @@ import com.tryniecki.kajutabot.ui.components.DiscordTargetPicker
 import kotlinx.coroutines.launch
 
 private data class OnboardingPage(
-    val title: String,
-    val description: String,
+    @StringRes val titleResId: Int,
+    @StringRes val descriptionResId: Int,
     val visual: OnboardingVisual,
 )
 
@@ -68,45 +71,17 @@ private enum class OnboardingVisual {
 }
 
 private val onboardingPages = listOf(
-    OnboardingPage(
-        title = "Steruj tym, co gra na Discordzie",
-        description = "Telefon działa jak pilot do KajutaBota na wybranym kanale głosowym. Widzisz aktualny utwór i postęp, możesz pominąć lub zatrzymać odtwarzanie, włączyć powtarzanie i zapisać utwór do ulubionych.",
-        visual = OnboardingVisual.PLAYER,
-    ),
-    OnboardingPage(
-        title = "Kolejka pod pełną kontrolą",
-        description = "Przytrzymaj i przeciągnij utwór, aby zmienić jego pozycję. Możesz usuwać pojedyncze pozycje, wyczyścić całą kolejkę albo szybko otworzyć wyszukiwanie z poziomu odtwarzacza.",
-        visual = OnboardingVisual.QUEUE,
-    ),
-    OnboardingPage(
-        title = "Dodawaj muzykę na swój sposób",
-        description = "Wpisz nazwę utworu, wklej bezpośredni link albo wybierz KajutaBot w systemowym menu Udostępnij, np. w YouTube. Link trafia od razu do ekranu dodawania i nie musisz kopiować go ręcznie między aplikacjami.",
-        visual = OnboardingVisual.SHARE,
-    ),
-    OnboardingPage(
-        title = "Ulubione zawsze pod ręką",
-        description = "Zapisuj utwory na później i dodawaj je ponownie jednym stuknięciem. Możesz też wrzucić wszystkie ulubione do kolejki naraz i opcjonalnie wymieszać ich kolejność.",
-        visual = OnboardingVisual.FAVORITES,
-    ),
-    OnboardingPage(
-        title = "Radio, gdy skończy się kolejka",
-        description = "Włącz Radio przyciskiem z ikoną radia w odtwarzaczu. Gdy zwykła kolejka się opróżni, KajutaBot automatycznie dobiera losowy utwór z cache, dzięki czemu muzyka może grać dalej bez ręcznego dokładania kolejnych pozycji.",
-        visual = OnboardingVisual.RADIO,
-    ),
-    OnboardingPage(
-        title = "Sterowanie zostaje z Tobą",
-        description = "Gdy coś gra, miniplayer pozostaje nad dolną nawigacją na pozostałych zakładkach. Pokazuje postęp i pozwala szybko dodać utwór do ulubionych, pominąć go albo wrócić do pełnego odtwarzacza.",
-        visual = OnboardingVisual.MINIPLAYER,
-    ),
-    OnboardingPage(
-        title = "Steruj też z poziomu Androida",
-        description = "Podczas odtwarzania Android pokazuje systemową kartę multimediów. Możesz podejrzeć aktualny utwór i używać szybkich akcji bez wracania do aplikacji.",
-        visual = OnboardingVisual.SYSTEM_MEDIA,
-    ),
+    OnboardingPage(R.string.onboarding_player_title, R.string.onboarding_player_description, OnboardingVisual.PLAYER),
+    OnboardingPage(R.string.onboarding_queue_title, R.string.onboarding_queue_description, OnboardingVisual.QUEUE),
+    OnboardingPage(R.string.onboarding_add_title, R.string.onboarding_add_description, OnboardingVisual.SHARE),
+    OnboardingPage(R.string.onboarding_favorites_title, R.string.onboarding_favorites_description, OnboardingVisual.FAVORITES),
+    OnboardingPage(R.string.onboarding_radio_title, R.string.onboarding_radio_description, OnboardingVisual.RADIO),
+    OnboardingPage(R.string.onboarding_miniplayer_title, R.string.onboarding_miniplayer_description, OnboardingVisual.MINIPLAYER),
+    OnboardingPage(R.string.onboarding_system_media_title, R.string.onboarding_system_media_description, OnboardingVisual.SYSTEM_MEDIA),
 )
 
 private val guestIntroPage = onboardingPages[0].copy(
-    description = "Telefon jest pilotem do KajutaBota na serwerze demonstracyjnym Discord. Podejrzysz aktualny utwór i postęp oraz skorzystasz z tych samych podstawowych kontrolek bez wpisywania komend.",
+    descriptionResId = R.string.onboarding_guest_description,
 )
 
 @Composable
@@ -165,16 +140,16 @@ fun OnboardingScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "KajutaBot",
+                    text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
 
                 if (canDismiss) {
-                    TextButton(onClick = onDismiss) { Text("Zamknij") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
                 } else if (pagerState.currentPage < selectionPageIndex) {
                     TextButton(onClick = { goToPage(selectionPageIndex) }) {
-                        Text("Pomiń")
+                        Text(stringResource(R.string.action_skip))
                     }
                 } else {
                     Spacer(Modifier.width(72.dp))
@@ -263,7 +238,7 @@ fun OnboardingScreen(
                                     .requiredWidth(splitButtonWidth)
                                     .graphicsLayer { alpha = backAlpha },
                             ) {
-                                Text("Wstecz")
+                                Text(stringResource(R.string.action_back))
                             }
                         }
                     }
@@ -284,9 +259,9 @@ fun OnboardingScreen(
                     ) {
                         Text(
                             if (pagerState.currentPage == selectionPageIndex) {
-                                if (canDismiss) "Gotowe" else "Zaczynamy"
+                                stringResource(if (canDismiss) R.string.action_done else R.string.action_get_started)
                             } else {
-                                "Dalej"
+                                stringResource(R.string.action_next)
                             },
                         )
                     }
@@ -331,14 +306,14 @@ private fun OnboardingFeaturePage(page: OnboardingPage, isActive: Boolean) {
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = page.title,
+            text = stringResource(page.titleResId),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            text = page.description,
+            text = stringResource(page.descriptionResId),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -371,14 +346,16 @@ private fun OnboardingSelectionPage(
 
         Spacer(Modifier.height(18.dp))
         Text(
-            text = "Gdzie chcesz sterować botem?",
+            text = stringResource(R.string.onboarding_selection_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = if (sessionType == SessionType.GUEST) "Serwer demonstracyjny jest już wybrany. Wybierz kanał głosowy; możesz go później zmienić z ekranu odtwarzacza."
-                else "Wybierz serwer Discord, a potem kanał głosowy. Ten wybór możesz później zmienić z ekranu odtwarzacza.",
+            text = stringResource(
+                if (sessionType == SessionType.GUEST) R.string.onboarding_selection_guest_description
+                else R.string.onboarding_selection_description,
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -473,7 +450,7 @@ private fun DiscordSelectionHero(modifier: Modifier = Modifier) {
                     )
                 }
                 Text(
-                    text = "Połączenie z Discordem",
+                    text = stringResource(R.string.onboarding_discord_connection),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,

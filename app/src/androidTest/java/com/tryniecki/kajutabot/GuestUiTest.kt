@@ -57,7 +57,7 @@ class GuestUiTest {
                 )
             }
         }
-        compose.onNodeWithText("Wypróbuj jako gość").assertIsDisplayed().performClick()
+        compose.onNodeWithText(compose.activity.getString(R.string.action_try_guest)).assertIsDisplayed().performClick()
         assertEquals(1, guestClicks)
     }
 
@@ -75,7 +75,7 @@ class GuestUiTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("Dodaj do ulubionych").assertExists()
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.action_add_favorite)).assertExists()
     }
 
     @Test
@@ -92,7 +92,7 @@ class GuestUiTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("Dodaj do ulubionych").assertExists()
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.action_add_favorite)).assertExists()
     }
 
     @Test
@@ -100,7 +100,7 @@ class GuestUiTest {
         compose.setContent {
             MaterialTheme {
                 MiniPlayer(
-                    slide = NowPlayingSlide("demo", true, "Demo", "", null, null, 60_000, null),
+                    slide = NowPlayingSlide("demo", true, "Demo", null, null, 60_000, null),
                     track = com.tryniecki.kajutabot.api.model.common.SearchTrackResponse(
                                 playing.contentId, playing.contentType, playing.title, playing.url,
                                 playing.durationMilliseconds, playing.artworkUrl,
@@ -115,7 +115,7 @@ class GuestUiTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("Dodaj do ulubionych").assertExists()
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.action_add_favorite)).assertExists()
     }
 
     @Test
@@ -141,7 +141,7 @@ class GuestUiTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("Dodaj do ulubionych").assertExists()
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.action_add_favorite)).assertExists()
         compose.onNodeWithText("7 wyświetleń").assertExists()
     }
 

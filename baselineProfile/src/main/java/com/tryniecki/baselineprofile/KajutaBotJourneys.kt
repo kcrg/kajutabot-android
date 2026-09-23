@@ -32,11 +32,16 @@ internal object KajutaBotJourneys {
         val device = device()
         val appInfo = instrumentation.context.packageManager.getApplicationInfo(packageName, 0)
         check(appInfo.isProfileableByShell) {
-            "Wariant $packageName użyty przez Baseline Profile nie jest profileable-by-shell. " +
-                "Generator musi targetować nonMinifiedRelease utworzony przez Baseline Profile Gradle Plugin."
+            "The $packageName variant used by Baseline Profile is not profileable-by-shell. " +
+                "The generator must target nonMinifiedRelease created by the Baseline Profile Gradle Plugin."
         }
 
         device.pressHome()
+        // Baseline Profile journeys use deterministic English selectors so they do not depend
+        // on the benchmark device's system language. Baseline Profile collection requires API 33+.
+        device.executeShellCommand(
+            "cmd locale set-app-locales $packageName --user current --locales en",
+        )
         instrumentation.context.startActivity(
             Intent(SETUP_ACTION).apply {
                 setClassName(packageName, "$packageName$MAIN_ACTIVITY")
@@ -57,26 +62,26 @@ internal object KajutaBotJourneys {
             }
 
             device.findObject(By.textStartsWith(SETUP_ERROR_PREFIX))?.let { error ->
-                error(error.text ?: "Nieznany błąd przygotowania Baseline Profile.")
+                error(error.text ?: "Unknown Baseline Profile setup error.")
             }
             device.findObject(By.descStartsWith(SETUP_ERROR_PREFIX))?.let { error ->
-                error(error.contentDescription ?: "Nieznany błąd przygotowania Baseline Profile.")
+                error(error.contentDescription ?: "Unknown Baseline Profile setup error.")
             }
 
             SystemClock.sleep(100)
         }
 
         error(
-            "Nie udało się przygotować KajutaBota do profilowania w ${DEFAULT_TIMEOUT_MS} ms. " +
+            "Failed to prepare KajutaBot for profiling within ${DEFAULT_TIMEOUT_MS} ms. " +
                 "profileableByShell=${appInfo.isProfileableByShell}, " +
-                "foregroundPackage=${device.currentPackageName ?: "<brak>"}."
+                "foregroundPackage=${device.currentPackageName ?: "<none>"}."
         )
     }
 
     fun MacrobenchmarkScope.launchAuthenticatedApp(packageName: String) {
         pressHome()
         startActivityAndWait()
-        device().waitForObject(By.desc("Odtwarzacz"), DEFAULT_TIMEOUT_MS)
+        device().waitForObject(By.desc("Player"), DEFAULT_TIMEOUT_MS)
     }
 
     /** Covers the most common code paths without mutating playback/queue state. */
@@ -84,32 +89,32 @@ internal object KajutaBotJourneys {
         val device = device()
 
         // Player -> Favorites, including a representative list gesture.
-        device.clickAndWait(By.desc("Ulubione"))
+        device.clickAndWait(By.desc("Favorites"))
         swipeContent(device, down = false)
         swipeContent(device, down = true)
 
         // Favorites -> More -> libraries/contact detail routes.
-        device.clickAndWait(By.desc("Więcej"))
-        device.scrollUntilVisible(By.text("Użyte biblioteki")).click()
-        device.waitForObject(By.desc("Wstecz"))
+        device.clickAndWait(By.desc("More"))
+        device.scrollUntilVisible(By.text("Libraries used")).click()
+        device.waitForObject(By.desc("Back"))
         device.pressBack()
-        device.waitForObject(By.desc("Więcej"))
+        device.waitForObject(By.desc("More"))
 
-        device.scrollUntilVisible(By.text("Kontakt")).click()
-        device.waitForObject(By.desc("Wstecz"))
+        device.scrollUntilVisible(By.text("Contact")).click()
+        device.waitForObject(By.desc("Back"))
         device.pressBack()
-        device.waitForObject(By.desc("Więcej"))
+        device.waitForObject(By.desc("More"))
 
         // Back to Player and exercise both full-screen player detail routes.
-        device.clickAndWait(By.desc("Odtwarzacz"))
+        device.clickAndWait(By.desc("Player"))
 
-        device.clickAndWait(By.desc("Zmień serwer i kanał głosowy"))
-        device.waitForObject(By.text("Serwer i kanał"))
+        device.clickAndWait(By.desc("Change server and voice channel"))
+        device.waitForObject(By.text("Server and channel"))
         device.pressBack()
-        device.waitForObject(By.desc("Odtwarzacz"))
+        device.waitForObject(By.desc("Player"))
 
-        device.clickAndWait(By.desc("Dodaj utwór"))
-        device.waitForObject(By.text("Dodaj do kolejki"))
+        device.clickAndWait(By.desc("Add track"))
+        device.waitForObject(By.text("Add to queue"))
 
         // Exercise Compose text input/search-state code without depending on a live search result.
         device.waitForObject(By.clazz("android.widget.EditText")).apply {
@@ -121,10 +126,10 @@ internal object KajutaBotJourneys {
         // First Back closes IME, second Back closes AddTrack and profiles the real system-back path.
         device.pressBack()
         SystemClock.sleep(200)
-        if (device.hasObject(By.text("Dodaj do kolejki"))) {
+        if (device.hasObject(By.text("Add to queue"))) {
             device.pressBack()
         }
-        device.waitForObject(By.desc("Odtwarzacz"))
+        device.waitForObject(By.desc("Player"))
     }
 
     private fun UiDevice.clickAndWait(selector: BySelector) {
@@ -136,7 +141,7 @@ internal object KajutaBotJourneys {
         selector: BySelector,
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     ): UiObject2 = wait(Until.findObject(selector), timeoutMs)
-        ?: error("Nie znaleziono elementu $selector w ${timeoutMs} ms")
+        ?: error("Element $selector was not found within ${timeoutMs} ms")
 
     private fun UiDevice.scrollUntilVisible(selector: BySelector): UiObject2 {
         findObject(selector)?.let { return it }
@@ -144,7 +149,7 @@ internal object KajutaBotJourneys {
             swipeContent(this, down = false)
             wait(Until.findObject(selector), SHORT_TIMEOUT_MS)?.let { return it }
         }
-        error("Nie znaleziono elementu $selector po przewinięciu ekranu")
+        error("Element $selector was not found after scrolling")
     }
 
     private fun swipeContent(device: UiDevice, down: Boolean) {

@@ -45,20 +45,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
+import com.tryniecki.kajutabot.ui.text.asString
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
-private val favoriteDateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
 @Composable
 fun FavoritesRoute(viewModel: FavoritesViewModel) {
@@ -91,6 +95,10 @@ fun FavoritesScreen(
     val openUrl = rememberOpenCustomTab()
     val motion = MaterialTheme.motionScheme
     val listState = rememberLazyListState()
+    val locale = LocalConfiguration.current.locales[0]
+    val favoriteDateFormatter = remember(locale) {
+        DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)
+    }
     val showFloatingAction = rememberScrollAwareFabVisible(listState)
 
     Scaffold(
@@ -113,7 +121,7 @@ fun FavoritesScreen(
                     ) {
                         Icon(
                             painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_heart_plus_outline),
-                            contentDescription = "Dodaj ulubiony przez link",
+                            contentDescription = stringResource(R.string.action_add_favorite_link),
                         )
                     }
 
@@ -132,7 +140,7 @@ fun FavoritesScreen(
                         ) {
                             Icon(
                                 painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrows_shuffle_outline),
-                                contentDescription = if (ui.shuffle) "Wyłącz losowanie" else "Włącz losowanie",
+                                contentDescription = stringResource(if (ui.shuffle) R.string.favorites_shuffle_disable else R.string.favorites_shuffle_enable),
                                 tint = lerp(
                                     shuffleUncheckedIconColor,
                                     shuffleCheckedIconColor,
@@ -142,7 +150,7 @@ fun FavoritesScreen(
                         }
 
                         ExtendedFloatingActionButton(
-                            text = { Text("Dodaj wszystkie (${ui.favorites.size})") },
+                            text = { Text(stringResource(R.string.favorites_add_all_count, ui.favorites.size)) },
                             icon = {
                                 Icon(
                                     painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
@@ -175,11 +183,11 @@ fun FavoritesScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Ulubione", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.nav_favorites), style = MaterialTheme.typography.titleLarge)
                     TextButton(
                         onClick = onRefresh,
                         enabled = !ui.isLoading && !ui.isMutating,
-                    ) { Text("Odśwież") }
+                    ) { Text(stringResource(R.string.action_refresh)) }
                 }
             }
             if (ui.error != null || ui.info != null) {
@@ -191,8 +199,8 @@ fun FavoritesScreen(
                         ),
                     ) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(ui.error ?: ui.info.orEmpty(), modifier = Modifier.weight(1f))
-                            TextButton(onClick = onDismiss) { Text("OK") }
+                            Text((ui.error ?: ui.info)?.asString().orEmpty(), modifier = Modifier.weight(1f))
+                            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_ok)) }
                         }
                     }
                 }
@@ -223,9 +231,9 @@ fun FavoritesScreen(
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.primary,
                         )
-                        Text("Brak ulubionych", style = MaterialTheme.typography.titleLarge)
-                        Text("Zapisz utwór sercem lub dodaj go przez link.")
-                        OutlinedButton(onClick = onRefresh) { Text("Odśwież") }
+                        Text(stringResource(R.string.favorites_empty_title), style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.favorites_empty_body))
+                        OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.action_refresh)) }
                     }
                 }
             } else {
@@ -263,7 +271,7 @@ fun FavoritesScreen(
                                             .format(favoriteDateFormatter)
                                     }.getOrDefault(fav.addedAt)
                                 }
-                                Text("Zapisano $date")
+                                Text(stringResource(R.string.favorites_saved_date, date))
                             },
                             trailingContent = {
                                 Row(
@@ -273,14 +281,14 @@ fun FavoritesScreen(
                                     IconButton(onClick = { onPlaySingle(fav.contentUrl) }, enabled = !ui.isMutating) {
                                         Icon(
                                             painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
-                                            contentDescription = "Dodaj do kolejki",
+                                            contentDescription = stringResource(R.string.action_add_to_queue),
                                             tint = MaterialTheme.colorScheme.primary,
                                         )
                                     }
                                     IconButton(onClick = { onDelete(fav.contentUrl) }, enabled = !ui.isMutating) {
                                         Icon(
                                             painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline),
-                                            contentDescription = "Usuń z ulubionych",
+                                            contentDescription = stringResource(R.string.action_remove_favorite),
                                             tint = MaterialTheme.colorScheme.error,
                                         )
                                     }
@@ -305,12 +313,12 @@ fun FavoritesScreen(
     if (addDialogOpen) {
         AlertDialog(
             onDismissRequest = { addDialogOpen = false },
-            title = { Text("Dodaj ulubiony przez link") },
+            title = { Text(stringResource(R.string.action_add_favorite_link)) },
             text = {
                 OutlinedTextField(
                     value = newUrl,
                     onValueChange = { newUrl = it },
-                    label = { Text("Adres utworu") },
+                    label = { Text(stringResource(R.string.favorites_track_url)) },
                     placeholder = { Text("https://www.youtube.com/watch?v=…") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -324,9 +332,9 @@ fun FavoritesScreen(
                         newUrl = ""
                         addDialogOpen = false
                     },
-                ) { Text("Zapisz") }
+                ) { Text(stringResource(R.string.action_save)) }
             },
-            dismissButton = { TextButton(onClick = { addDialogOpen = false }) { Text("Anuluj") } },
+            dismissButton = { TextButton(onClick = { addDialogOpen = false }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 }

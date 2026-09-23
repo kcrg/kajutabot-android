@@ -18,9 +18,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.components.DiscordTargetPicker
 
 @Composable
@@ -52,12 +54,12 @@ private fun DiscordSelectionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Serwer i kanał") },
+                title = { Text(stringResource(R.string.discord_selection_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_left_outline),
-                            contentDescription = "Wróć",
+                            contentDescription = stringResource(R.string.action_back),
                         )
                     }
                 },
@@ -71,14 +73,13 @@ private fun DiscordSelectionScreen(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Text(
-                text = "Gdzie chcesz sterować botem?",
+                text = stringResource(R.string.onboarding_selection_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = if (isGuest) "Wybierz kanał głosowy na serwerze demonstracyjnym."
-                    else "Wybierz serwer Discord, a potem kanał głosowy używany przez odtwarzacz.",
+                text = stringResource(if (isGuest) R.string.discord_selection_guest_description else R.string.discord_selection_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -104,7 +105,7 @@ private fun DiscordSelectionScreen(
                 enabled = ui.selectedGuildId != null && ui.selectedVoiceChannelId != null,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Gotowe")
+                Text(stringResource(R.string.action_done))
             }
         }
     }

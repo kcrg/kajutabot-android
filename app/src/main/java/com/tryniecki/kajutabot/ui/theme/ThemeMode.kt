@@ -1,7 +1,10 @@
 package com.tryniecki.kajutabot.ui.theme
 
-enum class ThemeMode(val label: String) {
-    NATIVE("Systemowy"),
-    LIGHT("Jasny"),
-    DARK("Ciemny"),
+import androidx.annotation.StringRes
+import com.tryniecki.kajutabot.R
+
+enum class ThemeMode(@StringRes val labelResId: Int) {
+    NATIVE(R.string.theme_system),
+    LIGHT(R.string.theme_light),
+    DARK(R.string.theme_dark),
 }

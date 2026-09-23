@@ -97,7 +97,6 @@ data class NowPlayingSlide(
     val identity: String,
     val hasTrack: Boolean,
     val title: String,
-    val hint: String,
     val thumbnailUrl: String?,
     val artworkAccentColor: String?,
     val durationMs: Long,
@@ -128,12 +127,7 @@ fun nowPlayingSlide(
         return NowPlayingSlide(
             identity = if (hasQueue) "empty:idle" else "empty:no-queue",
             hasTrack = false,
-            title = "Nic nie gra",
-            hint = if (hasQueue) {
-                "Kolejka oczekuje na utwory"
-            } else {
-                "Połącz aplikację z serwerem i wybierz kanał głosowy"
-            },
+            title = "",
             thumbnailUrl = null,
             artworkAccentColor = null,
             durationMs = 0,
@@ -145,7 +139,6 @@ fun nowPlayingSlide(
         identity = playbackIdentity(track, presentation.startedAt),
         hasTrack = true,
         title = track.title,
-        hint = formatDuration(track.durationMilliseconds),
         thumbnailUrl = track.artworkUrl,
         artworkAccentColor = track.artworkAccentColor,
         durationMs = track.durationMilliseconds,

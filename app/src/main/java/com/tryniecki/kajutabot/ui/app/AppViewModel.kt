@@ -10,6 +10,7 @@ import com.tryniecki.kajutabot.auth.AuthState
 import com.tryniecki.kajutabot.auth.LogoutResult
 import com.tryniecki.kajutabot.auth.OAuthCallbackResult
 import com.tryniecki.kajutabot.auth.OAuthStartResult
+import com.tryniecki.kajutabot.ui.text.UiText
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -91,7 +92,7 @@ class AppViewModel(
         }
     }
 
-    fun switchGuestToDiscord(onFailure: (String) -> Unit) {
+    fun switchGuestToDiscord(onFailure: (UiText) -> Unit) {
         if (_isSigningIn.value) return
         _isSigningIn.value = true
         viewModelScope.launch {
@@ -110,7 +111,7 @@ class AppViewModel(
         }
     }
 
-    private fun startLoginAfterGuestLogout(onFailure: (String) -> Unit) {
+    private fun startLoginAfterGuestLogout(onFailure: (UiText) -> Unit) {
         when (val result = container.sessionManager.startLogin()) {
             is OAuthStartResult.Ready -> _openUrl.tryEmit(result.url)
             is OAuthStartResult.Misconfigured -> onFailure(result.message)

@@ -75,16 +75,16 @@ class PlayerActionsTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("Zatrzymaj").performClick()
-        compose.onNodeWithText("Zatrzymać odtwarzanie?").assertIsDisplayed()
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.action_stop)).performClick()
+        compose.onNodeWithText(compose.activity.getString(R.string.player_stop_dialog_title)).assertIsDisplayed()
         assertEquals(0, stops)
-        compose.onNodeWithText("Anuluj").performClick()
+        compose.onNodeWithText(compose.activity.getString(R.string.action_cancel)).performClick()
         assertEquals(0, stops)
 
-        compose.onNodeWithContentDescription("Wyczyść kolejkę").performClick()
-        compose.onNodeWithText("Wyczyścić kolejkę?").assertIsDisplayed()
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.player_clear_queue)).performClick()
+        compose.onNodeWithText(compose.activity.getString(R.string.player_clear_dialog_title)).assertIsDisplayed()
         assertEquals(0, clears)
-        compose.onNodeWithText("Wyczyść").performClick()
+        compose.onNodeWithText(compose.activity.getString(R.string.action_clear)).performClick()
         assertEquals(1, clears)
     }
 

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.SessionManager
 import com.tryniecki.kajutabot.prefs.favoritesPreferenceOwnerKey
 import com.tryniecki.kajutabot.api.model.favorites.FavoriteResponse
@@ -14,6 +15,8 @@ import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.favorites.QueueFavoritesRequest
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
 import com.tryniecki.kajutabot.ui.userMessageForError
+import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.text.uiText
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,8 +31,8 @@ data class FavoritesUiState(
     val isLoading: Boolean = false,
     val isMutating: Boolean = false,
     val shuffle: Boolean = false,
-    val error: String? = null,
-    val info: String? = null,
+    val error: UiText? = null,
+    val info: UiText? = null,
 )
 
 class FavoritesViewModel(
@@ -53,8 +56,8 @@ class FavoritesViewModel(
     private val _ui = MutableStateFlow(FavoritesUiState(shuffle = loadShuffle(preferenceOwnerKey), isLoading = true))
     val ui: StateFlow<FavoritesUiState> = _ui.asStateFlow()
 
-    private val _toggleMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val toggleMessages: SharedFlow<String> = _toggleMessages.asSharedFlow()
+    private val _toggleMessages = MutableSharedFlow<UiText>(extraBufferCapacity = 4)
+    val toggleMessages: SharedFlow<UiText> = _toggleMessages.asSharedFlow()
     private var refreshGeneration = 0L
     private var mutationRevision = 0L
     private var favoriteIdentities: Set<String> = emptySet()
@@ -99,7 +102,7 @@ class FavoritesViewModel(
     fun setShuffle(enabled: Boolean) {
         saveShuffle(preferenceOwnerKey, enabled)
         _ui.update { it.copy(shuffle = enabled) }
-        _toggleMessages.tryEmit(if (enabled) "Losowanie włączone" else "Losowanie wyłączone")
+        _toggleMessages.tryEmit(uiText(if (enabled) R.string.favorites_shuffle_on else R.string.favorites_shuffle_off))
     }
 
     fun isFavorite(track: PlaybackTrackResponse): Boolean =
@@ -141,11 +144,11 @@ class FavoritesViewModel(
                         },
                         isMutating = false,
                         isLoading = false,
-                        info = if (toggleFeedback) null else "Zapisano utwór w ulubionych.",
+                        info = if (toggleFeedback) null else uiText(R.string.favorites_saved),
                     )
                 }
                 if (toggleFeedback) {
-                    _toggleMessages.emit("Dodano do ulubionych")
+                    _toggleMessages.emit(uiText(R.string.favorites_added))
                 }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
@@ -172,7 +175,7 @@ class FavoritesViewModel(
                     )
                 }
                 if (toggleFeedback) {
-                    _toggleMessages.emit("Usunięto z ulubionych")
+                    _toggleMessages.emit(uiText(R.string.favorites_removed))
                 }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
@@ -186,7 +189,7 @@ class FavoritesViewModel(
         val channelId = selectedChannelId()
         val shuffle = _ui.value.shuffle
         if (guildId == null || channelId == null) {
-            _ui.update { it.copy(error = "Wybierz serwer i kanał głosowy w Odtwarzaczu, aby dodać ulubione.") }
+            _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_all)) }
             return
         }
         viewModelScope.launch {
@@ -195,7 +198,7 @@ class FavoritesViewModel(
                 val response = sessionManager.withApiForSession(sessionIdentity) {
                     it.queueFavorites(QueueFavoritesRequest(guildId, channelId, shuffle = shuffle))
                 }
-                _ui.update { it.copy(isMutating = false, info = "Dodano ulubione do kolejki.") }
+                _ui.update { it.copy(isMutating = false, info = uiText(R.string.favorites_queued_all)) }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
             }
@@ -207,7 +210,7 @@ class FavoritesViewModel(
         val guildId = selectedGuildId()
         val channelId = selectedChannelId()
         if (guildId == null || channelId == null) {
-            _ui.update { it.copy(error = "Wybierz serwer i kanał głosowy w Odtwarzaczu, aby odtworzyć.") }
+            _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_play)) }
             return
         }
         viewModelScope.launch {
@@ -217,7 +220,7 @@ class FavoritesViewModel(
                     val queue = api.getQueue(guildId)
                     api.enqueue(guildId, EnqueueRequest(channelId, listOf(contentUrl), queue.version))
                 }
-                _ui.update { it.copy(isMutating = false, info = "Dodano do kolejki.") }
+                _ui.update { it.copy(isMutating = false, info = uiText(R.string.favorites_queued_one)) }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
             }

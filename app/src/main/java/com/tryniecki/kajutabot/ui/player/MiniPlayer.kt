@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -121,7 +122,7 @@ fun MiniPlayer(
                             .fillMaxSize()
                             .clickable(
                                 role = Role.Button,
-                                onClickLabel = "Otwórz odtwarzacz",
+                                onClickLabel = stringResource(R.string.action_open_player),
                                 onClick = onOpenPlayer,
                             )
                             .padding(horizontal = 12.dp),
@@ -172,7 +173,7 @@ fun MiniPlayer(
                             com.composables.icons.tabler.outline.R.drawable
                                 .tabler_ic_player_skip_forward_outline,
                         ),
-                        contentDescription = "Pomiń utwór",
+                        contentDescription = stringResource(R.string.action_skip_track),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }

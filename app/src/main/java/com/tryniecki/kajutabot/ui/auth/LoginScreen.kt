@@ -24,16 +24,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.components.BrandMark
+import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.text.asString
 
 @Composable
 fun LoginScreen(
     isSigningIn: Boolean,
     isGuestSigningIn: Boolean = false,
-    errorMessage: String?,
+    errorMessage: UiText?,
     isOAuthConfigured: Boolean,
     onLoginClick: () -> Unit,
     onGuestClick: () -> Unit,
@@ -58,13 +62,13 @@ fun LoginScreen(
                 BrandMark(size = 88.dp)
                 Spacer(Modifier.height(20.dp))
                 Text(
-                    text = "KajutaBot",
+                    text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Steruj muzyką na Discordzie z telefonu. Zaloguj się przez Discord albo wypróbuj aplikację od razu w trybie gościa.",
+                    text = stringResource(R.string.login_tagline),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -73,12 +77,12 @@ fun LoginScreen(
 
                 if (!isOAuthConfigured) {
                     LoginMessageCard(
-                        message = "Brak konfiguracji Discord Client ID. Uzupełnij KAJUTABOT_DISCORD_CLIENT_ID i przebuduj aplikację.",
+                        message = stringResource(R.string.login_oauth_config_missing),
                     )
                     Spacer(Modifier.height(12.dp))
                 }
                 if (errorMessage != null) {
-                    LoginMessageCard(message = errorMessage)
+                    LoginMessageCard(message = errorMessage.asString())
                     Spacer(Modifier.height(12.dp))
                 }
 
@@ -95,9 +99,9 @@ fun LoginScreen(
                             strokeWidth = 2.dp,
                         )
                         Spacer(Modifier.size(8.dp))
-                        Text("Logowanie…")
+                        Text(stringResource(R.string.login_signing_in))
                     } else {
-                        Text("Zaloguj przez Discord")
+                        Text(stringResource(R.string.action_sign_in_discord))
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -111,9 +115,9 @@ fun LoginScreen(
                     if (isGuestSigningIn) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.size(8.dp))
-                        Text("Logowanie…")
+                        Text(stringResource(R.string.login_signing_in))
                     } else {
-                        Text("Wypróbuj jako gość")
+                        Text(stringResource(R.string.action_try_guest))
                     }
                 }
             }

@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.ui.more
 
 import android.os.SystemClock
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,9 @@ import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.RealtimeConnectionState
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
+import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.text.asString
+import com.tryniecki.kajutabot.ui.text.uiText
 import kotlinx.coroutines.delay
 
 @Composable
@@ -78,12 +83,11 @@ fun MoreRootScreen(
 ) {
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
     var isLoggingOut by remember { mutableStateOf(false) }
-    var logoutError by remember { mutableStateOf<String?>(null) }
+    var logoutError by remember { mutableStateOf<UiText?>(null) }
     val isGuest = container.sessionManager.currentUserSession()?.sessionType == SessionType.GUEST
     val openCustomTab = rememberOpenCustomTab()
 
     Scaffold(
-        //topBar = { TopAppBar(title = { Text("Więcej") }) },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -95,7 +99,7 @@ fun MoreRootScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { SectionTitle("Konto") }
+            item { SectionTitle(stringResource(R.string.more_section_account)) }
 
             item {
                 val user = (authState as? AuthState.SignedIn)?.user
@@ -141,11 +145,11 @@ fun MoreRootScreen(
 
                                 Text(
                                     text = if (isGuest) {
-                                        "Tryb gościa"
+                                        stringResource(R.string.more_guest_mode)
                                     } else if (user != null) {
                                         "@${user.username}"
                                     } else {
-                                        "Niezalogowany"
+                                        stringResource(R.string.more_signed_out)
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -175,7 +179,7 @@ fun MoreRootScreen(
                                         strokeWidth = 2.dp,
                                     )
                                 } else {
-                                    Text("Wyloguj")
+                                    Text(stringResource(R.string.action_logout))
                                 }
                             }
                         }
@@ -184,7 +188,7 @@ fun MoreRootScreen(
                             Button(
                                 onClick = { openCustomTab("https://discord.gg/7jV7j5djF") },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Dołącz do serwera testowego") }
+                            ) { Text(stringResource(R.string.action_join_test_server)) }
 
                             OutlinedButton(
                                 onClick = {
@@ -193,7 +197,7 @@ fun MoreRootScreen(
                                 },
                                 enabled = !isLoggingOut,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Zaloguj przez Discord") }
+                            ) { Text(stringResource(R.string.action_sign_in_discord)) }
                         }
 
                         if (logoutError != null) {
@@ -203,7 +207,7 @@ fun MoreRootScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text(
-                                    text = logoutError.orEmpty(),
+                                    text = logoutError?.asString().orEmpty(),
                                     modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error,
@@ -223,7 +227,7 @@ fun MoreRootScreen(
                                         }
                                     },
                                 ) {
-                                    Text("Ponów")
+                                    Text(stringResource(R.string.action_retry_short))
                                 }
                             }
                         }
@@ -232,11 +236,11 @@ fun MoreRootScreen(
             }
 
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-            item { SectionTitle("Połączenie realtime") }
+            item { SectionTitle(stringResource(R.string.more_section_realtime)) }
             item { RealtimeStatusCard(playerViewModel) }
 
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-            item { SectionTitle("Motyw") }
+            item { SectionTitle(stringResource(R.string.more_section_theme)) }
 
             item {
                 Column(
@@ -254,33 +258,33 @@ fun MoreRootScreen(
                                     index = index,
                                     count = ThemeMode.entries.size,
                                 ),
-                            ) { Text(mode.label) }
+                            ) { Text(stringResource(mode.labelResId)) }
                         }
                     }
                 }
             }
 
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-            item { SectionTitle("Pomoc") }
+            item { SectionTitle(stringResource(R.string.more_section_help)) }
 
             item {
                 SettingsRow(
                     icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_directions_outline,
-                    title = "Przewodnik po aplikacji",
-                    subtitle = "Uruchom onboarding ponownie",
+                    title = stringResource(R.string.more_guide_title),
+                    subtitle = stringResource(R.string.more_guide_subtitle),
                     useContainer = true,
                     onClick = onOpenOnboarding,
                 )
             }
 
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-            item { SectionTitle("O aplikacji") }
+            item { SectionTitle(stringResource(R.string.more_section_about)) }
 
             item {
                 SettingsRow(
                     icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_info_circle_outline,
-                    title = "Użyte biblioteki",
-                    subtitle = "Licencje i komponenty open source",
+                    title = stringResource(R.string.more_libraries_title),
+                    subtitle = stringResource(R.string.more_libraries_subtitle),
                     useContainer = true,
                     onClick = onOpenLibraries,
                 )
@@ -288,8 +292,8 @@ fun MoreRootScreen(
             item {
                 SettingsRow(
                     icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_mail_outline,
-                    title = "Kontakt",
-                    subtitle = "Kacper Tryniecki",
+                    title = stringResource(R.string.more_contact_title),
+                    subtitle = stringResource(R.string.more_contact_author),
                     useContainer = true,
                     onClick = onOpenContact,
                 )
@@ -312,12 +316,12 @@ private fun RealtimeStatusCard(playerViewModel: PlayerViewModel) {
         }
     }
     val status = when (diagnostics.state) {
-        RealtimeConnectionState.DISCONNECTED -> "Rozłączono"
-        RealtimeConnectionState.CONNECTING -> "Łączenie…"
-        RealtimeConnectionState.CONNECTED_NO_GUILD -> "Połączono · brak wybranego serwera"
-        RealtimeConnectionState.SUBSCRIBING -> "Subskrybowanie serwera…"
-        RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED -> "Połączono"
-        RealtimeConnectionState.RECONNECTING -> "Ponowne łączenie…"
+        RealtimeConnectionState.DISCONNECTED -> R.string.realtime_disconnected
+        RealtimeConnectionState.CONNECTING -> R.string.realtime_connecting
+        RealtimeConnectionState.CONNECTED_NO_GUILD -> R.string.realtime_connected_no_guild
+        RealtimeConnectionState.SUBSCRIBING -> R.string.realtime_subscribing
+        RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED -> R.string.realtime_connected
+        RealtimeConnectionState.RECONNECTING -> R.string.realtime_reconnecting
     }
     val statusColor = if (diagnostics.state == RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED) {
         MaterialTheme.colorScheme.primary
@@ -331,15 +335,15 @@ private fun RealtimeStatusCard(playerViewModel: PlayerViewModel) {
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("●", color = statusColor, style = MaterialTheme.typography.bodyMedium)
-                Text(status, style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(status), style = MaterialTheme.typography.titleSmall)
             }
             Text(
-                "Ostatnia ramka: ${realtimeAgeLabel(diagnostics.lastFrameAtMs, nowMs)}",
+                stringResource(R.string.realtime_last_frame, realtimeAgeText(diagnostics.lastFrameAtMs, nowMs).asString()),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Ostatnia aktualizacja danych: ${realtimeAgeLabel(diagnostics.lastQueueUpdateAtMs, nowMs)}",
+                stringResource(R.string.realtime_last_update, realtimeAgeText(diagnostics.lastQueueUpdateAtMs, nowMs).asString()),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -347,19 +351,19 @@ private fun RealtimeStatusCard(playerViewModel: PlayerViewModel) {
     }
 }
 
-internal fun realtimeAgeLabel(timestampMs: Long?, nowMs: Long): String {
-    if (timestampMs == null) return "brak danych"
+internal fun realtimeAgeText(timestampMs: Long?, nowMs: Long): UiText {
+    if (timestampMs == null) return uiText(R.string.realtime_no_data)
     val seconds = ((nowMs - timestampMs).coerceAtLeast(0L)) / 1_000L
     return when {
-        seconds < 60 -> "$seconds s temu"
-        seconds < 3_600 -> "${seconds / 60} min temu"
-        else -> "${seconds / 3_600} godz. temu"
+        seconds < 60 -> uiText(R.string.realtime_seconds_ago, seconds)
+        seconds < 3_600 -> uiText(R.string.realtime_minutes_ago, seconds / 60)
+        else -> uiText(R.string.realtime_hours_ago, seconds / 3_600)
     }
 }
 
 @Composable
 fun LibrariesScreen(onBack: () -> Unit) {
-    Scaffold(topBar = { BackTopBar(title = "Użyte biblioteki", onBack = onBack) }) { innerPadding ->
+    Scaffold(topBar = { BackTopBar(title = stringResource(R.string.more_libraries_title), onBack = onBack) }) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -374,7 +378,7 @@ fun LibrariesScreen(onBack: () -> Unit) {
                     leadingContent = null,
                     trailingContent = { Text(library.license) },
                     overlineContent = null,
-                    supportingContent = { Text(library.description) },
+                    supportingContent = { Text(stringResource(library.descriptionResId)) },
                     colors = ListItemDefaults.colors(),
                     elevation = ListItemDefaults.elevation(),
                     content = { Text(library.name) },
@@ -387,7 +391,7 @@ fun LibrariesScreen(onBack: () -> Unit) {
 
 @Composable
 fun ContactScreen(onBack: () -> Unit) {
-    Scaffold(topBar = { BackTopBar(title = "Kontakt", onBack = onBack) }) { innerPadding ->
+    Scaffold(topBar = { BackTopBar(title = stringResource(R.string.more_contact_title), onBack = onBack) }) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             ListItem(
                 verticalAlignment = Alignment.CenterVertically,
@@ -395,10 +399,10 @@ fun ContactScreen(onBack: () -> Unit) {
                 leadingContent = null,
                 trailingContent = null,
                 overlineContent = null,
-                supportingContent = { Text("Autor KajutaBot") },
+                supportingContent = { Text(stringResource(R.string.contact_kajutabot_author)) },
                 colors = ListItemDefaults.colors(),
                 elevation = ListItemDefaults.elevation(),
-                content = { Text("Kacper Tryniecki") },
+                content = { Text(stringResource(R.string.more_contact_author)) },
             )
             HorizontalDivider()
             ContactLinks()
@@ -414,7 +418,7 @@ private fun ContactLinks() {
     SettingsRow(
         icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_mail_outline,
         title = "kacper@tryniecki.com",
-        subtitle = "E-mail",
+        subtitle = stringResource(R.string.contact_email_label),
         onClick = { uriHandler.openUri("mailto:kacper@tryniecki.com") },
     )
     SettingsRow(
@@ -434,7 +438,7 @@ private fun BackTopBar(title: String, onBack: () -> Unit) {
         title = { Text(title) },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_left_outline), contentDescription = "Wstecz")
+                Icon(painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_left_outline), contentDescription = stringResource(R.string.action_back))
             }
         },
     )
@@ -496,22 +500,22 @@ private fun SettingsRow(
     )
 }
 
-private data class LibraryInfo(val name: String, val description: String, val license: String)
+private data class LibraryInfo(val name: String, @StringRes val descriptionResId: Int, val license: String)
 
 private val LIBRARIES = listOf(
-    LibraryInfo("Jetpack Compose", "Budowa deklaratywnego interfejsu i animacji", "Apache 2.0"),
-    LibraryInfo("Material 3", "Komponenty, motywy i schemat ruchu interfejsu", "Apache 2.0"),
-    LibraryInfo("AndroidX Activity", "Integracja Compose z aktywnością i obsługa gestu wstecz", "Apache 2.0"),
-    LibraryInfo("Navigation Compose", "Nawigacja między ekranami i stos powrotu", "Apache 2.0"),
-    LibraryInfo("AndroidX Lifecycle", "ViewModel i obserwacja stanu zgodna z cyklem życia", "Apache 2.0"),
-    LibraryInfo("AndroidX Core KTX", "Funkcje pomocnicze dla platformy Android", "Apache 2.0"),
-    LibraryInfo("AndroidX Media3", "Sesja multimedialna i systemowe sterowanie botem", "Apache 2.0"),
-    LibraryInfo("AndroidX Browser", "Logowanie i otwieranie linków przez Custom Tabs", "Apache 2.0"),
-    LibraryInfo("Coil 3", "Ładowanie miniatur utworów i awatarów", "Apache 2.0"),
-    LibraryInfo("Tabler Icons", "Ikony interfejsu", "MIT"),
-    LibraryInfo("Kotlin Coroutines", "Operacje asynchroniczne i przepływy stanu", "Apache 2.0"),
-    LibraryInfo("Retrofit", "Wywołania KajutaBot Control API", "Apache 2.0"),
-    LibraryInfo("SignalR Java Client", "Aktualizacje kolejki w czasie rzeczywistym", "MIT"),
-    LibraryInfo("OkHttp", "Połączenia HTTP dla API i obrazów", "Apache 2.0"),
-    LibraryInfo("kotlinx.serialization", "Odczyt i zapis danych JSON", "Apache 2.0"),
+    LibraryInfo("Jetpack Compose", R.string.library_compose_description, "Apache 2.0"),
+    LibraryInfo("Material 3", R.string.library_material3_description, "Apache 2.0"),
+    LibraryInfo("AndroidX Activity", R.string.library_activity_description, "Apache 2.0"),
+    LibraryInfo("Navigation Compose", R.string.library_navigation_description, "Apache 2.0"),
+    LibraryInfo("AndroidX Lifecycle", R.string.library_lifecycle_description, "Apache 2.0"),
+    LibraryInfo("AndroidX Core KTX", R.string.library_core_ktx_description, "Apache 2.0"),
+    LibraryInfo("AndroidX Media3", R.string.library_media3_description, "Apache 2.0"),
+    LibraryInfo("AndroidX Browser", R.string.library_browser_description, "Apache 2.0"),
+    LibraryInfo("Coil 3", R.string.library_coil_description, "Apache 2.0"),
+    LibraryInfo("Tabler Icons", R.string.library_tabler_description, "MIT"),
+    LibraryInfo("Kotlin Coroutines", R.string.library_coroutines_description, "Apache 2.0"),
+    LibraryInfo("Retrofit", R.string.library_retrofit_description, "Apache 2.0"),
+    LibraryInfo("SignalR Java Client", R.string.library_signalr_description, "MIT"),
+    LibraryInfo("OkHttp", R.string.library_okhttp_description, "Apache 2.0"),
+    LibraryInfo("kotlinx.serialization", R.string.library_serialization_description, "Apache 2.0"),
 )

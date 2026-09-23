@@ -1,5 +1,7 @@
 package com.tryniecki.kajutabot.auth
 
+import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.api.client.KajutaBotApi
 import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
@@ -89,20 +91,17 @@ class OAuthCallbackTest {
         assertTrue(result is OAuthCallbackResult.Failed)
         assertEquals(0, authApi.exchangeCount.get())
         val state = sm.authState.value as AuthState.SignedOut
-        assertTrue(state.message?.contains("anulowane") == true)
+        assertEquals(R.string.auth_discord_login_cancelled, (state.message as UiText.Resource).id)
     }
 
     @Test
-    fun `exchange guild_access_denied maps to Polish message`() = runTest {
+    fun `exchange guild_access_denied maps to localized message`() = runTest {
         val (sm, _, _) = setup(
             exchange = { throw httpError(403, "discord_guild_access_denied") },
         )
         val result = sm.handleOAuthCallback("code-1", "state-123", null)
         assertTrue(result is OAuthCallbackResult.Failed)
         val message = (result as OAuthCallbackResult.Failed).message
-        assertEquals(
-            "Nie masz dostępu do żadnego serwera Discord obsługiwanego przez KajutaBot.",
-            message,
-        )
+        assertEquals(R.string.auth_no_discord_guild_access, (message as UiText.Resource).id)
     }
 }

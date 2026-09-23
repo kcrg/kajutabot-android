@@ -73,7 +73,7 @@ For the simplest run, open the cloned directory in Android Studio, let Gradle sy
 
 ### Guest access
 
-On the login screen, tap **Wypróbuj jako gość** (“Try as guest”). The app requests a guest session from the configured Control API; no Discord login or credentials are needed. In onboarding, continue to the last page, select a voice channel on the preselected demo server, and tap **Zaczynamy**. Guest access needs an internet connection and an available demo backend; it cannot be used with an arbitrary self-hosted API unless that backend supports guest sessions.
+On the login screen, tap **Try as guest**. The app requests a guest session from the configured Control API; no Discord login or credentials are needed. In onboarding, continue to the last page, select a voice channel on the preselected demo server, and tap **Get started**. Guest access needs an internet connection and an available demo backend; it cannot be used with an arbitrary self-hosted API unless that backend supports guest sessions.
 
 ## Tests and checks
 

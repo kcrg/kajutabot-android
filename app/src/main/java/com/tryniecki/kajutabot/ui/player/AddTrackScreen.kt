@@ -48,14 +48,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.tryniecki.kajutabot.BuildConfig
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.common.SearchTrackResponse
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
@@ -63,6 +66,7 @@ import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
+import com.tryniecki.kajutabot.ui.text.asString
 import java.text.NumberFormat
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.Locale
@@ -92,6 +96,7 @@ fun AddTrackScreen(
     val isUrlInput = PlayerViewModel.looksLikeUrl(trimmed)
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val appLocale = LocalConfiguration.current.locales[0]
     val submitAndHideKeyboard = remember(onSubmit, keyboardController, focusManager) {
         {
             keyboardController?.hide()
@@ -111,12 +116,12 @@ fun AddTrackScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Dodaj do kolejki") },
+                    title = { Text(stringResource(R.string.add_track_title)) },
                     navigationIcon = {
                         IconButton(onClick = onClose) {
                             Icon(
                                 painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_x_outline),
-                                contentDescription = "Zamknij",
+                                contentDescription = stringResource(R.string.action_close),
                             )
                         }
                     },
@@ -143,7 +148,7 @@ fun AddTrackScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                     ) {
-                        Text(if (isUrlInput) "Dodaj do kolejki" else "Szukaj")
+                        Text(stringResource(if (isUrlInput) R.string.action_add_to_queue else R.string.action_search))
                     }
                 }
             },
@@ -175,8 +180,8 @@ fun AddTrackScreen(
                                 ExpressiveLoadingIndicator(modifier = Modifier.size(24.dp))
                             }
                         },
-                        placeholder = { Text("Wklej link lub wyszukaj utwór") },
-                        label = { Text("Dodaj do kolejki") },
+                        placeholder = { Text(stringResource(R.string.add_track_hint)) },
+                        label = { Text(stringResource(R.string.add_track_title)) },
                         keyboardOptions = KeyboardOptions(
                             imeAction = if (isUrlInput) ImeAction.Go else ImeAction.Search,
                         ),
@@ -240,11 +245,11 @@ fun AddTrackScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    text = ui.error ?: ui.info.orEmpty(),
+                                    text = (ui.error ?: ui.info)?.asString().orEmpty(),
                                     modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
-                                TextButton(onClick = onDismissMessage) { Text("OK") }
+                                TextButton(onClick = onDismissMessage) { Text(stringResource(R.string.action_ok)) }
                             }
                         }
                     }
@@ -301,7 +306,7 @@ fun AddTrackScreen(
                                             )
                                         }
                                         Text(
-                                            text = formatSearchResultMetric(item),
+                                            text = formatSearchResultMetric(item, appLocale),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1,
@@ -336,11 +341,11 @@ fun AddTrackScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
-                                "Brak wyników",
+                                stringResource(R.string.add_track_no_results_title),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                "Spróbuj innej frazy lub wklej bezpośredni link.",
+                                stringResource(R.string.add_track_no_results_body),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -369,7 +374,7 @@ private fun SearchSourceDropdown(
             onClick = { expanded = true },
         ) {
             Text(
-                text = selected.displayName,
+                text = stringResource(selected.displayNameResId),
                 maxLines = 1,
             )
 
@@ -392,7 +397,7 @@ private fun SearchSourceDropdown(
         ) {
             SearchSourceOption.entries.forEach { source ->
                 DropdownMenuItem(
-                    text = { Text(source.displayName) },
+                    text = { Text(stringResource(source.displayNameResId)) },
                     onClick = {
                         expanded = false
                         onSelected(source)

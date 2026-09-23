@@ -1,5 +1,6 @@
 package com.tryniecki.kajutabot.ui.player
 
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.common.SearchTrackResponse
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import java.util.Locale
@@ -109,7 +110,7 @@ class SearchResultFormattingTest {
         assertEquals("YouTube", SearchSourceOption.YOUTUBE.apiValue)
         assertEquals("SoundCloud", SearchSourceOption.SOUNDCLOUD.apiValue)
         assertEquals("Database", SearchSourceOption.DATABASE.apiValue)
-        assertEquals("Baza danych", SearchSourceOption.DATABASE.displayName)
+        assertEquals(R.string.search_source_database, SearchSourceOption.DATABASE.displayNameResId)
     }
 
 }

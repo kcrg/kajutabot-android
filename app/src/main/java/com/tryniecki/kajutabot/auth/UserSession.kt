@@ -2,6 +2,7 @@ package com.tryniecki.kajutabot.auth
 
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.SessionType
+import com.tryniecki.kajutabot.ui.text.UiText
 
 data class UserSession(
     val accessToken: String,
@@ -14,7 +15,7 @@ data class UserSession(
 
 sealed interface AuthState {
     data object Restoring : AuthState
-    data class SignedOut(val message: String? = null) : AuthState
+    data class SignedOut(val message: UiText? = null) : AuthState
     data class SignedIn(val user: AuthUserResponse) : AuthState
-    data class RecoverableError(val message: String) : AuthState
+    data class RecoverableError(val message: UiText) : AuthState
 }

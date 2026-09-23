@@ -1,5 +1,7 @@
 package com.tryniecki.kajutabot.auth
 
+import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.api.client.KajutaBotApi
 import com.tryniecki.kajutabot.api.client.KajutaBotAuthApi
 import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
@@ -600,7 +602,7 @@ class SessionManagerTest {
         )
         sm.restore()
         val error = sm.authState.value as AuthState.RecoverableError
-        assertTrue(error.message.contains("zapisać"))
+        assertEquals(R.string.auth_refreshed_session_save_failed, (error.message as UiText.Resource).id)
         assertEquals("access-1", sm.currentAccessToken())
     }
 
@@ -619,7 +621,7 @@ class SessionManagerTest {
             appConfig = AppConfig("https://api.example", "client"),
         )
         sm.restore()
-        assertTrue((sm.authState.value as AuthState.RecoverableError).message.contains("magazynu"))
+        assertEquals(R.string.auth_secure_store_read_failed, ((sm.authState.value as AuthState.RecoverableError).message as UiText.Resource).id)
     }
 
     @Test
@@ -640,7 +642,7 @@ class SessionManagerTest {
         assertTrue(sm.logout() is LogoutResult.LocalOnly)
         assertEquals(0, serverLogoutCalls)
         assertNull(store.session)
-        assertTrue((sm.authState.value as AuthState.SignedOut).message!!.contains("lokalnie"))
+        assertEquals(R.string.auth_refresh_revoke_not_confirmed_local, ((sm.authState.value as AuthState.SignedOut).message as UiText.Resource).id)
     }
 
     @Test

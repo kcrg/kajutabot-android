@@ -28,11 +28,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 
@@ -52,7 +54,7 @@ fun DiscordTargetPicker(
     Column(modifier = modifier) {
         if (showGuildPicker) {
             Text(
-                text = "Serwer Discord",
+                text = stringResource(R.string.discord_server),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -80,7 +82,7 @@ fun DiscordTargetPicker(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "Kanał głosowy",
+                text = stringResource(R.string.discord_voice_channel),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -91,9 +93,9 @@ fun DiscordTargetPicker(
         Spacer(Modifier.size(8.dp))
 
         when {
-            selectedGuildId == null -> SelectionHint("Najpierw wybierz serwer.")
+            selectedGuildId == null -> SelectionHint(R.string.discord_select_server_first)
             isLoadingVoiceChannels -> VoiceChannelSkeletons()
-            voiceChannels.isEmpty() -> SelectionHint("Na tym serwerze nie ma dostępnych kanałów głosowych.")
+            voiceChannels.isEmpty() -> SelectionHint(R.string.discord_no_voice_channels)
             else -> LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -154,11 +156,12 @@ private fun GuildChoiceCard(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val a11yDescription = stringResource(R.string.discord_server_a11y, guild.name)
     Card(
         modifier = Modifier
             .widthIn(min = 190.dp, max = 260.dp)
             .semantics {
-                contentDescription = "Serwer Discord: ${guild.name}"
+                contentDescription = a11yDescription
             }
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
@@ -198,11 +201,12 @@ private fun ChannelChoiceCard(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val a11yDescription = stringResource(R.string.discord_voice_channel_a11y, channel.name)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .semantics {
-                contentDescription = "Kanał głosowy: ${channel.name}"
+                contentDescription = a11yDescription
             }
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
@@ -240,7 +244,7 @@ private fun ChannelChoiceCard(
 }
 
 @Composable
-private fun SelectionHint(text: String) {
+private fun SelectionHint(@androidx.annotation.StringRes textResId: Int) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -249,7 +253,7 @@ private fun SelectionHint(text: String) {
         shape = MaterialTheme.shapes.large,
     ) {
         Text(
-            text = text,
+            text = stringResource(textResId),
             modifier = Modifier.padding(18.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

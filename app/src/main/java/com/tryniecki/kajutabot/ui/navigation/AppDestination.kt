@@ -1,6 +1,8 @@
 package com.tryniecki.kajutabot.ui.navigation
 
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import com.tryniecki.kajutabot.R
 import kotlinx.serialization.Serializable
 
 sealed interface AppRoute {
@@ -14,11 +16,11 @@ sealed interface AppRoute {
 }
 
 enum class AppDestination(
-    val label: String,
+    @StringRes val labelResId: Int,
     @DrawableRes val icon: Int,
     val route: AppRoute,
 ) {
-    PLAYER("Odtwarzacz", com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_outline, AppRoute.Player),
-    FAVORITES("Ulubione", com.composables.icons.tabler.outline.R.drawable.tabler_ic_hearts_outline, AppRoute.Favorites),
-    MORE("Więcej", com.composables.icons.tabler.outline.R.drawable.tabler_ic_dots_outline, AppRoute.More),
+    PLAYER(R.string.nav_player, com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_outline, AppRoute.Player),
+    FAVORITES(R.string.nav_favorites, com.composables.icons.tabler.outline.R.drawable.tabler_ic_hearts_outline, AppRoute.Favorites),
+    MORE(R.string.nav_more, com.composables.icons.tabler.outline.R.drawable.tabler_ic_dots_outline, AppRoute.More),
 }

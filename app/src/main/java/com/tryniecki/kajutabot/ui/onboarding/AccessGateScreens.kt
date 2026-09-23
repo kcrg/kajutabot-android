@@ -21,10 +21,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
+import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.text.asString
 
 @Composable
 fun AccessCheckingScreen(isGuest: Boolean = false) {
@@ -41,7 +45,7 @@ fun AccessCheckingScreen(isGuest: Boolean = false) {
             ) {
                 ExpressiveLoadingIndicator(modifier = Modifier.size(48.dp))
                 Text(
-                    text = if (isGuest) "Sprawdzanie serwera demonstracyjnego…" else "Sprawdzanie dostępu do Discorda…",
+                    text = stringResource(if (isGuest) R.string.access_checking_guest else R.string.access_checking_discord),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -57,10 +61,9 @@ fun NoAccessScreen(
     isGuest: Boolean = false,
 ) {
     AccessMessageScreen(
-        title = "Brak dostępu",
-        message = if (isGuest) "Serwer demonstracyjny jest obecnie niedostępny. Spróbuj ponownie później."
-            else "Nie masz dostępu do żadnego serwera Discord, na którym znajduje się KajutaBot. Do aplikacji wejdziesz, gdy pojawi się co najmniej jeden wspólny serwer.",
-        primaryLabel = "Sprawdź ponownie",
+        title = stringResource(R.string.access_none_title),
+        message = stringResource(if (isGuest) R.string.access_none_guest else R.string.access_none_discord),
+        primaryLabel = stringResource(R.string.access_check_again),
         onPrimary = onRetry,
         onLogout = onLogout,
     )
@@ -68,16 +71,15 @@ fun NoAccessScreen(
 
 @Composable
 fun AccessErrorScreen(
-    message: String?,
+    message: UiText?,
     onRetry: () -> Unit,
     onLogout: () -> Unit,
     isGuest: Boolean = false,
 ) {
     AccessMessageScreen(
-        title = "Nie udało się sprawdzić dostępu",
-        message = message ?: if (isGuest) "Nie można teraz pobrać serwera demonstracyjnego. Sprawdź połączenie i spróbuj ponownie."
-            else "Nie można teraz pobrać listy serwerów Discord. Sprawdź połączenie i spróbuj ponownie.",
-        primaryLabel = "Spróbuj ponownie",
+        title = stringResource(R.string.access_error_title),
+        message = message?.asString() ?: stringResource(if (isGuest) R.string.access_error_guest else R.string.access_error_discord),
+        primaryLabel = stringResource(R.string.action_retry),
         onPrimary = onRetry,
         onLogout = onLogout,
     )
@@ -139,7 +141,7 @@ private fun AccessMessageScreen(
                         Text(primaryLabel)
                     }
                     TextButton(onClick = onLogout) {
-                        Text("Wyloguj się")
+                        Text(stringResource(R.string.action_logout))
                     }
                 }
             }

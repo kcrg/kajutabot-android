@@ -54,6 +54,10 @@ android {
         compose = true
         buildConfig = true
     }
+    androidResources {
+        generateLocaleConfig = true
+        localeFilters += listOf("en", "pl")
+    }
 }
 
 // Keep generated profiles under source control, but do not make every local

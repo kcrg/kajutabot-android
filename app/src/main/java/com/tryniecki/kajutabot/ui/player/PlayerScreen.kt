@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
@@ -99,6 +100,9 @@ import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.theme.fadeThrough
 import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
+import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.text.asString
+import com.tryniecki.kajutabot.ui.text.resolve
 import coil3.compose.AsyncImage
 
 private val artworkAccentColorRegex = Regex("#[0-9a-fA-F]{6}")
@@ -122,7 +126,7 @@ fun PlayerRoute(
 
     LaunchedEffect(viewModel, context) {
         viewModel.controlMessages.collect { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, message.resolve(context), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -218,8 +222,8 @@ fun PlayerScreen(
         }
     }
     val pendingEntryIds = pendingIndexById.keys
+    val changeServerChannelDesc = stringResource(R.string.player_change_server_channel)
     Scaffold(
-        //topBar = { TopAppBar(title = { Text("Odtwarzacz") }) },
         floatingActionButton = {
             AnimatedVisibility(
                 visible = showFloatingActions,
@@ -235,7 +239,7 @@ fun PlayerScreen(
                     SmallFloatingActionButton(
                         onClick = onDiscordSelectionOpen,
                         modifier = Modifier.semantics {
-                            contentDescription = "Zmień serwer i kanał głosowy"
+                            contentDescription = changeServerChannelDesc
                         },
                     ) {
                         if (ui.selectedGuild != null) {
@@ -254,7 +258,7 @@ fun PlayerScreen(
                     FloatingActionButton(onClick = onAddTrackOpen) {
                         Icon(
                             painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
-                            contentDescription = "Dodaj utwór",
+                            contentDescription = stringResource(R.string.action_add_track),
                         )
                     }
                 }
@@ -288,11 +292,11 @@ fun PlayerScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = ui.error ?: ui.info.orEmpty(),
+                                text = (ui.error ?: ui.info)?.asString().orEmpty(),
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            TextButton(onClick = onDismissMessage) { Text("OK") }
+                            TextButton(onClick = onDismissMessage) { Text(stringResource(R.string.action_ok)) }
                         }
                     }
                 }
@@ -317,7 +321,7 @@ fun PlayerScreen(
                     when (state) {
                         PlayerSurfaceState.LOADING -> NowPlayingSkeletonCard()
                         PlayerSurfaceState.ERROR -> PlayerLoadErrorCard(
-                            message = ui.queueLoadError ?: "Nie udało się pobrać stanu odtwarzacza.",
+                            message = ui.queueLoadError,
                             onRetry = onRetryQueue,
                         )
                         PlayerSurfaceState.READY -> NowPlayingCard(
@@ -345,7 +349,7 @@ fun PlayerScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Kolejka",
+                        stringResource(R.string.player_queue_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -353,7 +357,7 @@ fun PlayerScreen(
                         IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
                             Icon(
                                 painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_x_outline),
-                                contentDescription = "Wyczyść kolejkę",
+                                contentDescription = stringResource(R.string.player_clear_queue),
                                 tint = MaterialTheme.colorScheme.error,
                             )
                         }
@@ -386,6 +390,9 @@ fun PlayerScreen(
                     val entryIndex = pendingIndexById[entry.entryId] ?: -1
                     val dragged = draggingEntryId == entry.entryId
                     val target = dragTargetIndex == entryIndex
+                    val dragDescription = stringResource(R.string.player_drag_track_a11y, entry.track.title)
+                    val moveUpDescription = stringResource(R.string.action_move_up)
+                    val moveDownDescription = stringResource(R.string.action_move_down)
                     Card(
                         modifier = Modifier
                             .zIndex(if (dragged) 1f else 0f)
@@ -412,16 +419,16 @@ fun PlayerScreen(
                                             .offset(x = -8.dp)
                                             .testTag("queue-drag-${entry.entryId}")
                                             .semantics {
-                                                contentDescription = "Przeciągnij, aby zmienić pozycję utworu ${entry.track.title}"
+                                                contentDescription = dragDescription
                                                 val index = entryIndex
                                                 customActions = listOf(
-                                                    CustomAccessibilityAction("Przenieś w górę") {
+                                                    CustomAccessibilityAction(moveUpDescription) {
                                                         if (index > 0 && !ui.isMutating && ui.queue != null) {
                                                             onMoveEntry(entry.entryId, index, ui.queue.version)
                                                             true
                                                         } else false
                                                     },
-                                                    CustomAccessibilityAction("Przenieś w dół") {
+                                                    CustomAccessibilityAction(moveDownDescription) {
                                                         if (index in 0 until pending.lastIndex && !ui.isMutating && ui.queue != null) {
                                                             onMoveEntry(entry.entryId, index + 2, ui.queue.version)
                                                             true
@@ -525,7 +532,7 @@ fun PlayerScreen(
                                         ) {
                                             Icon(
                                                 painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline),
-                                                contentDescription = "Usuń z kolejki",
+                                                contentDescription = stringResource(R.string.action_remove_from_queue),
                                                 tint = MaterialTheme.colorScheme.error,
                                             )
                                         }
@@ -547,27 +554,27 @@ fun PlayerScreen(
         if (confirmStop) {
             AlertDialog(
                 onDismissRequest = { confirmStop = false },
-                title = { Text("Zatrzymać odtwarzanie?") },
-                text = { Text("Utwór zostanie przerwany, a bot opuści kanał głosowy.") },
+                title = { Text(stringResource(R.string.player_stop_dialog_title)) },
+                text = { Text(stringResource(R.string.player_stop_dialog_body)) },
                 confirmButton = {
                     TextButton(onClick = { confirmStop = false; onStop() }, enabled = !ui.isMutating) {
-                        Text("Zatrzymaj", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.action_stop), color = MaterialTheme.colorScheme.error)
                     }
                 },
-                dismissButton = { TextButton(onClick = { confirmStop = false }) { Text("Anuluj") } },
+                dismissButton = { TextButton(onClick = { confirmStop = false }) { Text(stringResource(R.string.action_cancel)) } },
             )
         }
         if (confirmClear) {
             AlertDialog(
                 onDismissRequest = { confirmClear = false },
-                title = { Text("Wyczyścić kolejkę?") },
-                text = { Text("Wszystkie oczekujące utwory zostaną usunięte. Aktualny utwór będzie grał dalej.") },
+                title = { Text(stringResource(R.string.player_clear_dialog_title)) },
+                text = { Text(stringResource(R.string.player_clear_dialog_body)) },
                 confirmButton = {
                     TextButton(onClick = { confirmClear = false; onClearQueue() }, enabled = !ui.isMutating) {
-                        Text("Wyczyść", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.action_clear), color = MaterialTheme.colorScheme.error)
                     }
                 },
-                dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Anuluj") } },
+                dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.action_cancel)) } },
             )
         }
     }
@@ -648,7 +655,7 @@ private fun NowPlayingCard(
 
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                "TERAZ ODTWARZANE",
+                                stringResource(R.string.player_now_playing),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                             )
@@ -656,7 +663,7 @@ private fun NowPlayingCard(
                             // the same height at any font scale, so the card never
                             // jumps on track -> track.
                             Text(
-                                text = slide.title,
+                                text = if (slide.hasTrack) slide.title else stringResource(R.string.player_nothing_playing),
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 minLines = 2,
@@ -687,7 +694,7 @@ private fun NowPlayingCard(
                 ) {
                     Icon(
                         painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_stop_outline),
-                        contentDescription = "Zatrzymaj",
+                        contentDescription = stringResource(R.string.action_stop),
                         tint = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -698,23 +705,23 @@ private fun NowPlayingCard(
                 ) {
                     Icon(
                         painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_skip_forward_outline),
-                        contentDescription = "Pomiń",
+                        contentDescription = stringResource(R.string.action_skip),
                     )
                 }
                 TonalToggleIconButton(
                     checked = repeatEnabled,
                     onCheckedChange = { onRepeatToggle() },
                     iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_repeat_outline,
-                    checkedContentDescription = "Wyłącz powtarzanie",
-                    uncheckedContentDescription = "Włącz powtarzanie",
+                    checkedContentDescription = stringResource(R.string.player_repeat_disable),
+                    uncheckedContentDescription = stringResource(R.string.player_repeat_enable),
                     enabled = !playbackControlsBlocked && queue != null,
                 )
                 TonalToggleIconButton(
                     checked = radioEnabled,
                     onCheckedChange = { onRadioToggle() },
                     iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline,
-                    checkedContentDescription = "Wyłącz radio",
-                    uncheckedContentDescription = "Włącz radio",
+                    checkedContentDescription = stringResource(R.string.player_radio_disable),
+                    uncheckedContentDescription = stringResource(R.string.player_radio_enable),
                     enabled = !playbackControlsBlocked && queue != null,
                 )
                 presentedNowPlaying?.track?.let { track ->
@@ -845,7 +852,7 @@ private fun AccentArtworkGlow(
         )
     }
     Box(modifier = modifier) {
-        // Główny ambient wychodzący poza artwork ze wszystkich stron.
+        // Main ambient glow extending beyond the artwork on every side.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -857,7 +864,7 @@ private fun AccentArtworkGlow(
                 .background(brush = ambientBrush),
         )
 
-        // Lekko mocniejsze światło w dolnej połowie.
+        // Slightly stronger glow in the lower half.
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.82f)
@@ -893,7 +900,7 @@ private fun ImageArtworkGlow(
                 .alpha(0.40f),
         )
 
-        // Druga, słabsza warstwa daje bardziej miękkie wygaszenie.
+        // A second, softer layer makes the fade more gradual.
         AsyncImage(
             model = imageUrl,
             contentDescription = null,
@@ -932,9 +939,9 @@ private fun EmptyQueueCard(modifier: Modifier = Modifier) {
                 modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text("Kolejka jest pusta", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.player_queue_empty_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                "Użyj przycisku wyszukiwania, aby dodać utwory.",
+                stringResource(R.string.player_queue_empty_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1025,7 +1032,7 @@ private fun QueueSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 private fun PlayerLoadErrorCard(
-    message: String,
+    message: UiText?,
     onRetry: () -> Unit,
 ) {
     Card(
@@ -1045,16 +1052,16 @@ private fun PlayerLoadErrorCard(
                 tint = MaterialTheme.colorScheme.error,
             )
             Text(
-                "Nie udało się pobrać stanu odtwarzacza",
+                stringResource(R.string.player_load_failed).removeSuffix("."),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                message,
+                message?.asString() ?: stringResource(R.string.player_load_failed),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button(onClick = onRetry) { Text("Spróbuj ponownie") }
+            Button(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
         }
     }
 }

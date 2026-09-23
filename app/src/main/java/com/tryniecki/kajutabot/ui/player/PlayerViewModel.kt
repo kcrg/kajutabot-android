@@ -1,12 +1,14 @@
 package com.tryniecki.kajutabot.ui.player
 
 import android.os.SystemClock
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
+import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.client.KajutaBotApiErrors
 import com.tryniecki.kajutabot.api.client.KajutaBotRealtimeClientFactory
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
@@ -20,6 +22,8 @@ import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.userMessageForError
+import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.text.uiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -62,11 +66,11 @@ enum class QueueLoadState {
 
 enum class SearchSourceOption(
     val apiValue: String,
-    val displayName: String,
+    @StringRes val displayNameResId: Int,
 ) {
-    YOUTUBE("YouTube", "YouTube"),
-    SOUNDCLOUD("SoundCloud", "SoundCloud"),
-    DATABASE("Database", "Baza danych"),
+    YOUTUBE("YouTube", R.string.search_source_youtube),
+    SOUNDCLOUD("SoundCloud", R.string.search_source_soundcloud),
+    DATABASE("Database", R.string.search_source_database),
 }
 
 data class PlayerUiState(
@@ -84,15 +88,15 @@ data class PlayerUiState(
     val isLoadingGuilds: Boolean = true,
     val isLoadingVoiceChannels: Boolean = false,
     val guildAccessState: GuildAccessState = GuildAccessState.CHECKING,
-    val guildAccessError: String? = null,
+    val guildAccessError: UiText? = null,
     val isLoadingQueue: Boolean = false,
     val queueLoadState: QueueLoadState = QueueLoadState.IDLE,
-    val queueLoadError: String? = null,
+    val queueLoadError: UiText? = null,
     val isSearching: Boolean = false,
     val isMutating: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
-    val error: String? = null,
-    val info: String? = null,
+    val error: UiText? = null,
+    val info: UiText? = null,
 ) {
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
@@ -115,11 +119,11 @@ data class PlayerScreenState(
     val isLoadingGuilds: Boolean = false,
     val isLoadingQueue: Boolean = false,
     val queueLoadState: QueueLoadState = QueueLoadState.IDLE,
-    val queueLoadError: String? = null,
+    val queueLoadError: UiText? = null,
     val isMutating: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
-    val error: String? = null,
-    val info: String? = null,
+    val error: UiText? = null,
+    val info: UiText? = null,
 ) {
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
@@ -136,7 +140,7 @@ data class PlayerEntryState(
     val selectedVoiceChannelId: String? = null,
     val isLoadingVoiceChannels: Boolean = false,
     val guildAccessState: GuildAccessState = GuildAccessState.CHECKING,
-    val guildAccessError: String? = null,
+    val guildAccessError: UiText? = null,
 )
 
 data class AddTrackUiState(
@@ -147,8 +151,8 @@ data class AddTrackUiState(
     val lastCompletedSearchQuery: String? = null,
     val isSearching: Boolean = false,
     val isMutating: Boolean = false,
-    val error: String? = null,
-    val info: String? = null,
+    val error: UiText? = null,
+    val info: UiText? = null,
 )
 
 data class MiniPlayerState(
@@ -276,7 +280,7 @@ class PlayerViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.queue?.nowPlaying != null)
 
-    val playerError: StateFlow<String?> = _ui
+    val playerError: StateFlow<UiText?> = _ui
         .map { it.error ?: it.queueLoadError }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.error ?: _ui.value.queueLoadError)
@@ -284,8 +288,8 @@ class PlayerViewModel(
     private val _trackAdded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val trackAdded: SharedFlow<Unit> = _trackAdded.asSharedFlow()
 
-    private val _controlMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val controlMessages: SharedFlow<String> = _controlMessages.asSharedFlow()
+    private val _controlMessages = MutableSharedFlow<UiText>(extraBufferCapacity = 4)
+    val controlMessages: SharedFlow<UiText> = _controlMessages.asSharedFlow()
 
     private var searchJob: Job? = null
     private var transitionRefreshJob: Job? = null
@@ -735,7 +739,7 @@ class PlayerViewModel(
         if (guildId == null || channelId == null) {
             _ui.update {
                 it.copy(
-                    error = "Wybierz serwer i kanał głosowy na ekranie odtwarzacza, aby dodać utwór.",
+                    error = uiText(R.string.player_select_target_to_add),
                 )
             }
             return
@@ -779,7 +783,7 @@ class PlayerViewModel(
         mutate(
             controlAction = PlayerControlAction.REPEAT,
             successMessage = { response ->
-                if (response.isRepeatEnabled) "Powtarzanie włączone" else "Powtarzanie wyłączone"
+                if (response.isRepeatEnabled) uiText(R.string.player_repeat_on) else uiText(R.string.player_repeat_off)
             },
         ) { api, version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
@@ -796,14 +800,14 @@ class PlayerViewModel(
             // restart the media service for a track that no longer exists.
             forcePresentationIdleOnSuccess = true,
             successMessage = { response ->
-                if (response.radio.isEnabled) "Radio włączone" else "Radio wyłączone"
+                if (response.radio.isEnabled) uiText(R.string.player_radio_on) else uiText(R.string.player_radio_off)
             },
         ) { api, _ ->
             val queue = _ui.value.queue ?: return@mutate null
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             when (val action = decideRadioToggle(queue, _ui.value.selectedVoiceChannelId)) {
                 RadioToggleAction.MissingVoiceChannel -> {
-                    _ui.update { it.copy(error = "Najpierw wybierz serwer i kanał głosowy.") }
+                    _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }
                     null
                 }
                 is RadioToggleAction.Disable -> api.disableRadio(guildId, action.expectedVersion)
@@ -863,7 +867,7 @@ class PlayerViewModel(
     private fun mutate(
         controlAction: PlayerControlAction? = null,
         forcePresentationIdleOnSuccess: Boolean = false,
-        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse) -> String?)? = null,
+        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse) -> UiText?)? = null,
         call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse?,
     ) {
         if (controlAction != null) {
@@ -895,7 +899,7 @@ class PlayerViewModel(
     private suspend fun performMutation(
         controlAction: PlayerControlAction?,
         forcePresentationIdleOnSuccess: Boolean,
-        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse) -> String?)?,
+        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse) -> UiText?)?,
         call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse?,
     ) {
         _ui.update {
@@ -940,7 +944,7 @@ class PlayerViewModel(
                                 isMutating = false,
                                 activeControlAction = null,
                                 error = if (applied) {
-                                    "Kolejka zmieniła się w międzyczasie. Odświeżono stan."
+                                    uiText(R.string.player_queue_conflict_refreshed)
                                 } else {
                                     it.error
                                 },

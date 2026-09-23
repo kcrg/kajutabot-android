@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -88,6 +89,9 @@ import com.tryniecki.kajutabot.ui.player.RealtimeOwner
 import com.tryniecki.kajutabot.ui.player.AddTrackRoute
 import com.tryniecki.kajutabot.ui.player.DiscordSelectionRoute
 import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
+import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.text.asString
+import com.tryniecki.kajutabot.ui.text.resolve
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import com.tryniecki.kajutabot.ui.theme.KbMotion
 import kotlinx.coroutines.awaitCancellation
@@ -157,7 +161,7 @@ private fun RestoringScreen() {
             ExpressiveLoadingIndicator(modifier = Modifier.size(36.dp))
             Spacer(Modifier.height(12.dp))
             Text(
-                "Przywracanie sesji…",
+                stringResource(R.string.auth_restoring_session),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -166,7 +170,7 @@ private fun RestoringScreen() {
 }
 
 @Composable
-private fun RestoreErrorScreen(message: String, onRetry: () -> Unit) {
+private fun RestoreErrorScreen(message: UiText, onRetry: () -> Unit) {
     Scaffold { innerPadding ->
         Column(
             modifier = Modifier
@@ -176,15 +180,15 @@ private fun RestoreErrorScreen(message: String, onRetry: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text("Nie można przywrócić sesji", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.auth_restore_failed_title), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
             Text(
-                message,
+                message.asString(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onRetry) { Text("Spróbuj ponownie") }
+            Button(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
         }
     }
 }
@@ -336,7 +340,7 @@ private fun AuthenticatedContent(
 
     LaunchedEffect(favoritesViewModel, context) {
         favoritesViewModel.toggleMessages.collect { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, message.resolve(context), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -366,10 +370,10 @@ private fun AuthenticatedContent(
 
     // Surface player errors on tabs without their own error card.
     // The Player tab keeps its inline card; other tabs get a transient snackbar.
-    LaunchedEffect(playerError, currentDestination) {
-        val message = playerError
-        if (message != null && currentDestination != AppDestination.PLAYER) {
-            snackbarHostState.showSnackbar(message)
+    val playerErrorMessage = playerError?.asString()
+    LaunchedEffect(playerErrorMessage, currentDestination) {
+        if (playerErrorMessage != null && currentDestination != AppDestination.PLAYER) {
+            snackbarHostState.showSnackbar(playerErrorMessage)
         }
     }
 
@@ -419,6 +423,7 @@ private fun AuthenticatedContent(
                     }
                     NavigationBar {
                         AppDestination.entries.forEach { destination ->
+                            val destinationLabel = stringResource(destination.labelResId)
                             NavigationBarItem(
                                 selected = currentDestination == destination,
                                 onClick = {
@@ -433,10 +438,10 @@ private fun AuthenticatedContent(
                                 icon = {
                                     Icon(
                                         painter = painterResource(destination.icon),
-                                        contentDescription = destination.label,
+                                        contentDescription = destinationLabel,
                                     )
                                 },
-                                label = { Text(destination.label) },
+                                label = { Text(destinationLabel) },
                             )
                         }
                     }
