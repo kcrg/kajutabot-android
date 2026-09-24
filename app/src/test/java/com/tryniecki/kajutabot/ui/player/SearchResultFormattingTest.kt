@@ -65,9 +65,9 @@ class SearchResultFormattingTest {
             ),
         )
         assertEquals(
-            "https://api.example.com/api/v1/cache/thumbnails/YouTube/video-id",
+            "https://api.example.com/api/v1/app/users/me/media/content/upload-id/artwork",
             normalizeSearchThumbnailUrl(
-                "/api/v1/cache/thumbnails/YouTube/video-id",
+                "/api/v1/app/users/me/media/content/upload-id/artwork",
                 "https://api.example.com",
             ),
         )
