@@ -65,10 +65,10 @@ import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
+import com.tryniecki.kajutabot.ui.components.resolveArtworkUrl
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.text.asString
 import java.text.NumberFormat
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.Locale
 
 /**
@@ -440,19 +440,7 @@ internal fun formatSearchResultMetric(
 internal fun normalizeSearchThumbnailUrl(
     raw: String?,
     apiBaseUrl: String = BuildConfig.KAJUTABOT_API_BASE_URL,
-): String? {
-    val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    val apiRoot = apiBaseUrl.trim().trimEnd('/').toHttpUrlOrNull()
-
-    if (value.startsWith("//")) {
-        return "${apiRoot?.scheme ?: "https"}:$value"
-    }
-    if (value.toHttpUrlOrNull() != null) return value
-
-    // A relative thumbnail URL is still backend-provided data. Resolve it against the
-    // configured API origin instead of inventing a provider-specific fallback.
-    return apiRoot?.resolve(value)?.toString() ?: value
-}
+): String? = resolveArtworkUrl(raw, apiBaseUrl)
 
 @Composable
 private fun SearchResultArtwork(

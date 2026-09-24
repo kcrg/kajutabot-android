@@ -6,12 +6,33 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ArtworkUrlTest {
+    private val apiBaseUrl = "https://api.example.com"
+
     @Test
     fun `valid https url is passed through verbatim`() {
         val url = "https://cdn.example.com/art/abc123.jpg?x=1"
         val source = resolveArtworkSource(url)
         assertTrue(source is ArtworkSource.Remote)
         assertEquals(url, (source as ArtworkSource.Remote).url)
+    }
+
+    @Test
+    fun `root relative backend artwork is resolved against api origin`() {
+        assertEquals(
+            "https://api.example.com/api/v1/app/artwork/YouTube/video-id",
+            resolveArtworkUrl(
+                "/api/v1/app/artwork/YouTube/video-id",
+                apiBaseUrl,
+            ),
+        )
+    }
+
+    @Test
+    fun `protocol relative artwork inherits api scheme`() {
+        assertEquals(
+            "https://i.ytimg.com/vi/video-id/hqdefault.jpg",
+            resolveArtworkUrl("//i.ytimg.com/vi/video-id/hqdefault.jpg", apiBaseUrl),
+        )
     }
 
     @Test

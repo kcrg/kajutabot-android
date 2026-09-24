@@ -96,6 +96,7 @@ import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.components.TonalToggleIconButton
+import com.tryniecki.kajutabot.ui.components.resolveArtworkUrl
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.theme.fadeThrough
@@ -750,9 +751,10 @@ private fun SmoothArtworkGlow(
     // warm Coil's cache at the real render size so the old glow stays visible
     // until the new artwork is actually ready, avoiding a fade-through-black gap.
     val targetAccent = slide.artworkAccentColor.toArtworkAccentColor()
+    val targetArtworkUrl = remember(slide.thumbnailUrl) { resolveArtworkUrl(slide.thumbnailUrl) }
     val preloadImage = slide != displayedSlide &&
         slide.hasTrack &&
-        slide.thumbnailUrl != null &&
+        targetArtworkUrl != null &&
         targetAccent == null
 
     LaunchedEffect(slide, preloadImage) {
@@ -763,7 +765,7 @@ private fun SmoothArtworkGlow(
         if (preloadImage) {
             val candidate = slide
             AsyncImage(
-                model = candidate.thumbnailUrl,
+                model = targetArtworkUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -885,9 +887,10 @@ private fun ImageArtworkGlow(
     imageUrl: String,
     modifier: Modifier = Modifier,
 ) {
+    val model = remember(imageUrl) { resolveArtworkUrl(imageUrl) }
     Box(modifier = modifier) {
         AsyncImage(
-            model = imageUrl,
+            model = model,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -902,7 +905,7 @@ private fun ImageArtworkGlow(
 
         // A second, softer layer makes the fade more gradual.
         AsyncImage(
-            model = imageUrl,
+            model = model,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
