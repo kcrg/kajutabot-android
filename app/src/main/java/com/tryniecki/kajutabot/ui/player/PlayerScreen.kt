@@ -55,7 +55,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,9 +68,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -96,7 +94,6 @@ import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.components.TonalToggleIconButton
-import com.tryniecki.kajutabot.ui.components.resolveArtworkUrl
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.theme.fadeThrough
@@ -104,7 +101,6 @@ import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
 import com.tryniecki.kajutabot.ui.text.resolve
-import coil3.compose.AsyncImage
 
 private val artworkAccentColorRegex = Regex("#[0-9a-fA-F]{6}")
 
@@ -229,9 +225,9 @@ fun PlayerScreen(
             AnimatedVisibility(
                 visible = showFloatingActions,
                 enter = fadeIn(animationSpec = motion.fastEffectsSpec()) +
-                    scaleIn(animationSpec = motion.fastSpatialSpec(), initialScale = 0.82f),
+                        scaleIn(animationSpec = motion.fastSpatialSpec(), initialScale = 0.82f),
                 exit = fadeOut(animationSpec = motion.fastEffectsSpec()) +
-                    scaleOut(animationSpec = motion.fastSpatialSpec(), targetScale = 0.82f),
+                        scaleOut(animationSpec = motion.fastSpatialSpec(), targetScale = 0.82f),
             ) {
                 Column(
                     horizontalAlignment = Alignment.End,
@@ -744,64 +740,24 @@ private fun SmoothArtworkGlow(
     modifier: Modifier = Modifier,
 ) {
     val motion = MaterialTheme.motionScheme
-    val latestSlide by rememberUpdatedState(slide)
-    var displayedSlide by remember { mutableStateOf(slide) }
+    val fallbackAccent = lerp(
+        MaterialTheme.colorScheme.primary,
+        Color.White,
+        0.18f,
+    )
 
-    // Color-backed glows can transition immediately. Image-backed glows first
-    // warm Coil's cache at the real render size so the old glow stays visible
-    // until the new artwork is actually ready, avoiding a fade-through-black gap.
-    val targetAccent = slide.artworkAccentColor.toArtworkAccentColor()
-    val targetArtworkUrl = remember(slide.thumbnailUrl) { resolveArtworkUrl(slide.thumbnailUrl) }
-    val preloadImage = slide != displayedSlide &&
-        slide.hasTrack &&
-        targetArtworkUrl != null &&
-        targetAccent == null
+    Crossfade(
+        targetState = slide,
+        animationSpec = motion.slowEffectsSpec(),
+        modifier = modifier,
+        label = "nowPlayingGlow",
+    ) { current ->
+        if (!current.hasTrack) return@Crossfade
 
-    LaunchedEffect(slide, preloadImage) {
-        if (!preloadImage) displayedSlide = slide
-    }
-
-    Box(modifier = modifier) {
-        if (preloadImage) {
-            val candidate = slide
-            AsyncImage(
-                model = targetArtworkUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .alpha(0f),
-                onSuccess = {
-                    if (latestSlide == candidate) displayedSlide = candidate
-                },
-                onError = {
-                    // Do not pin the previous track forever if artwork fails.
-                    if (latestSlide == candidate) displayedSlide = candidate
-                },
-            )
-        }
-
-        Crossfade(
-            targetState = displayedSlide,
-            animationSpec = motion.slowEffectsSpec(),
+        AccentArtworkGlow(
+            accent = current.artworkAccentColor.toArtworkAccentColor() ?: fallbackAccent,
             modifier = Modifier.fillMaxSize(),
-            label = "nowPlayingGlow",
-        ) { current ->
-            if (!current.hasTrack || current.thumbnailUrl == null) return@Crossfade
-
-            val accent = current.artworkAccentColor.toArtworkAccentColor()
-            if (accent != null) {
-                AccentArtworkGlow(
-                    accent = accent,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                ImageArtworkGlow(
-                    imageUrl = current.thumbnailUrl,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
+        )
     }
 }
 
@@ -834,89 +790,24 @@ private fun AccentArtworkGlow(
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
-    val ambientBrush = remember(accent) {
-        Brush.radialGradient(
-            colorStops = arrayOf(
-                0.00f to accent.copy(alpha = 0.42f),
-                0.42f to accent.copy(alpha = 0.26f),
-                0.72f to accent.copy(alpha = 0.10f),
-                1.00f to Color.Transparent,
-            ),
-        )
-    }
-    val lowerGlowBrush = remember(accent) {
-        Brush.radialGradient(
-            colorStops = arrayOf(
-                0.00f to accent.copy(alpha = 0.38f),
-                0.55f to accent.copy(alpha = 0.16f),
-                1.00f to Color.Transparent,
-            ),
-        )
-    }
     Box(modifier = modifier) {
-        // Main ambient glow extending beyond the artwork on every side.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 14.dp)
+                .padding(2.dp)
+                .offset(y = 4.dp)
+                .graphicsLayer {
+                    scaleX = 1.03f
+                    scaleY = 1.04f
+                }
                 .blur(
-                    radius = 44.dp,
+                    radius = 40.dp,
                     edgeTreatment = BlurredEdgeTreatment.Unbounded,
                 )
-                .background(brush = ambientBrush),
-        )
-
-        // Slightly stronger glow in the lower half.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.82f)
-                .fillMaxHeight(0.62f)
-                .align(Alignment.BottomCenter)
-                .offset(y = 12.dp)
-                .blur(
-                    radius = 34.dp,
-                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
-                )
-                .background(brush = lowerGlowBrush),
-        )
-    }
-}
-
-@Composable
-private fun ImageArtworkGlow(
-    imageUrl: String,
-    modifier: Modifier = Modifier,
-) {
-    val model = remember(imageUrl) { resolveArtworkUrl(imageUrl) }
-    Box(modifier = modifier) {
-        AsyncImage(
-            model = model,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 18.dp, vertical = 12.dp)
-                .blur(
-                    radius = 46.dp,
-                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
-                )
-                .alpha(0.40f),
-        )
-
-        // A second, softer layer makes the fade more gradual.
-        AsyncImage(
-            model = model,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth(0.88f)
-                .fillMaxHeight(0.78f)
-                .align(Alignment.Center)
-                .blur(
-                    radius = 60.dp,
-                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
-                )
-                .alpha(0.18f),
+                .background(
+                    color = accent.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(14.dp),
+                ),
         )
     }
 }
