@@ -30,18 +30,12 @@ import coil3.compose.AsyncImage
 import com.tryniecki.kajutabot.R
 
 /**
- * Backend-provided track artwork with an optional caller-supplied fallback and a broken state.
- *
- * [imageUrl] is used verbatim. If it is missing or cannot be loaded, [fallbackImageUrl]
- * is tried when supplied. Otherwise a visible broken-image state is shown.
- *
- * The caller must size this composable (e.g. `Modifier.size(56.dp)` or
- * `fillMaxWidth + aspectRatio`); the image and the broken state fill that space.
+ * Displays the artwork URL supplied by the backend, or a placeholder when it is missing
+ * or cannot be loaded. The caller supplies the size.
  */
 @Composable
 fun TrackArtwork(
     imageUrl: String?,
-    fallbackImageUrl: String? = null,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     contentScale: ContentScale = ContentScale.Crop,
@@ -50,15 +44,8 @@ fun TrackArtwork(
     showMissingLabel: Boolean = false,
     backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
 ) {
-    val primary = remember(imageUrl) { resolveArtworkSource(imageUrl) }
-    val fallback = remember(fallbackImageUrl) { resolveArtworkSource(fallbackImageUrl) }
-    var primaryFailed by remember(imageUrl, fallbackImageUrl) { mutableStateOf(false) }
-    var fallbackFailed by remember(imageUrl, fallbackImageUrl) { mutableStateOf(false) }
-    val source = when {
-        primary is ArtworkSource.Remote && !primaryFailed -> primary
-        fallback is ArtworkSource.Remote && fallback.url != (primary as? ArtworkSource.Remote)?.url && !fallbackFailed -> fallback
-        else -> ArtworkSource.Missing
-    }
+    val source = remember(imageUrl) { resolveArtworkSource(imageUrl) }
+    var loadFailed by remember(imageUrl) { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -66,20 +53,19 @@ fun TrackArtwork(
             .background(backgroundColor),
         contentAlignment = Alignment.Center,
     ) {
-        when {
-            source is ArtworkSource.Missing -> BrokenArtwork(
-                isLoadError = primaryFailed || fallbackFailed,
-                iconSize = brokenIconSize,
-                showLabel = showMissingLabel,
-            )
-            else -> AsyncImage(
-                model = (source as ArtworkSource.Remote).url,
+        if (source is ArtworkSource.Remote && !loadFailed) {
+            AsyncImage(
+                model = source.url,
                 contentDescription = contentDescription,
                 modifier = Modifier.matchParentSize(),
                 contentScale = contentScale,
-                onError = {
-                    if (source == primary) primaryFailed = true else fallbackFailed = true
-                },
+                onError = { loadFailed = true },
+            )
+        } else {
+            BrokenArtwork(
+                isLoadError = loadFailed,
+                iconSize = brokenIconSize,
+                showLabel = showMissingLabel,
             )
         }
     }

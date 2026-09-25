@@ -51,16 +51,16 @@ class SearchResultFormattingTest {
     @Test
     fun `normalizes protocol relative search thumbnail to https`() {
         assertEquals(
-            "https://i.ytimg.com/vi/video-id/hqdefault.jpg",
+            "https://cdn.example.com/art/video-id.jpg",
             normalizeSearchThumbnailUrl(
-                "//i.ytimg.com/vi/video-id/hqdefault.jpg",
+                "//cdn.example.com/art/video-id.jpg",
                 "https://api.example.com",
             ),
         )
         assertEquals(
-            "https://i.ytimg.com/vi/video-id/hqdefault.jpg",
+            "https://cdn.example.com/art/video-id.jpg",
             normalizeSearchThumbnailUrl(
-                " https://i.ytimg.com/vi/video-id/hqdefault.jpg ",
+                " https://cdn.example.com/art/video-id.jpg ",
                 "https://api.example.com",
             ),
         )

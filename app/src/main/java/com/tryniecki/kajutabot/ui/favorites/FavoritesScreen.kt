@@ -259,7 +259,6 @@ fun FavoritesScreen(
                             leadingContent = {
                                 TrackArtwork(
                                     imageUrl = fav.thumbnailUrl,
-                                    fallbackImageUrl = favoriteArtworkFallbackUrl(fav.contentUrl),
                                     modifier = Modifier.size(64.dp),
                                 )
                             },

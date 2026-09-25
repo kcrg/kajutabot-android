@@ -30,8 +30,8 @@ class ArtworkUrlTest {
     @Test
     fun `protocol relative artwork inherits api scheme`() {
         assertEquals(
-            "https://i.ytimg.com/vi/video-id/hqdefault.jpg",
-            resolveArtworkUrl("//i.ytimg.com/vi/video-id/hqdefault.jpg", apiBaseUrl),
+            "https://cdn.example.com/art/video-id.jpg",
+            resolveArtworkUrl("//cdn.example.com/art/video-id.jpg", apiBaseUrl),
         )
     }
 
