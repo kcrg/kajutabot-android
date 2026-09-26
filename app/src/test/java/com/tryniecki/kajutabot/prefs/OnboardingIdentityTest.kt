@@ -1,5 +1,7 @@
 package com.tryniecki.kajutabot.prefs
 
+import com.tryniecki.kajutabot.data.preferences.onboardingIdentityKey
+
 import com.tryniecki.kajutabot.api.model.auth.SessionType
 import org.junit.Assert.assertEquals
 import org.junit.Test

@@ -1,5 +1,7 @@
 package com.tryniecki.kajutabot.prefs
 
+import com.tryniecki.kajutabot.data.preferences.favoritesPreferenceOwnerKey
+
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.auth.UserSession

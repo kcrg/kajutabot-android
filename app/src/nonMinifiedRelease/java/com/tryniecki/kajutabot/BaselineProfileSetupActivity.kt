@@ -49,8 +49,8 @@ class BaselineProfileSetupActivity : ComponentActivity() {
 
         // The generator profiles the returning-user path, not first-run onboarding. Keep selection
         // empty and deterministic; PlayerViewModel will resolve the available guest guild normally.
-        container.selectionStore.clear()
-        container.onboardingPreferences.setCompletedFor(
+        container.preferencesRepository.clearGuildSelection()
+        container.preferencesRepository.setOnboardingCompleted(
             sessionType = session.sessionType,
             discordUserId = session.user.discordUserId,
         )

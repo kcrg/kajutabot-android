@@ -53,11 +53,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import coil3.compose.AsyncImage
-import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
-import com.tryniecki.kajutabot.auth.LogoutResult
-import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.browser.openCustomTab
 import com.tryniecki.kajutabot.browser.rememberCustomTabColors
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
@@ -72,9 +69,9 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun MoreRootScreen(
-    container: AppContainer,
     appViewModel: AppViewModel,
     playerViewModel: PlayerViewModel,
+    isGuest: Boolean,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     onOpenOnboarding: () -> Unit,
@@ -82,9 +79,9 @@ fun MoreRootScreen(
     onOpenContact: () -> Unit,
 ) {
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
-    var isLoggingOut by remember { mutableStateOf(false) }
-    var logoutError by remember { mutableStateOf<UiText?>(null) }
-    val isGuest = container.sessionManager.currentUserSession()?.sessionType == SessionType.GUEST
+    val appUi by appViewModel.ui.collectAsStateWithLifecycle()
+    val isLoggingOut = appUi.isLoggingOut
+    val logoutError = appUi.accountError
     val openCustomTab = rememberOpenCustomTab()
 
     Scaffold(
@@ -159,18 +156,7 @@ fun MoreRootScreen(
                             }
 
                             Button(
-                                onClick = {
-                                    isLoggingOut = true
-                                    logoutError = null
-
-                                    appViewModel.logout { result ->
-                                        isLoggingOut = false
-
-                                        if (result is LogoutResult.NeedsRetry) {
-                                            logoutError = result.message
-                                        }
-                                    }
-                                },
+                                onClick = appViewModel::logout,
                                 enabled = !isLoggingOut,
                             ) {
                                 if (isLoggingOut) {
@@ -191,11 +177,8 @@ fun MoreRootScreen(
                             ) { Text(stringResource(R.string.action_join_test_server)) }
 
                             OutlinedButton(
-                                onClick = {
-                                    logoutError = null
-                                    appViewModel.switchGuestToDiscord { logoutError = it }
-                                },
-                                enabled = !isLoggingOut,
+                                onClick = appViewModel::switchGuestToDiscord,
+                                enabled = !isLoggingOut && !appUi.isSigningIn,
                                 modifier = Modifier.fillMaxWidth(),
                             ) { Text(stringResource(R.string.action_sign_in_discord)) }
                         }
@@ -215,16 +198,8 @@ fun MoreRootScreen(
 
                                 OutlinedButton(
                                     onClick = {
-                                        logoutError = null
-                                        isLoggingOut = true
-
-                                        appViewModel.logout { result ->
-                                            isLoggingOut = false
-
-                                            if (result is LogoutResult.NeedsRetry) {
-                                                logoutError = result.message
-                                            }
-                                        }
+                                        appViewModel.dismissAccountError()
+                                        appViewModel.logout()
                                     },
                                 ) {
                                     Text(stringResource(R.string.action_retry_short))

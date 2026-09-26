@@ -7,22 +7,19 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
-import com.tryniecki.kajutabot.auth.SessionManager
-import com.tryniecki.kajutabot.prefs.favoritesPreferenceOwnerKey
-import com.tryniecki.kajutabot.api.model.favorites.FavoriteResponse
-import com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
-import com.tryniecki.kajutabot.api.model.favorites.QueueFavoritesRequest
-import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
-import com.tryniecki.kajutabot.ui.userMessageForError
+import com.tryniecki.kajutabot.api.model.favorites.FavoriteResponse
+import com.tryniecki.kajutabot.data.preferences.UserPreferencesRepository
+import com.tryniecki.kajutabot.data.preferences.favoritesPreferenceOwnerKey
+import com.tryniecki.kajutabot.data.repository.FavoritesRepository
+import com.tryniecki.kajutabot.ui.text.UiMessage
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.uiText
-import kotlinx.coroutines.flow.MutableSharedFlow
+import com.tryniecki.kajutabot.ui.userMessageForError
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -33,37 +30,30 @@ data class FavoritesUiState(
     val shuffle: Boolean = false,
     val error: UiText? = null,
     val info: UiText? = null,
+    val transientMessage: UiMessage? = null,
 )
 
 class FavoritesViewModel(
-    private val sessionManager: SessionManager,
-    private val selectedGuildId: () -> String?,
-    private val selectedChannelId: () -> String?,
-    private val loadShuffle: (String) -> Boolean,
-    private val saveShuffle: (String, Boolean) -> Unit,
+    private val repository: FavoritesRepository,
+    private val preferencesRepository: UserPreferencesRepository,
 ) : ViewModel() {
-    constructor(container: AppContainer) : this(
-        container.sessionManager,
-        { container.selectionStore.guildId },
-        { container.selectionStore.voiceChannelId },
-        container.favoritesPreferences::shuffle,
-        container.favoritesPreferences::setShuffle,
-    )
+    private val sessionIdentity = checkNotNull(repository.sessionIdentity.value)
+    private val preferenceOwnerKey = favoritesPreferenceOwnerKey(checkNotNull(repository.currentSession()))
 
-    private val sessionIdentity = checkNotNull(sessionManager.sessionIdentity.value)
-    private val preferenceOwnerKey = favoritesPreferenceOwnerKey(checkNotNull(sessionManager.currentUserSession()))
-
-    private val _ui = MutableStateFlow(FavoritesUiState(shuffle = loadShuffle(preferenceOwnerKey), isLoading = true))
+    private val _ui = MutableStateFlow(FavoritesUiState(isLoading = true))
     val ui: StateFlow<FavoritesUiState> = _ui.asStateFlow()
 
-    private val _toggleMessages = MutableSharedFlow<UiText>(extraBufferCapacity = 4)
-    val toggleMessages: SharedFlow<UiText> = _toggleMessages.asSharedFlow()
     private var refreshGeneration = 0L
     private var mutationRevision = 0L
     private var favoriteIdentities: Set<String> = emptySet()
+    private var messageSequence = 0L
 
     init {
-        refresh()
+        viewModelScope.launch {
+            val shuffle = preferencesRepository.favoritesShuffle(preferenceOwnerKey).first()
+            _ui.update { it.copy(shuffle = shuffle) }
+            refresh()
+        }
     }
 
     fun refresh() {
@@ -73,7 +63,7 @@ class FavoritesViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, error = null) }
             try {
-                val items = sessionManager.withApiForSession(sessionIdentity) { it.getFavorites() }
+                val items = repository.getFavorites(sessionIdentity)
                 if (generation == refreshGeneration) {
                     if (revision == mutationRevision) {
                         favoriteIdentities = items.asSequence()
@@ -99,10 +89,21 @@ class FavoritesViewModel(
         _ui.update { it.copy(error = null, info = null) }
     }
 
+    fun acknowledgeTransientMessage(id: Long) {
+        _ui.update { current ->
+            if (current.transientMessage?.id == id) current.copy(transientMessage = null) else current
+        }
+    }
+
     fun setShuffle(enabled: Boolean) {
-        saveShuffle(preferenceOwnerKey, enabled)
-        _ui.update { it.copy(shuffle = enabled) }
-        _toggleMessages.tryEmit(uiText(if (enabled) R.string.favorites_shuffle_on else R.string.favorites_shuffle_off))
+        val message = UiMessage(
+            id = ++messageSequence,
+            text = uiText(if (enabled) R.string.favorites_shuffle_on else R.string.favorites_shuffle_off),
+        )
+        _ui.update { it.copy(shuffle = enabled, transientMessage = message) }
+        viewModelScope.launch {
+            preferencesRepository.setFavoritesShuffle(preferenceOwnerKey, enabled)
+        }
     }
 
     fun isFavorite(track: PlaybackTrackResponse): Boolean =
@@ -131,11 +132,19 @@ class FavoritesViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isMutating = true, error = null, info = null) }
             try {
-                val added = sessionManager.withApiForSession(sessionIdentity) {
-                    it.addFavorite(AddFavoriteRequest(contentUrl, title, thumbnailUrl))
-                }
+                val added = repository.addFavorite(
+                    expectedIdentity = sessionIdentity,
+                    contentUrl = contentUrl,
+                    title = title,
+                    thumbnailUrl = thumbnailUrl,
+                )
                 mutationRevision++
                 val identity = favoriteIdentity(added.contentUrl)
+                val transientMessage = if (toggleFeedback) {
+                    UiMessage(++messageSequence, uiText(R.string.favorites_added))
+                } else {
+                    null
+                }
                 favoriteIdentities = favoriteIdentities + identity
                 _ui.update { current ->
                     current.copy(
@@ -145,10 +154,8 @@ class FavoritesViewModel(
                         isMutating = false,
                         isLoading = false,
                         info = if (toggleFeedback) null else uiText(R.string.favorites_saved),
+                        transientMessage = transientMessage ?: current.transientMessage,
                     )
-                }
-                if (toggleFeedback) {
-                    _toggleMessages.emit(uiText(R.string.favorites_added))
                 }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
@@ -163,19 +170,22 @@ class FavoritesViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isMutating = true, error = null) }
             try {
-                sessionManager.withApiForSession(sessionIdentity) { it.deleteFavorite(contentUrl) }
+                repository.deleteFavorite(sessionIdentity, contentUrl)
                 mutationRevision++
                 val identity = favoriteIdentity(contentUrl)
+                val transientMessage = if (toggleFeedback) {
+                    UiMessage(++messageSequence, uiText(R.string.favorites_removed))
+                } else {
+                    null
+                }
                 favoriteIdentities = favoriteIdentities - identity
                 _ui.update { current ->
                     current.copy(
                         favorites = current.favorites.filterNot { favoriteIdentity(it.contentUrl) == identity },
                         isMutating = false,
                         isLoading = false,
+                        transientMessage = transientMessage ?: current.transientMessage,
                     )
-                }
-                if (toggleFeedback) {
-                    _toggleMessages.emit(uiText(R.string.favorites_removed))
                 }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
@@ -185,19 +195,22 @@ class FavoritesViewModel(
 
     fun queueAll() {
         if (_ui.value.isMutating) return
-        val guildId = selectedGuildId()
-        val channelId = selectedChannelId()
-        val shuffle = _ui.value.shuffle
-        if (guildId == null || channelId == null) {
-            _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_all)) }
-            return
-        }
         viewModelScope.launch {
+            val selection = preferencesRepository.currentGuildSelection()
+            val guildId = selection.guildId
+            val channelId = selection.voiceChannelId
+            if (guildId == null || channelId == null) {
+                _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_all)) }
+                return@launch
+            }
             _ui.update { it.copy(isMutating = true, error = null, info = null) }
             try {
-                val response = sessionManager.withApiForSession(sessionIdentity) {
-                    it.queueFavorites(QueueFavoritesRequest(guildId, channelId, shuffle = shuffle))
-                }
+                repository.queueFavorites(
+                    expectedIdentity = sessionIdentity,
+                    guildId = guildId,
+                    channelId = channelId,
+                    shuffle = _ui.value.shuffle,
+                )
                 _ui.update { it.copy(isMutating = false, info = uiText(R.string.favorites_queued_all)) }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
@@ -207,19 +220,22 @@ class FavoritesViewModel(
 
     fun playSingle(contentUrl: String) {
         if (_ui.value.isMutating) return
-        val guildId = selectedGuildId()
-        val channelId = selectedChannelId()
-        if (guildId == null || channelId == null) {
-            _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_play)) }
-            return
-        }
         viewModelScope.launch {
+            val selection = preferencesRepository.currentGuildSelection()
+            val guildId = selection.guildId
+            val channelId = selection.voiceChannelId
+            if (guildId == null || channelId == null) {
+                _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_play)) }
+                return@launch
+            }
             _ui.update { it.copy(isMutating = true, error = null, info = null) }
             try {
-                val response = sessionManager.withApiForSession(sessionIdentity) { api ->
-                    val queue = api.getQueue(guildId)
-                    api.enqueue(guildId, EnqueueRequest(channelId, listOf(contentUrl), queue.version))
-                }
+                repository.playSingle(
+                    expectedIdentity = sessionIdentity,
+                    guildId = guildId,
+                    channelId = channelId,
+                    contentUrl = contentUrl,
+                )
                 _ui.update { it.copy(isMutating = false, info = uiText(R.string.favorites_queued_one)) }
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
@@ -231,7 +247,10 @@ class FavoritesViewModel(
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             viewModelFactory {
                 initializer {
-                    FavoritesViewModel(container)
+                    FavoritesViewModel(
+                        repository = container.favoritesRepository,
+                        preferencesRepository = container.preferencesRepository,
+                    )
                 }
             }
     }

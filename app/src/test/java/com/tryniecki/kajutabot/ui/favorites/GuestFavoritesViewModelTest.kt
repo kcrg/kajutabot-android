@@ -13,6 +13,8 @@ import com.tryniecki.kajutabot.auth.FakePendingStorage
 import com.tryniecki.kajutabot.auth.FakeSessionStore
 import com.tryniecki.kajutabot.auth.SessionManager
 import com.tryniecki.kajutabot.auth.UserSession
+import com.tryniecki.kajutabot.data.preferences.UserPreferencesRepository
+import com.tryniecki.kajutabot.data.repository.FavoritesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
@@ -28,6 +30,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.time.Instant
 
@@ -60,12 +63,13 @@ class GuestFavoritesViewModelTest {
                 appConfig = AppConfig(baseUrl, "test-client"),
             )
             manager.restore()
-            val savedShuffle = mutableMapOf<String, Boolean>()
+            val preferences = UserPreferencesRepository(RuntimeEnvironment.getApplication())
+            preferences.setGuildSelection("demo-guild", "voice")
+            preferences.setFavoritesShuffle("guest", false)
             server.enqueue(MockResponse().setBody("[]"))
             val viewModel = FavoritesViewModel(
-                manager, { "demo-guild" }, { "voice" },
-                { key -> savedShuffle[key] ?: false },
-                { key, value -> savedShuffle[key] = value },
+                repository = FavoritesRepository(manager),
+                preferencesRepository = preferences,
             )
             withTimeout(5_000) { viewModel.ui.first { !it.isLoading } }
             assertEquals("/api/v1/app/users/me/favorites", server.takeRequest().path)
@@ -74,7 +78,7 @@ class GuestFavoritesViewModelTest {
             withTimeout(5_000) { viewModel.ui.first { !it.isLoading } }
             assertEquals("/api/v1/app/users/me/favorites", server.takeRequest().path)
             viewModel.setShuffle(true)
-            assertEquals(true, savedShuffle["guest"])
+            assertTrue(withTimeout(5_000) { preferences.favoritesShuffle("guest").first { it } })
 
             server.enqueue(MockResponse().setBody(favoriteJson))
             viewModel.toggle(track)
@@ -130,11 +134,14 @@ class GuestFavoritesViewModelTest {
             )
             manager.restore()
             val identity = checkNotNull(manager.sessionIdentity.value)
-            val savedShuffle = mutableMapOf<String, Boolean>()
+            val preferences = UserPreferencesRepository(RuntimeEnvironment.getApplication())
+            preferences.setGuildSelection("demo-guild", "voice")
+            preferences.setFavoritesShuffle("guest", false)
             server.enqueue(MockResponse().setBody("[]"))
-            val viewModel = FavoritesViewModel(manager, { "demo-guild" }, { "voice" },
-                { key -> savedShuffle[key] ?: false },
-                { key, value -> savedShuffle[key] = value })
+            val viewModel = FavoritesViewModel(
+                repository = FavoritesRepository(manager),
+                preferencesRepository = preferences,
+            )
             withTimeout(5_000) { viewModel.ui.first { !it.isLoading } }
             server.takeRequest()
             viewModel.setShuffle(true)
@@ -143,7 +150,7 @@ class GuestFavoritesViewModelTest {
             assertEquals("new-jwt", manager.accessTokenForSession(identity))
             assertEquals(identity, manager.sessionIdentity.value)
             assertEquals(1, auth.guestCount.get())
-            assertEquals(true, savedShuffle["guest"])
+            assertTrue(withTimeout(5_000) { preferences.favoritesShuffle("guest").first { it } })
             assertTrue(viewModel.ui.value.shuffle)
             assertEquals("new-jwt", stored.session?.accessToken)
         } finally {

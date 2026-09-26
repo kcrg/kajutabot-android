@@ -10,33 +10,29 @@ import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.client.KajutaBotApiErrors
-import com.tryniecki.kajutabot.api.client.KajutaBotRealtimeClientFactory
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
-import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
-import com.tryniecki.kajutabot.api.model.queue.MoveQueueEntryRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
-import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
-import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
+import com.tryniecki.kajutabot.data.preferences.UserPreferencesRepository
+import com.tryniecki.kajutabot.data.repository.PlayerRepository
 import com.tryniecki.kajutabot.ui.userMessageForError
+import com.tryniecki.kajutabot.ui.text.UiMessage
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.uiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -97,6 +93,8 @@ data class PlayerUiState(
     val activeControlAction: PlayerControlAction? = null,
     val error: UiText? = null,
     val info: UiText? = null,
+    val controlMessage: UiMessage? = null,
+    val addTrackCompleted: Boolean = false,
 ) {
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
@@ -153,6 +151,7 @@ data class AddTrackUiState(
     val isMutating: Boolean = false,
     val error: UiText? = null,
     val info: UiText? = null,
+    val addTrackCompleted: Boolean = false,
 )
 
 data class MiniPlayerState(
@@ -200,6 +199,7 @@ fun PlayerUiState.toAddTrackUiState(): AddTrackUiState = AddTrackUiState(
     isMutating = isMutating,
     error = error,
     info = info,
+    addTrackCompleted = addTrackCompleted,
 )
 
 fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
@@ -213,20 +213,12 @@ fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
 }
 
 class PlayerViewModel(
-    private val container: AppContainer,
+    private val repository: PlayerRepository,
+    private val preferencesRepository: UserPreferencesRepository,
 ) : ViewModel() {
-    private val sessionManager = container.sessionManager
-    private val sessionIdentity = checkNotNull(sessionManager.sessionIdentity.value)
-    private val selection = container.selectionStore
-    private val searchHistory = container.searchHistoryPreferences
+    private val sessionIdentity = checkNotNull(repository.sessionIdentity.value)
 
-    private val _ui = MutableStateFlow(
-        PlayerUiState(
-            selectedGuildId = selection.guildId,
-            selectedVoiceChannelId = selection.voiceChannelId,
-            searchHistory = searchHistory.entries(),
-        ),
-    )
+    private val _ui = MutableStateFlow(PlayerUiState())
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
     private val realtimeGuildId = _ui.map { it.selectedGuildId }
         .distinctUntilChanged()
@@ -234,10 +226,10 @@ class PlayerViewModel(
     private val realtime = PlayerRealtime(
         scope = viewModelScope,
         expectedIdentity = sessionIdentity,
-        sessionIdentity = sessionManager.sessionIdentity,
+        sessionIdentity = repository.sessionIdentity,
         guildId = realtimeGuildId,
-        token = { sessionManager.accessTokenForSession(sessionIdentity) },
-        connect = { token -> KajutaBotRealtimeClientFactory.create(container.appConfig.apiBaseUrl, token) },
+        token = { repository.accessToken(sessionIdentity) },
+        connect = repository::createRealtimeClient,
         onSnapshot = { snapshot -> applyQueueSnapshot(snapshot) },
         recoverQueue = ::recoverQueueOnce,
         elapsedRealtimeMs = SystemClock::elapsedRealtime,
@@ -285,11 +277,10 @@ class PlayerViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.error ?: _ui.value.queueLoadError)
 
-    private val _trackAdded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val trackAdded: SharedFlow<Unit> = _trackAdded.asSharedFlow()
-
-    private val _controlMessages = MutableSharedFlow<UiText>(extraBufferCapacity = 4)
-    val controlMessages: SharedFlow<UiText> = _controlMessages.asSharedFlow()
+    val controlMessage: StateFlow<UiMessage?> = _ui
+        .map { it.controlMessage }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.controlMessage)
 
     private var searchJob: Job? = null
     private var transitionRefreshJob: Job? = null
@@ -304,8 +295,21 @@ class PlayerViewModel(
     private val controlMutationMutex = Mutex()
     private val pendingControlActions = mutableSetOf<PlayerControlAction>()
 
+    private var messageSequence = 0L
+
     init {
-        refreshGuilds()
+        viewModelScope.launch {
+            val selection = preferencesRepository.currentGuildSelection()
+            val history = preferencesRepository.searchHistory.first()
+            _ui.update {
+                it.copy(
+                    selectedGuildId = selection.guildId,
+                    selectedVoiceChannelId = selection.voiceChannelId,
+                    searchHistory = history,
+                )
+            }
+            refreshGuilds()
+        }
     }
 
     fun setRealtimeOwner(owner: RealtimeOwner, active: Boolean) = realtime.setOwner(owner, active)
@@ -345,6 +349,16 @@ class PlayerViewModel(
         _ui.update { it.copy(error = null, info = null) }
     }
 
+    fun acknowledgeControlMessage(id: Long) {
+        _ui.update { current ->
+            if (current.controlMessage?.id == id) current.copy(controlMessage = null) else current
+        }
+    }
+
+    fun acknowledgeAddTrackCompleted() {
+        _ui.update { it.copy(addTrackCompleted = false) }
+    }
+
     fun clearAddTrack() {
         searchJob?.cancel()
         _ui.update {
@@ -355,6 +369,7 @@ class PlayerViewModel(
                 isSearching = false,
                 error = null,
                 info = null,
+                addTrackCompleted = false,
             )
         }
     }
@@ -369,18 +384,17 @@ class PlayerViewModel(
                 )
             }
             try {
-                val guilds = sessionManager.withApiForSession(sessionIdentity) { it.getMyGuilds() }
-                var selGuild = selection.guildId
-                var selChannel = selection.voiceChannelId
+                val guilds = repository.getGuilds(sessionIdentity)
+                var selGuild = _ui.value.selectedGuildId
+                var selChannel = _ui.value.selectedVoiceChannelId
                 if (selGuild != null && guilds.none { g -> g.id == selGuild }) {
                     selGuild = null
                     selChannel = null
-                    selection.guildId = null
-                    selection.voiceChannelId = null
+                    preferencesRepository.setGuildSelection(null, null)
                 }
                 if (selGuild == null && guilds.size == 1) {
                     selGuild = guilds.first().id
-                    selection.guildId = selGuild
+                    preferencesRepository.setGuildId(selGuild)
                 }
                 _ui.update {
                     val keepsCurrentQueue = it.selectedGuildId == selGuild && it.queue != null
@@ -430,8 +444,7 @@ class PlayerViewModel(
 
     fun selectGuild(guildId: String) {
         cancelPresentationRecovery()
-        selection.guildId = guildId
-        selection.voiceChannelId = null
+        viewModelScope.launch { preferencesRepository.setGuildSelection(guildId, null) }
         _ui.update {
             it.copy(
                 selectedGuildId = guildId,
@@ -449,7 +462,7 @@ class PlayerViewModel(
     }
 
     fun selectChannel(channelId: String) {
-        selection.voiceChannelId = channelId
+        viewModelScope.launch { preferencesRepository.setVoiceChannelId(channelId) }
         _ui.update { it.copy(selectedVoiceChannelId = channelId, error = null) }
     }
 
@@ -457,12 +470,12 @@ class PlayerViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isLoadingVoiceChannels = true, error = null) }
             try {
-                val channels = sessionManager.withApiForSession(sessionIdentity) { it.getVoiceChannels(guildId) }
+                val channels = repository.getVoiceChannels(sessionIdentity, guildId)
                 if (_ui.value.selectedGuildId != guildId) return@launch
                 var selChannel = preserveChannel
                 if (selChannel != null && channels.none { c -> c.id == selChannel }) {
                     selChannel = null
-                    selection.voiceChannelId = null
+                    preferencesRepository.setVoiceChannelId(null)
                 }
                 _ui.update {
                     it.copy(
@@ -524,7 +537,7 @@ class PlayerViewModel(
 
     /** One silent REST recovery when the hub cannot supply a concrete snapshot. */
     private suspend fun recoverQueueOnce(guildId: String) {
-        if (_ui.value.selectedGuildId != guildId || sessionManager.sessionIdentity.value != sessionIdentity) return
+        if (_ui.value.selectedGuildId != guildId || repository.sessionIdentity.value != sessionIdentity) return
         try {
             applyQueueSnapshot(fetchQueueSnapshot(guildId))
         } catch (e: CancellationException) {
@@ -543,7 +556,7 @@ class PlayerViewModel(
 
     private suspend fun fetchQueueSnapshot(guildId: String): QueueSnapshotResponse =
         queueFetchMutex.withLock {
-            sessionManager.withApiForSession(sessionIdentity) { it.getQueue(guildId) }
+            repository.getQueue(sessionIdentity, guildId)
         }
 
     /**
@@ -673,8 +686,6 @@ class PlayerViewModel(
         }
 
         searchJob?.cancel()
-        val updatedHistory = searchHistory.add(trimmed)
-        _ui.update { it.copy(searchHistory = updatedHistory) }
         val source = _ui.value.searchSource
         searchJob = viewModelScope.launch {
             _ui.update {
@@ -686,9 +697,20 @@ class PlayerViewModel(
                 )
             }
             try {
-                val response = sessionManager.withApiForSession(sessionIdentity) {
-                    it.search(query = trimmed, source = source.apiValue, maxResults = 10)
+                val updatedHistory = preferencesRepository.addSearchHistory(trimmed)
+                _ui.update { current ->
+                    if (current.searchQuery.trim() == trimmed && current.searchSource == source) {
+                        current.copy(searchHistory = updatedHistory)
+                    } else {
+                        current
+                    }
                 }
+                val response = repository.search(
+                    expectedIdentity = sessionIdentity,
+                    query = trimmed,
+                    source = source.apiValue,
+                    maxResults = 10,
+                )
                 _ui.update { current ->
                     if (current.searchQuery.trim() != trimmed || current.searchSource != source) current
                     else current.copy(
@@ -748,14 +770,16 @@ class PlayerViewModel(
             _ui.update { it.copy(isMutating = true, error = null, info = null) }
             try {
                 val version = _ui.value.queue?.version
-                val response = sessionManager.withApiForSession(sessionIdentity) {
-                    it.enqueue(guildId, EnqueueRequest(channelId, inputs, version))
-                }
+                val response = repository.enqueue(
+                    expectedIdentity = sessionIdentity,
+                    guildId = guildId,
+                    request = EnqueueRequest(channelId, inputs, version),
+                )
                 applyQueueSnapshot(response)
                 // Query/results stay intact so the AddTrack exit transition renders stable
                 // content; the shell clears them after the AddTrack route closes.
                 _ui.update { it.copy(isMutating = false) }
-                _trackAdded.tryEmit(Unit)
+                _ui.update { it.copy(addTrackCompleted = true) }
             } catch (e: Exception) {
                 handleMutationError(e)
             }
@@ -763,9 +787,9 @@ class PlayerViewModel(
     }
 
     fun skip() {
-        mutate(controlAction = PlayerControlAction.SKIP) { api, version ->
+        mutate(controlAction = PlayerControlAction.SKIP) { version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
-            api.skip(guildId, SkipQueueRequest(expectedVersion = version))
+            repository.skip(sessionIdentity, guildId, version)
         }
     }
 
@@ -773,9 +797,9 @@ class PlayerViewModel(
         mutate(
             controlAction = PlayerControlAction.STOP,
             forcePresentationIdleOnSuccess = true,
-        ) { api, version ->
+        ) { version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
-            api.stop(guildId, QueueMutationRequest(expectedVersion = version))
+            repository.stop(sessionIdentity, guildId, version)
         }
     }
 
@@ -785,9 +809,9 @@ class PlayerViewModel(
             successMessage = { response ->
                 if (response.isRepeatEnabled) uiText(R.string.player_repeat_on) else uiText(R.string.player_repeat_off)
             },
-        ) { api, version ->
+        ) { version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
-            api.setRepeat(guildId, SetQueueRepeatRequest(enabled, version))
+            repository.setRepeat(sessionIdentity, guildId, enabled, version)
         }
     }
 
@@ -796,13 +820,12 @@ class PlayerViewModel(
             controlAction = PlayerControlAction.RADIO,
             // If radio was the only playback source, disabling it can stop and
             // disconnect the bot immediately. Do not keep that ended radio track
-            // alive in the presentation grace window, otherwise the UI may try to
-            // restart the media service for a track that no longer exists.
+            // alive in the presentation grace window.
             forcePresentationIdleOnSuccess = true,
             successMessage = { response ->
                 if (response.radio.isEnabled) uiText(R.string.player_radio_on) else uiText(R.string.player_radio_off)
             },
-        ) { api, _ ->
+        ) { _ ->
             val queue = _ui.value.queue ?: return@mutate null
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             when (val action = decideRadioToggle(queue, _ui.value.selectedVoiceChannelId)) {
@@ -810,8 +833,10 @@ class PlayerViewModel(
                     _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }
                     null
                 }
-                is RadioToggleAction.Disable -> api.disableRadio(guildId, action.expectedVersion)
-                is RadioToggleAction.Enable -> api.enableRadio(guildId, action.request)
+                is RadioToggleAction.Disable ->
+                    repository.disableRadio(sessionIdentity, guildId, action.expectedVersion)
+                is RadioToggleAction.Enable ->
+                    repository.enableRadio(sessionIdentity, guildId, action.request)
             }
         }
     }
@@ -821,10 +846,12 @@ class PlayerViewModel(
             val guildId = _ui.value.selectedGuildId ?: return@launch
             _ui.update { it.copy(isMutating = true, error = null) }
             try {
-                val version = _ui.value.queue?.version
-                val response = sessionManager.withApiForSession(sessionIdentity) {
-                    it.removeQueueEntry(guildId, entryId, version)
-                }
+                val response = repository.removeQueueEntry(
+                    expectedIdentity = sessionIdentity,
+                    guildId = guildId,
+                    entryId = entryId,
+                    expectedVersion = _ui.value.queue?.version,
+                )
                 applyQueueSnapshot(response)
                 _ui.update { it.copy(isMutating = false) }
             } catch (e: Exception) {
@@ -842,13 +869,13 @@ class PlayerViewModel(
             val guildId = _ui.value.selectedGuildId ?: return@launch
             _ui.update { it.copy(isMutating = true, error = null) }
             try {
-                val response = sessionManager.withApiForSession(sessionIdentity) {
-                    it.moveQueueEntry(
-                        guildId,
-                        entryId,
-                        MoveQueueEntryRequest(newPosition, expectedVersion),
-                    )
-                }
+                val response = repository.moveQueueEntry(
+                    expectedIdentity = sessionIdentity,
+                    guildId = guildId,
+                    entryId = entryId,
+                    newPosition = newPosition,
+                    expectedVersion = expectedVersion,
+                )
                 applyQueueSnapshot(response)
                 _ui.update { it.copy(isMutating = false) }
             } catch (e: Exception) {
@@ -858,17 +885,17 @@ class PlayerViewModel(
     }
 
     fun clearQueue() {
-        mutate { api, version ->
+        mutate { version ->
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
-            api.clearPendingQueue(guildId, version)
+            repository.clearQueue(sessionIdentity, guildId, version)
         }
     }
 
     private fun mutate(
         controlAction: PlayerControlAction? = null,
         forcePresentationIdleOnSuccess: Boolean = false,
-        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse) -> UiText?)? = null,
-        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse?,
+        successMessage: ((QueueSnapshotResponse) -> UiText?)? = null,
+        call: suspend (Long?) -> QueueSnapshotResponse?,
     ) {
         if (controlAction != null) {
             val accepted = synchronized(pendingControlActions) {
@@ -899,8 +926,8 @@ class PlayerViewModel(
     private suspend fun performMutation(
         controlAction: PlayerControlAction?,
         forcePresentationIdleOnSuccess: Boolean,
-        successMessage: ((com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse) -> UiText?)?,
-        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long?) -> com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse?,
+        successMessage: ((QueueSnapshotResponse) -> UiText?)?,
+        call: suspend (Long?) -> QueueSnapshotResponse?,
     ) {
         _ui.update {
             it.copy(
@@ -910,8 +937,7 @@ class PlayerViewModel(
             )
         }
         try {
-            val version = _ui.value.queue?.version
-            val response = sessionManager.withApiForSession(sessionIdentity) { call(it, version) } ?: run {
+            val response = call(_ui.value.queue?.version) ?: run {
                 _ui.update { it.copy(isMutating = false, activeControlAction = null) }
                 return
             }
@@ -919,8 +945,15 @@ class PlayerViewModel(
                 response,
                 forcePresentationIdle = forcePresentationIdleOnSuccess,
             )
-            _ui.update { it.copy(isMutating = false, activeControlAction = null) }
-            successMessage?.invoke(response)?.let(_controlMessages::tryEmit)
+            val message = successMessage?.invoke(response)
+            val uiMessage = message?.let { UiMessage(++messageSequence, it) }
+            _ui.update { current ->
+                current.copy(
+                    isMutating = false,
+                    activeControlAction = null,
+                    controlMessage = uiMessage,
+                )
+            }
         } catch (e: Exception) {
             handleMutationError(e)
         }
@@ -978,7 +1011,10 @@ class PlayerViewModel(
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             viewModelFactory {
                 initializer {
-                    PlayerViewModel(container)
+                    PlayerViewModel(
+                        repository = container.playerRepository,
+                        preferencesRepository = container.preferencesRepository,
+                    )
                 }
             }
     }

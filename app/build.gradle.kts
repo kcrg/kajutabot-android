@@ -70,6 +70,8 @@ baselineProfile {
 dependencies {
     implementation(project(":api"))
     implementation(libs.androidx.profileinstaller)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.compose.material3.adaptive)
     implementation(libs.retrofit)
     implementation(libs.okhttp)
     implementation(platform(libs.androidx.compose.bom))
@@ -85,7 +87,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.viewmodel)
-    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.media3.session)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)

@@ -6,151 +6,198 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewModelScope
 import com.tryniecki.kajutabot.AppContainer
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.auth.AuthState
 import com.tryniecki.kajutabot.auth.LogoutResult
-import com.tryniecki.kajutabot.auth.OAuthCallbackResult
 import com.tryniecki.kajutabot.auth.OAuthStartResult
+import com.tryniecki.kajutabot.data.preferences.UserPreferencesRepository
+import com.tryniecki.kajutabot.data.repository.SessionRepository
 import com.tryniecki.kajutabot.ui.text.UiText
-import kotlinx.coroutines.flow.MutableSharedFlow
+import com.tryniecki.kajutabot.ui.theme.ThemeMode
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+data class AppUiState(
+    val isSigningIn: Boolean = false,
+    val isGuestSigningIn: Boolean = false,
+    val isLoggingOut: Boolean = false,
+    val loginUrl: String? = null,
+    val pendingSharedUrl: String? = null,
+    val accountError: UiText? = null,
+    val themeMode: ThemeMode = ThemeMode.NATIVE,
+    val sessionType: SessionType? = null,
+)
+
 class AppViewModel(
-    private val container: AppContainer,
+    private val sessionRepository: SessionRepository,
+    private val preferencesRepository: UserPreferencesRepository,
+    private val sessionOwnerProvider: (Long) -> SessionViewModelOwner,
+    val isOAuthConfigured: Boolean,
 ) : ViewModel() {
-    val authState: StateFlow<AuthState> = container.sessionManager.authState
-    val sessionIdentity: StateFlow<Long?> = container.sessionManager.sessionIdentity
+    val authState: StateFlow<AuthState> = sessionRepository.authState
+    val sessionIdentity: StateFlow<Long?> = sessionRepository.sessionIdentity
 
-    fun ownerForSession(identity: Long): SessionViewModelOwner {
-        return container.ownerForSession(identity)
-    }
+    private val _ui = MutableStateFlow(AppUiState())
+    val ui: StateFlow<AppUiState> = _ui.asStateFlow()
 
-    private fun resetSessionUi() {
-        _pendingSharedUrl.value = null
-    }
-
-    private val _isSigningIn = MutableStateFlow(false)
-    val isSigningIn: StateFlow<Boolean> = _isSigningIn.asStateFlow()
-    private val _isGuestSigningIn = MutableStateFlow(false)
-    val isGuestSigningIn: StateFlow<Boolean> = _isGuestSigningIn.asStateFlow()
-
-    private val _openUrl = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val openUrl: SharedFlow<String> = _openUrl.asSharedFlow()
-
-    private val _pendingSharedUrl = MutableStateFlow<String?>(null)
-    val pendingSharedUrl: StateFlow<String?> = _pendingSharedUrl.asStateFlow()
+    fun ownerForSession(identity: Long): SessionViewModelOwner = sessionOwnerProvider(identity)
 
     init {
         viewModelScope.launch {
+            preferencesRepository.themeMode.collectLatest { mode ->
+                preferencesRepository.applyPlatformNightMode(mode)
+                _ui.value = _ui.value.copy(themeMode = mode)
+            }
+        }
+        viewModelScope.launch {
             var previousIdentity: Long? = null
             sessionIdentity.collect { identity ->
-                if (previousIdentity != null && identity != previousIdentity) resetSessionUi()
+                if (previousIdentity != null && identity != previousIdentity) {
+                    resetSessionUi()
+                }
+                _ui.value = _ui.value.copy(
+                    sessionType = if (identity == null) null else sessionRepository.currentSession()?.sessionType,
+                )
                 previousIdentity = identity
             }
         }
         viewModelScope.launch {
-            container.sessionManager.restore()
+            sessionRepository.restore()
         }
+    }
+
+    private fun resetSessionUi() {
+        _ui.value = _ui.value.copy(
+            pendingSharedUrl = null,
+            accountError = null,
+            loginUrl = null,
+        )
     }
 
     fun onSharedUrl(url: String?) {
         if (url.isNullOrBlank()) return
-        _pendingSharedUrl.value = url
+        _ui.value = _ui.value.copy(pendingSharedUrl = url)
     }
 
     fun clearPendingSharedUrl() {
-        _pendingSharedUrl.value = null
+        _ui.value = _ui.value.copy(pendingSharedUrl = null)
+    }
+
+    fun acknowledgeLoginUrl(url: String) {
+        if (_ui.value.loginUrl == url) {
+            _ui.value = _ui.value.copy(loginUrl = null)
+        }
+    }
+
+    fun dismissAccountError() {
+        _ui.value = _ui.value.copy(accountError = null)
     }
 
     fun startLogin() {
-        if (_isSigningIn.value) return
-        when (val result = container.sessionManager.startLogin()) {
-            is OAuthStartResult.Ready -> _openUrl.tryEmit(result.url)
-            is OAuthStartResult.Misconfigured -> {
-                // Surface via authState SignedOut message without clearing session if signed in.
-                // SessionManager does not change state on start, so emit is handled by UI reading result.
-                // As a fallback, login screen reads misconfiguration from AppConfig directly.
-            }
+        if (_ui.value.isSigningIn) return
+        when (val result = sessionRepository.startLogin()) {
+            is OAuthStartResult.Ready -> _ui.value = _ui.value.copy(loginUrl = result.url, accountError = null)
+            is OAuthStartResult.Misconfigured -> _ui.value = _ui.value.copy(accountError = result.message)
         }
     }
 
     fun continueAsGuest() {
-        if (_isSigningIn.value) return
-        _isSigningIn.value = true
-        _isGuestSigningIn.value = true
+        if (_ui.value.isSigningIn) return
+        _ui.value = _ui.value.copy(isSigningIn = true, isGuestSigningIn = true, accountError = null)
         viewModelScope.launch {
             try {
-                container.sessionManager.continueAsGuest()
+                sessionRepository.continueAsGuest()
             } finally {
-                _isSigningIn.value = false
-                _isGuestSigningIn.value = false
+                _ui.value = _ui.value.copy(isSigningIn = false, isGuestSigningIn = false)
             }
         }
     }
 
-    fun switchGuestToDiscord(onFailure: (UiText) -> Unit) {
-        if (_isSigningIn.value) return
-        _isSigningIn.value = true
+    fun switchGuestToDiscord() {
+        if (_ui.value.isSigningIn || _ui.value.isLoggingOut) return
+        _ui.value = _ui.value.copy(isSigningIn = true, accountError = null)
         viewModelScope.launch {
             try {
-                when (val result = container.sessionManager.logout()) {
-                    is LogoutResult.NeedsRetry -> onFailure(result.message)
+                when (val result = sessionRepository.logout()) {
+                    is LogoutResult.NeedsRetry -> _ui.value = _ui.value.copy(accountError = result.message)
                     else -> {
-                        container.selectionStore.clear()
+                        preferencesRepository.clearGuildSelection()
                         resetSessionUi()
-                        startLoginAfterGuestLogout(onFailure)
+                        when (val start = sessionRepository.startLogin()) {
+                            is OAuthStartResult.Ready -> _ui.value = _ui.value.copy(loginUrl = start.url)
+                            is OAuthStartResult.Misconfigured -> _ui.value = _ui.value.copy(accountError = start.message)
+                        }
                     }
                 }
             } finally {
-                _isSigningIn.value = false
+                _ui.value = _ui.value.copy(isSigningIn = false)
             }
-        }
-    }
-
-    private fun startLoginAfterGuestLogout(onFailure: (UiText) -> Unit) {
-        when (val result = container.sessionManager.startLogin()) {
-            is OAuthStartResult.Ready -> _openUrl.tryEmit(result.url)
-            is OAuthStartResult.Misconfigured -> onFailure(result.message)
         }
     }
 
     fun handleOAuthCallback(code: String?, state: String?, error: String?) {
         viewModelScope.launch {
-            _isSigningIn.value = true
+            _ui.value = _ui.value.copy(isSigningIn = true, accountError = null)
             try {
-                container.sessionManager.handleOAuthCallback(code, state, error)
+                sessionRepository.handleOAuthCallback(code, state, error)
             } finally {
-                _isSigningIn.value = false
+                _ui.value = _ui.value.copy(isSigningIn = false)
             }
         }
     }
 
-    fun logout(onResult: (LogoutResult) -> Unit = {}) {
+    fun logout() {
+        if (_ui.value.isLoggingOut) return
+        _ui.value = _ui.value.copy(isLoggingOut = true, accountError = null)
         viewModelScope.launch {
-            val result = container.sessionManager.logout()
-            if (result is LogoutResult.SignedOut || result is LogoutResult.LocalOnly) {
-                container.selectionStore.clear()
-                resetSessionUi()
+            try {
+                when (val result = sessionRepository.logout()) {
+                    is LogoutResult.NeedsRetry -> _ui.value = _ui.value.copy(accountError = result.message)
+                    is LogoutResult.SignedOut,
+                    is LogoutResult.LocalOnly -> {
+                        preferencesRepository.clearGuildSelection()
+                        resetSessionUi()
+                    }
+                }
+            } finally {
+                _ui.value = _ui.value.copy(isLoggingOut = false)
             }
-            onResult(result)
         }
     }
 
     fun retryRestore() {
+        viewModelScope.launch { sessionRepository.retryRestore() }
+    }
+
+    fun onboardingCompleted(sessionType: SessionType, discordUserId: String): Flow<Boolean> =
+        preferencesRepository.onboardingCompleted(sessionType, discordUserId)
+
+    fun completeOnboarding(sessionType: SessionType, discordUserId: String) {
         viewModelScope.launch {
-            container.sessionManager.retryRestore()
+            preferencesRepository.setOnboardingCompleted(sessionType, discordUserId)
         }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        if (_ui.value.themeMode == mode) return
+        _ui.value = _ui.value.copy(themeMode = mode)
+        viewModelScope.launch { preferencesRepository.setThemeMode(mode) }
     }
 
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory =
             viewModelFactory {
                 initializer {
-                    AppViewModel(container)
+                    AppViewModel(
+                        sessionRepository = container.sessionRepository,
+                        preferencesRepository = container.preferencesRepository,
+                        sessionOwnerProvider = container::ownerForSession,
+                        isOAuthConfigured = container.appConfig.isOAuthConfigured,
+                    )
                 }
             }
     }

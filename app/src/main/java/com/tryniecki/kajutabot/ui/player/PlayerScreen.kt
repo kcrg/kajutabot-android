@@ -1,7 +1,8 @@
 package com.tryniecki.kajutabot.ui.player
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
@@ -55,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,7 +78,6 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,7 +101,6 @@ import com.tryniecki.kajutabot.ui.theme.fadeThrough
 import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
-import com.tryniecki.kajutabot.ui.text.resolve
 
 private val artworkAccentColorRegex = Regex("#[0-9a-fA-F]{6}")
 
@@ -116,16 +116,11 @@ fun PlayerRoute(
     favoritesViewModel: FavoritesViewModel,
     onAddTrackOpen: () -> Unit,
     onDiscordSelectionOpen: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     val ui by viewModel.playerScreenState.collectAsStateWithLifecycle()
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-
-    LaunchedEffect(viewModel, context) {
-        viewModel.controlMessages.collect { message ->
-            Toast.makeText(context, message.resolve(context), Toast.LENGTH_SHORT).show()
-        }
-    }
 
     PlayerScreen(
         ui = ui,
@@ -145,6 +140,8 @@ fun PlayerRoute(
         onRetryQueue = {
             ui.selectedGuildId?.let(viewModel::refreshQueue)
         },
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope,
     )
 }
 
@@ -157,17 +154,45 @@ fun AddTrackRoute(
     val ui by viewModel.addTrackState.collectAsStateWithLifecycle()
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel) {
-        viewModel.trackAdded.collect { onClose() }
+    var savedQuery by rememberSaveable { mutableStateOf(ui.searchQuery) }
+    var savedSourceName by rememberSaveable { mutableStateOf(ui.searchSource.name) }
+    val savedSource = SearchSourceOption.entries.firstOrNull { it.name == savedSourceName }
+        ?: SearchSourceOption.YOUTUBE
+
+    // Rehydrate ViewModel search input after process recreation. The route's
+    // rememberSaveable state survives because Navigation 3 owns a saveable-state holder.
+    LaunchedEffect(Unit) {
+        if (viewModel.addTrackState.value.searchQuery != savedQuery) {
+            viewModel.setSearchQuery(savedQuery)
+        }
+        if (viewModel.addTrackState.value.searchSource != savedSource) {
+            viewModel.setSearchSource(savedSource)
+        }
+    }
+
+    LaunchedEffect(ui.addTrackCompleted) {
+        if (ui.addTrackCompleted) {
+            viewModel.acknowledgeAddTrackCompleted()
+            onClose()
+        }
     }
 
     AddTrackScreen(
-        ui = ui,
+        ui = ui.copy(searchQuery = savedQuery, searchSource = savedSource),
         onClose = onClose,
-        onQueryChange = viewModel::setSearchQuery,
-        onSearchSourceChange = viewModel::setSearchSource,
+        onQueryChange = { query ->
+            savedQuery = query
+            viewModel.setSearchQuery(query)
+        },
+        onSearchSourceChange = { source ->
+            savedSourceName = source.name
+            viewModel.setSearchSource(source)
+        },
         onSubmit = viewModel::submitSmartInput,
-        onHistoryClick = viewModel::searchFromHistory,
+        onHistoryClick = { query ->
+            savedQuery = query
+            viewModel.searchFromHistory(query)
+        },
         onResultClick = viewModel::enqueueSearchResult,
         isFavorite = favoritesViewModel::isFavorite,
         onToggleFavorite = favoritesViewModel::toggle,
@@ -194,10 +219,12 @@ fun PlayerScreen(
     onDismissMessage: () -> Unit,
     onAddTrackOpen: () -> Unit,
     onRetryQueue: () -> Unit = {},
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     val motion = MaterialTheme.motionScheme
-    var confirmStop by remember { mutableStateOf(false) }
-    var confirmClear by remember { mutableStateOf(false) }
+    var confirmStop by rememberSaveable { mutableStateOf(false) }
+    var confirmClear by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val showFloatingActions = rememberScrollAwareFabVisible(listState)
     var draggingEntryId by remember { mutableStateOf<String?>(null) }
@@ -334,6 +361,8 @@ fun PlayerScreen(
                             favoritesBusy = favoritesBusy,
                             onRepeatToggle = onRepeatToggle,
                             onRadioToggle = onRadioToggle,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
                         )
                     }
                 }
@@ -590,6 +619,8 @@ private fun NowPlayingCard(
     favoritesBusy: Boolean,
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     val repeatEnabled = queue?.isRepeatEnabled == true
     val radioEnabled = queue?.radio?.isEnabled == true
@@ -648,7 +679,11 @@ private fun NowPlayingCard(
                     label = "nowPlaying",
                 ) { slide ->
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        NowPlayingArtwork(slide)
+                        NowPlayingArtwork(
+                            slide = slide,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
 
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
@@ -661,6 +696,15 @@ private fun NowPlayingCard(
                             // jumps on track -> track.
                             Text(
                                 text = if (slide.hasTrack) slide.title else stringResource(R.string.player_nothing_playing),
+                                modifier = if (slide.hasTrack) {
+                                    Modifier.playerTitleSharedBounds(
+                                        playbackIdentity = slide.identity,
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                    )
+                                } else {
+                                    Modifier
+                                },
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 minLines = 2,
@@ -767,7 +811,11 @@ private fun String?.toArtworkAccentColor(): Color? =
         ?.let { Color(0xFF000000L or it.substring(1).toLong(16)) }
 
 @Composable
-private fun NowPlayingArtwork(slide: NowPlayingSlide) {
+private fun NowPlayingArtwork(
+    slide: NowPlayingSlide,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -776,7 +824,19 @@ private fun NowPlayingArtwork(slide: NowPlayingSlide) {
     ) {
         TrackArtwork(
             imageUrl = slide.thumbnailUrl,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .let { artworkModifier ->
+                    if (slide.hasTrack) {
+                        artworkModifier.playerArtworkSharedElement(
+                            playbackIdentity = slide.identity,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    } else {
+                        artworkModifier
+                    }
+                },
             shape = RoundedCornerShape(12.dp),
             brokenIconSize = 48.dp,
             showMissingLabel = true,

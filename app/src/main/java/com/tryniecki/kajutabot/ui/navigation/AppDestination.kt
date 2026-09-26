@@ -2,10 +2,11 @@ package com.tryniecki.kajutabot.ui.navigation
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.navigation3.runtime.NavKey
 import com.tryniecki.kajutabot.R
 import kotlinx.serialization.Serializable
 
-sealed interface AppRoute {
+sealed interface AppRoute : NavKey {
     @Serializable data object Player : AppRoute
     @Serializable data object Favorites : AppRoute
     @Serializable data object More : AppRoute

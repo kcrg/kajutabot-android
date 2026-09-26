@@ -12,22 +12,22 @@ import com.tryniecki.kajutabot.auth.PkceGenerator
 import com.tryniecki.kajutabot.auth.SecureSessionStore
 import com.tryniecki.kajutabot.auth.SessionManager
 import com.tryniecki.kajutabot.auth.SessionStore
-import com.tryniecki.kajutabot.prefs.GuildSelectionStore
-import com.tryniecki.kajutabot.prefs.OnboardingPreferences
-import com.tryniecki.kajutabot.prefs.FavoritesPreferences
-import com.tryniecki.kajutabot.prefs.SearchHistoryPreferences
-import com.tryniecki.kajutabot.ui.app.SessionViewModelScope
+import com.tryniecki.kajutabot.data.preferences.UserPreferencesRepository
+import com.tryniecki.kajutabot.data.repository.FavoritesRepository
+import com.tryniecki.kajutabot.data.repository.PlayerRepository
+import com.tryniecki.kajutabot.data.repository.SessionRepository
 import com.tryniecki.kajutabot.ui.app.SessionViewModelOwner
+import com.tryniecki.kajutabot.ui.app.SessionViewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
- * Minimal process-lifetime composition root owned by KajutaBotApplication.
- * No Hilt/Koin, no global ServiceLocator object.
+ * Process-lifetime composition root owned by KajutaBotApplication.
+ * Dependencies are constructed here and ViewModels receive repositories explicitly.
  */
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -40,10 +40,6 @@ class AppContainer(context: Context) {
     val sessionStore: SessionStore = SecureSessionStore(appContext)
     val pendingStore: PendingOAuthStore = PendingOAuthStore(appContext)
     val pendingStorage: OAuthPendingStorage = PendingOAuthStoreAdapter(pendingStore)
-    val selectionStore = GuildSelectionStore(appContext)
-    val onboardingPreferences = OnboardingPreferences(appContext)
-    val favoritesPreferences = FavoritesPreferences(appContext)
-    val searchHistoryPreferences = SearchHistoryPreferences(appContext)
     val pkceGenerator = PkceGenerator()
 
     val authApi: KajutaBotAuthApi =
@@ -70,23 +66,29 @@ class AppContainer(context: Context) {
         pkceGenerator = pkceGenerator,
     )
 
+    val preferencesRepository = UserPreferencesRepository(appContext)
+    val sessionRepository = SessionRepository(sessionManager)
+    val playerRepository = PlayerRepository(sessionManager, appConfig.apiBaseUrl)
+    val favoritesRepository = FavoritesRepository(sessionManager)
+
     private val _mediaServiceActive = MutableStateFlow(false)
     val mediaServiceActive = _mediaServiceActive.asStateFlow()
     fun setMediaServiceActive(active: Boolean) {
         _mediaServiceActive.value = active
     }
 
-    // The authenticated store is shared by Activity and MediaSessionService.
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    // The authenticated ViewModel store is shared by Activity and MediaSessionService.
     // It survives Activity destruction, but is cleared as soon as the user session ends.
     private val sessionScope = SessionViewModelScope {
         clearApiCache()
-        selectionStore.clear()
+        appScope.launch { preferencesRepository.clearGuildSelection() }
     }
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     init {
         appScope.launch {
-            sessionManager.sessionIdentity.collect { identity ->
+            sessionRepository.sessionIdentity.collect { identity ->
                 if (identity == null) sessionScope.end() else sessionScope.ownerFor(identity)
             }
         }

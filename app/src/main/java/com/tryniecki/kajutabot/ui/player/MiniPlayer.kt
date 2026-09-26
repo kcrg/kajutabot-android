@@ -1,6 +1,8 @@
 package com.tryniecki.kajutabot.ui.player
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -76,6 +78,8 @@ fun MiniPlayer(
     onOpenPlayer: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     val motion = MaterialTheme.motionScheme
     val playbackControlsBlocked = isMutating && activeControlAction == null
@@ -130,7 +134,14 @@ fun MiniPlayer(
                     ) {
                         TrackArtwork(
                             imageUrl = current.thumbnailUrl,
-                            modifier = Modifier.size(48.dp),
+                            modifier = Modifier
+                                .size(48.dp)
+                                .playerArtworkSharedElement(
+                                    playbackIdentity = current.identity,
+                                    sharedTransitionScope = sharedTransitionScope,
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                ),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                             brokenIconSize = 20.dp,
                         )
 
@@ -141,6 +152,11 @@ fun MiniPlayer(
                         ) {
                             Text(
                                 text = current.title,
+                                modifier = Modifier.playerTitleSharedBounds(
+                                    playbackIdentity = current.identity,
+                                    sharedTransitionScope = sharedTransitionScope,
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                ),
                                 style = MaterialTheme.typography.titleSmall,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,

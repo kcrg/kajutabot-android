@@ -7,9 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
 import com.tryniecki.kajutabot.auth.DiscordOAuth
@@ -17,7 +15,6 @@ import com.tryniecki.kajutabot.image.CoilSetup
 import com.tryniecki.kajutabot.ui.KajutaBotApp
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.theme.KajutaBotTheme
-import com.tryniecki.kajutabot.ui.theme.ThemePreferences
 
 class MainActivity : ComponentActivity() {
 
@@ -53,25 +50,14 @@ class MainActivity : ComponentActivity() {
 
         handleIntent(intent)
 
-        val themePreferences = ThemePreferences(this)
-
         setContent {
-            var themeMode by remember {
-                mutableStateOf(themePreferences.themeMode)
-            }
-
-            KajutaBotTheme(themeMode = themeMode) {
+            val appUi by appViewModel.ui.collectAsStateWithLifecycle()
+            KajutaBotTheme(themeMode = appUi.themeMode) {
                 KajutaBotApp(
                     container = container,
                     appViewModel = appViewModel,
-                    themeMode = themeMode,
-                    onThemeModeChange = { mode ->
-                        // Update Compose immediately. The Activity handles uiMode
-                        // configuration changes itself, so switching themes never
-                        // tears down and rebuilds the navigation/UI tree.
-                        themePreferences.themeMode = mode
-                        themeMode = mode
-                    },
+                    themeMode = appUi.themeMode,
+                    onThemeModeChange = appViewModel::setThemeMode,
                 )
             }
         }
