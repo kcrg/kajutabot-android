@@ -11,6 +11,7 @@ import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
 import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
+import com.tryniecki.kajutabot.api.model.queue.SwapQueueEntriesRequest
 import com.tryniecki.kajutabot.api.model.radio.EnableRadioRequest
 import com.tryniecki.kajutabot.api.model.search.SearchResponse
 import retrofit2.http.Body
@@ -63,6 +64,12 @@ interface KajutaBotApi {
         @Path("guildId") guildId: String,
         @Path("entryId") entryId: String,
         @Body request: MoveQueueEntryRequest,
+    ): QueueSnapshotResponse
+
+    @POST("guilds/{guildId}/queue/items/swap")
+    suspend fun swapQueueEntries(
+        @Path("guildId") guildId: String,
+        @Body request: SwapQueueEntriesRequest,
     ): QueueSnapshotResponse
 
     @DELETE("guilds/{guildId}/queue/items")

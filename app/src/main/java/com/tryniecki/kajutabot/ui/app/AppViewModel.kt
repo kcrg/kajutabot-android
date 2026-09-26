@@ -13,12 +13,14 @@ import com.tryniecki.kajutabot.auth.OAuthStartResult
 import com.tryniecki.kajutabot.data.preferences.UserPreferencesRepository
 import com.tryniecki.kajutabot.data.repository.SessionRepository
 import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.theme.PlatformThemeController
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class AppUiState(
@@ -29,12 +31,14 @@ data class AppUiState(
     val pendingSharedUrl: String? = null,
     val accountError: UiText? = null,
     val themeMode: ThemeMode = ThemeMode.NATIVE,
+    val isThemeInitialized: Boolean = false,
     val sessionType: SessionType? = null,
 )
 
 class AppViewModel(
     private val sessionRepository: SessionRepository,
     private val preferencesRepository: UserPreferencesRepository,
+    private val platformThemeController: PlatformThemeController,
     private val sessionOwnerProvider: (Long) -> SessionViewModelOwner,
     val isOAuthConfigured: Boolean,
 ) : ViewModel() {
@@ -49,8 +53,8 @@ class AppViewModel(
     init {
         viewModelScope.launch {
             preferencesRepository.themeMode.collectLatest { mode ->
-                preferencesRepository.applyPlatformNightMode(mode)
-                _ui.value = _ui.value.copy(themeMode = mode)
+                platformThemeController.apply(mode)
+                _ui.update { it.copy(themeMode = mode, isThemeInitialized = true) }
             }
         }
         viewModelScope.launch {
@@ -59,9 +63,9 @@ class AppViewModel(
                 if (previousIdentity != null && identity != previousIdentity) {
                     resetSessionUi()
                 }
-                _ui.value = _ui.value.copy(
-                    sessionType = if (identity == null) null else sessionRepository.currentSession()?.sessionType,
-                )
+                _ui.update {
+                    it.copy(sessionType = if (identity == null) null else sessionRepository.currentSession()?.sessionType)
+                }
                 previousIdentity = identity
             }
         }
@@ -71,92 +75,94 @@ class AppViewModel(
     }
 
     private fun resetSessionUi() {
-        _ui.value = _ui.value.copy(
-            pendingSharedUrl = null,
-            accountError = null,
-            loginUrl = null,
-        )
+        _ui.update {
+            it.copy(
+                pendingSharedUrl = null,
+                accountError = null,
+                loginUrl = null,
+            )
+        }
     }
 
     fun onSharedUrl(url: String?) {
         if (url.isNullOrBlank()) return
-        _ui.value = _ui.value.copy(pendingSharedUrl = url)
+        _ui.update { it.copy(pendingSharedUrl = url) }
     }
 
     fun clearPendingSharedUrl() {
-        _ui.value = _ui.value.copy(pendingSharedUrl = null)
+        _ui.update { it.copy(pendingSharedUrl = null) }
     }
 
     fun acknowledgeLoginUrl(url: String) {
-        if (_ui.value.loginUrl == url) {
-            _ui.value = _ui.value.copy(loginUrl = null)
+        _ui.update { current ->
+            if (current.loginUrl == url) current.copy(loginUrl = null) else current
         }
     }
 
     fun dismissAccountError() {
-        _ui.value = _ui.value.copy(accountError = null)
+        _ui.update { it.copy(accountError = null) }
     }
 
     fun startLogin() {
         if (_ui.value.isSigningIn) return
         when (val result = sessionRepository.startLogin()) {
-            is OAuthStartResult.Ready -> _ui.value = _ui.value.copy(loginUrl = result.url, accountError = null)
-            is OAuthStartResult.Misconfigured -> _ui.value = _ui.value.copy(accountError = result.message)
+            is OAuthStartResult.Ready -> _ui.update { it.copy(loginUrl = result.url, accountError = null) }
+            is OAuthStartResult.Misconfigured -> _ui.update { it.copy(accountError = result.message) }
         }
     }
 
     fun continueAsGuest() {
         if (_ui.value.isSigningIn) return
-        _ui.value = _ui.value.copy(isSigningIn = true, isGuestSigningIn = true, accountError = null)
+        _ui.update { it.copy(isSigningIn = true, isGuestSigningIn = true, accountError = null) }
         viewModelScope.launch {
             try {
                 sessionRepository.continueAsGuest()
             } finally {
-                _ui.value = _ui.value.copy(isSigningIn = false, isGuestSigningIn = false)
+                _ui.update { it.copy(isSigningIn = false, isGuestSigningIn = false) }
             }
         }
     }
 
     fun switchGuestToDiscord() {
         if (_ui.value.isSigningIn || _ui.value.isLoggingOut) return
-        _ui.value = _ui.value.copy(isSigningIn = true, accountError = null)
+        _ui.update { it.copy(isSigningIn = true, accountError = null) }
         viewModelScope.launch {
             try {
                 when (val result = sessionRepository.logout()) {
-                    is LogoutResult.NeedsRetry -> _ui.value = _ui.value.copy(accountError = result.message)
+                    is LogoutResult.NeedsRetry -> _ui.update { it.copy(accountError = result.message) }
                     else -> {
                         preferencesRepository.clearGuildSelection()
                         resetSessionUi()
                         when (val start = sessionRepository.startLogin()) {
-                            is OAuthStartResult.Ready -> _ui.value = _ui.value.copy(loginUrl = start.url)
-                            is OAuthStartResult.Misconfigured -> _ui.value = _ui.value.copy(accountError = start.message)
+                            is OAuthStartResult.Ready -> _ui.update { it.copy(loginUrl = start.url) }
+                            is OAuthStartResult.Misconfigured -> _ui.update { it.copy(accountError = start.message) }
                         }
                     }
                 }
             } finally {
-                _ui.value = _ui.value.copy(isSigningIn = false)
+                _ui.update { it.copy(isSigningIn = false) }
             }
         }
     }
 
     fun handleOAuthCallback(code: String?, state: String?, error: String?) {
         viewModelScope.launch {
-            _ui.value = _ui.value.copy(isSigningIn = true, accountError = null)
+            _ui.update { it.copy(isSigningIn = true, accountError = null) }
             try {
                 sessionRepository.handleOAuthCallback(code, state, error)
             } finally {
-                _ui.value = _ui.value.copy(isSigningIn = false)
+                _ui.update { it.copy(isSigningIn = false) }
             }
         }
     }
 
     fun logout() {
         if (_ui.value.isLoggingOut) return
-        _ui.value = _ui.value.copy(isLoggingOut = true, accountError = null)
+        _ui.update { it.copy(isLoggingOut = true, accountError = null) }
         viewModelScope.launch {
             try {
                 when (val result = sessionRepository.logout()) {
-                    is LogoutResult.NeedsRetry -> _ui.value = _ui.value.copy(accountError = result.message)
+                    is LogoutResult.NeedsRetry -> _ui.update { it.copy(accountError = result.message) }
                     is LogoutResult.SignedOut,
                     is LogoutResult.LocalOnly -> {
                         preferencesRepository.clearGuildSelection()
@@ -164,7 +170,7 @@ class AppViewModel(
                     }
                 }
             } finally {
-                _ui.value = _ui.value.copy(isLoggingOut = false)
+                _ui.update { it.copy(isLoggingOut = false) }
             }
         }
     }
@@ -184,7 +190,8 @@ class AppViewModel(
 
     fun setThemeMode(mode: ThemeMode) {
         if (_ui.value.themeMode == mode) return
-        _ui.value = _ui.value.copy(themeMode = mode)
+        _ui.update { it.copy(themeMode = mode) }
+        platformThemeController.apply(mode)
         viewModelScope.launch { preferencesRepository.setThemeMode(mode) }
     }
 
@@ -195,6 +202,7 @@ class AppViewModel(
                     AppViewModel(
                         sessionRepository = container.sessionRepository,
                         preferencesRepository = container.preferencesRepository,
+                        platformThemeController = container.platformThemeController,
                         sessionOwnerProvider = container::ownerForSession,
                         isOAuthConfigured = container.appConfig.isOAuthConfigured,
                     )

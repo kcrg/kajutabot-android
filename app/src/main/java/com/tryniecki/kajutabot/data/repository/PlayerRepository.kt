@@ -5,11 +5,11 @@ import com.tryniecki.kajutabot.api.client.KajutaBotRealtimeClientFactory
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
-import com.tryniecki.kajutabot.api.model.queue.MoveQueueEntryRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
 import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
+import com.tryniecki.kajutabot.api.model.queue.SwapQueueEntriesRequest
 import com.tryniecki.kajutabot.api.model.radio.EnableRadioRequest
 import com.tryniecki.kajutabot.api.model.search.SearchResponse
 import com.tryniecki.kajutabot.auth.SessionManager
@@ -106,14 +106,14 @@ class PlayerRepository(
         it.removeQueueEntry(guildId, entryId, expectedVersion)
     }
 
-    suspend fun moveQueueEntry(
+    suspend fun swapQueueEntries(
         expectedIdentity: Long,
         guildId: String,
-        entryId: String,
-        newPosition: Int,
+        firstEntryId: String,
+        secondEntryId: String,
         expectedVersion: Long,
     ): QueueSnapshotResponse = sessionManager.withApiForSession(expectedIdentity) {
-        it.moveQueueEntry(guildId, entryId, MoveQueueEntryRequest(newPosition, expectedVersion))
+        it.swapQueueEntries(guildId, SwapQueueEntriesRequest(firstEntryId, secondEntryId, expectedVersion))
     }
 
     suspend fun clearQueue(

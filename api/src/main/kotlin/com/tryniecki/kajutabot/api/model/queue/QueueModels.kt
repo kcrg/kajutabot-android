@@ -44,6 +44,13 @@ data class MoveQueueEntryRequest(
 )
 
 @Serializable
+data class SwapQueueEntriesRequest(
+    val firstEntryId: String,
+    val secondEntryId: String,
+    val expectedVersion: Long? = null,
+)
+
+@Serializable
 data class SkipQueueRequest(
     val skipToPosition: Int? = null,
     val expectedVersion: Long? = null,
@@ -54,4 +61,3 @@ data class SetQueueRepeatRequest(
     val isEnabled: Boolean,
     val expectedVersion: Long? = null,
 )
-

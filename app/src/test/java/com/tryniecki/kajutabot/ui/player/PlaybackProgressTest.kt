@@ -141,6 +141,16 @@ class PlaybackProgressTest {
         assertTrue(first.isNotBlank())
         assertTrue(first != repeated)
         assertEquals(first, playbackIdentity(t, "2026-09-18T12:00:00Z"))
+        assertEquals(first, playbackIdentity(t, "2026-09-18T12:00:00+00:00"))
+    }
+
+    @Test
+    fun `queue metadata update keeps now playing animation identity`() {
+        val before = nowPlayingSlide(snapshot(nowPlaying = track().copy(artworkUrl = "old")))
+        val after = nowPlayingSlide(snapshot(version = 11L, nowPlaying = track().copy(artworkUrl = "new")))
+
+        assertEquals(before.identity, after.identity)
+        assertFalse(before == after)
     }
 
     @Test

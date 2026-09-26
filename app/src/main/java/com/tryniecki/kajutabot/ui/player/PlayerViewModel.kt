@@ -860,20 +860,21 @@ class PlayerViewModel(
         }
     }
 
-    fun moveEntry(entryId: String, newPosition: Int, expectedVersion: Long) {
-        val snapshot = _ui.value.queue ?: return
-        if (_ui.value.isMutating || snapshot.pendingEntries.none { it.entryId == entryId } ||
-            newPosition !in 1..snapshot.pendingEntries.size
-        ) return
+    fun swapEntries(sourceEntryId: String, targetEntryId: String, expectedVersion: Long): Boolean {
+        val state = _ui.value
+        val snapshot = state.queue ?: return false
+        val guildId = state.selectedGuildId ?: return false
+        if (state.isMutating || snapshot.version != expectedVersion || snapshot.guildId != guildId) return false
+        if (swappedQueueEntries(snapshot.pendingEntries, sourceEntryId, targetEntryId) == null) return false
+
+        _ui.update { it.copy(isMutating = true, error = null) }
         viewModelScope.launch {
-            val guildId = _ui.value.selectedGuildId ?: return@launch
-            _ui.update { it.copy(isMutating = true, error = null) }
             try {
-                val response = repository.moveQueueEntry(
+                val response = repository.swapQueueEntries(
                     expectedIdentity = sessionIdentity,
                     guildId = guildId,
-                    entryId = entryId,
-                    newPosition = newPosition,
+                    firstEntryId = sourceEntryId,
+                    secondEntryId = targetEntryId,
                     expectedVersion = expectedVersion,
                 )
                 applyQueueSnapshot(response)
@@ -882,6 +883,7 @@ class PlayerViewModel(
                 handleMutationError(e)
             }
         }
+        return true
     }
 
     fun clearQueue() {

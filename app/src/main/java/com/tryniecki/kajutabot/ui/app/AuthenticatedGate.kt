@@ -12,17 +12,15 @@ internal enum class AuthenticatedGate {
 
 internal fun resolveAuthenticatedGate(
     guildAccessState: GuildAccessState,
-    onboardingCompleted: Boolean,
+    onboardingCompleted: Boolean?,
     manualOnboardingRequested: Boolean,
 ): AuthenticatedGate = when (guildAccessState) {
     GuildAccessState.CHECKING -> AuthenticatedGate.CHECKING_ACCESS
     GuildAccessState.ERROR -> AuthenticatedGate.ACCESS_ERROR
     GuildAccessState.NONE -> AuthenticatedGate.NO_ACCESS
-    GuildAccessState.AVAILABLE -> {
-        if (!onboardingCompleted || manualOnboardingRequested) {
-            AuthenticatedGate.ONBOARDING
-        } else {
-            AuthenticatedGate.CONTENT
-        }
+    GuildAccessState.AVAILABLE -> when {
+        onboardingCompleted == null -> AuthenticatedGate.CHECKING_ACCESS
+        !onboardingCompleted || manualOnboardingRequested -> AuthenticatedGate.ONBOARDING
+        else -> AuthenticatedGate.CONTENT
     }
 }

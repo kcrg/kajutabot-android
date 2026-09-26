@@ -1,9 +1,6 @@
 package com.tryniecki.kajutabot.ui.more
 
 import android.os.SystemClock
-import androidx.annotation.StringRes
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,17 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -31,8 +22,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,8 +43,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import coil3.compose.AsyncImage
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
-import com.tryniecki.kajutabot.browser.openCustomTab
-import com.tryniecki.kajutabot.browser.rememberCustomTabColors
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
@@ -337,89 +323,6 @@ internal fun realtimeAgeText(timestampMs: Long?, nowMs: Long): UiText {
 }
 
 @Composable
-fun LibrariesScreen(onBack: () -> Unit) {
-    Scaffold(topBar = { BackTopBar(title = stringResource(R.string.more_libraries_title), onBack = onBack) }) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = innerPadding.calculateBottomPadding() + 16.dp,
-            ),
-        ) {
-            items(LIBRARIES, key = { it.name }) { library ->
-                ListItem(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier,
-                    leadingContent = null,
-                    trailingContent = { Text(library.license) },
-                    overlineContent = null,
-                    supportingContent = { Text(stringResource(library.descriptionResId)) },
-                    colors = ListItemDefaults.colors(),
-                    elevation = ListItemDefaults.elevation(),
-                    content = { Text(library.name) },
-                )
-                if (library != LIBRARIES.last()) HorizontalDivider()
-            }
-        }
-    }
-}
-
-@Composable
-fun ContactScreen(onBack: () -> Unit) {
-    Scaffold(topBar = { BackTopBar(title = stringResource(R.string.more_contact_title), onBack = onBack) }) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            ListItem(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier,
-                leadingContent = null,
-                trailingContent = null,
-                overlineContent = null,
-                supportingContent = { Text(stringResource(R.string.contact_kajutabot_author)) },
-                colors = ListItemDefaults.colors(),
-                elevation = ListItemDefaults.elevation(),
-                content = { Text(stringResource(R.string.more_contact_author)) },
-            )
-            HorizontalDivider()
-            ContactLinks()
-        }
-    }
-}
-
-@Composable
-private fun ContactLinks() {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-    val colors = rememberCustomTabColors()
-    SettingsRow(
-        icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_mail_outline,
-        title = "kacper@tryniecki.com",
-        subtitle = stringResource(R.string.contact_email_label),
-        onClick = { uriHandler.openUri("mailto:kacper@tryniecki.com") },
-    )
-    SettingsRow(
-        icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_github_outline,
-        title = "github.com/kcrg",
-        subtitle = "GitHub",
-        onClick = {
-            openCustomTab(context, uriHandler, "https://github.com/kcrg", colors)
-        },
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BackTopBar(title: String, onBack: () -> Unit) {
-    TopAppBar(
-        title = { Text(title) },
-        navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_left_outline), contentDescription = stringResource(R.string.action_back))
-            }
-        },
-    )
-}
-
-@Composable
 private fun SectionTitle(text: String) {
     Text(
         text = text,
@@ -429,68 +332,3 @@ private fun SectionTitle(text: String) {
         modifier = Modifier.padding(top = 8.dp),
     )
 }
-
-@Composable
-private fun SettingsRow(
-    icon: Int,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-    useContainer: Boolean = false,
-) {
-    ListItem(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = if (useContainer) {
-            Modifier
-                .clip(MaterialTheme.shapes.large)
-                .clickable(onClick = onClick)
-        } else {
-            Modifier.clickable(onClick = onClick)
-        },
-        leadingContent = {
-                Icon(
-                    painter = painterResource(icon),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-        trailingContent = {
-                Icon(
-                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_chevron_right_outline),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-        overlineContent = null,
-        supportingContent = { Text(subtitle) },
-        colors = ListItemDefaults.colors(
-            containerColor = if (useContainer) {
-                MaterialTheme.colorScheme.surfaceContainer
-            } else {
-                ListItemDefaults.containerColor
-            },
-        ),
-        elevation = ListItemDefaults.elevation(),
-        content = { Text(title) },
-    )
-}
-
-private data class LibraryInfo(val name: String, @StringRes val descriptionResId: Int, val license: String)
-
-private val LIBRARIES = listOf(
-    LibraryInfo("Jetpack Compose", R.string.library_compose_description, "Apache 2.0"),
-    LibraryInfo("Material 3", R.string.library_material3_description, "Apache 2.0"),
-    LibraryInfo("AndroidX Activity", R.string.library_activity_description, "Apache 2.0"),
-    LibraryInfo("Navigation Compose", R.string.library_navigation_description, "Apache 2.0"),
-    LibraryInfo("AndroidX Lifecycle", R.string.library_lifecycle_description, "Apache 2.0"),
-    LibraryInfo("AndroidX Core KTX", R.string.library_core_ktx_description, "Apache 2.0"),
-    LibraryInfo("AndroidX Media3", R.string.library_media3_description, "Apache 2.0"),
-    LibraryInfo("AndroidX Browser", R.string.library_browser_description, "Apache 2.0"),
-    LibraryInfo("Coil 3", R.string.library_coil_description, "Apache 2.0"),
-    LibraryInfo("Tabler Icons", R.string.library_tabler_description, "MIT"),
-    LibraryInfo("Kotlin Coroutines", R.string.library_coroutines_description, "Apache 2.0"),
-    LibraryInfo("Retrofit", R.string.library_retrofit_description, "Apache 2.0"),
-    LibraryInfo("SignalR Java Client", R.string.library_signalr_description, "MIT"),
-    LibraryInfo("OkHttp", R.string.library_okhttp_description, "Apache 2.0"),
-    LibraryInfo("kotlinx.serialization", R.string.library_serialization_description, "Apache 2.0"),
-)

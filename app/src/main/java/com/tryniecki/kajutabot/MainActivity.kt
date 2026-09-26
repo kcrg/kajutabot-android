@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
             this,
             AppViewModel.factory(container),
         )[AppViewModel::class.java]
+        splashScreen.setKeepOnScreenCondition { !appViewModel.ui.value.isThemeInitialized }
 
         handleIntent(intent)
 

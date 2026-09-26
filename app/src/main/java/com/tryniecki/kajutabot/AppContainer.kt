@@ -18,6 +18,7 @@ import com.tryniecki.kajutabot.data.repository.PlayerRepository
 import com.tryniecki.kajutabot.data.repository.SessionRepository
 import com.tryniecki.kajutabot.ui.app.SessionViewModelOwner
 import com.tryniecki.kajutabot.ui.app.SessionViewModelScope
+import com.tryniecki.kajutabot.ui.theme.PlatformThemeController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -67,6 +68,7 @@ class AppContainer(context: Context) {
     )
 
     val preferencesRepository = UserPreferencesRepository(appContext)
+    val platformThemeController = PlatformThemeController(appContext)
     val sessionRepository = SessionRepository(sessionManager)
     val playerRepository = PlayerRepository(sessionManager, appConfig.apiBaseUrl)
     val favoritesRepository = FavoritesRepository(sessionManager)

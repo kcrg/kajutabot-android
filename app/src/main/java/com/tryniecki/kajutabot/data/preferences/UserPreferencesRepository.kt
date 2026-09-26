@@ -1,10 +1,9 @@
 package com.tryniecki.kajutabot.data.preferences
 
-import android.app.UiModeManager
 import android.content.Context
-import android.os.Build
 import androidx.datastore.preferences.SharedPreferencesMigration
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -74,20 +73,20 @@ class UserPreferencesRepository(context: Context) {
     suspend fun currentGuildSelection(): GuildSelection = guildSelection.first()
 
     suspend fun setGuildId(guildId: String?) {
-        dataStore.edit { preferences ->
+        editSafely { preferences ->
             if (guildId == null) preferences.remove(GUILD_ID) else preferences[GUILD_ID] = guildId
         }
     }
 
     suspend fun setVoiceChannelId(channelId: String?) {
-        dataStore.edit { preferences ->
+        editSafely { preferences ->
             if (channelId == null) preferences.remove(VOICE_CHANNEL_ID)
             else preferences[VOICE_CHANNEL_ID] = channelId
         }
     }
 
     suspend fun setGuildSelection(guildId: String?, channelId: String?) {
-        dataStore.edit { preferences ->
+        editSafely { preferences ->
             if (guildId == null) preferences.remove(GUILD_ID) else preferences[GUILD_ID] = guildId
             if (channelId == null) preferences.remove(VOICE_CHANNEL_ID)
             else preferences[VOICE_CHANNEL_ID] = channelId
@@ -95,7 +94,7 @@ class UserPreferencesRepository(context: Context) {
     }
 
     suspend fun clearGuildSelection() {
-        dataStore.edit { preferences ->
+        editSafely { preferences ->
             preferences.remove(GUILD_ID)
             preferences.remove(VOICE_CHANNEL_ID)
         }
@@ -112,7 +111,7 @@ class UserPreferencesRepository(context: Context) {
         completed: Boolean = true,
     ) {
         val key = booleanPreferencesKey(onboardingCompletedKey(sessionType, discordUserId))
-        dataStore.edit { preferences -> preferences[key] = completed }
+        editSafely { preferences -> preferences[key] = completed }
     }
 
     fun favoritesShuffle(ownerKey: String): Flow<Boolean> = preferences.map { preferences ->
@@ -120,35 +119,28 @@ class UserPreferencesRepository(context: Context) {
     }
 
     suspend fun setFavoritesShuffle(ownerKey: String, enabled: Boolean) {
-        dataStore.edit { preferences ->
+        editSafely { preferences ->
             preferences[booleanPreferencesKey(favoritesShuffleKey(ownerKey))] = enabled
         }
     }
 
     suspend fun addSearchHistory(query: String): List<String> {
-        var updated = emptyList<String>()
-        dataStore.edit { preferences ->
-            updated = updateSearchHistory(decodeSearchHistory(preferences[SEARCH_HISTORY]), query)
-            preferences[SEARCH_HISTORY] = Json.encodeToString(updated)
-        }
+        val updated = updateSearchHistory(searchHistory.first(), query)
+        editSafely { preferences -> preferences[SEARCH_HISTORY] = Json.encodeToString(updated) }
         return updated
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
-        dataStore.edit { preferences -> preferences[THEME_MODE] = mode.name }
-        applyPlatformNightMode(mode)
+        editSafely { preferences -> preferences[THEME_MODE] = mode.name }
     }
 
-    fun applyPlatformNightMode(mode: ThemeMode) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-
-        appContext.getSystemService(UiModeManager::class.java).setApplicationNightMode(
-            when (mode) {
-                ThemeMode.LIGHT -> UiModeManager.MODE_NIGHT_NO
-                ThemeMode.DARK -> UiModeManager.MODE_NIGHT_YES
-                ThemeMode.NATIVE -> UiModeManager.MODE_NIGHT_AUTO
-            },
-        )
+    private suspend fun editSafely(transform: suspend (MutablePreferences) -> Unit) {
+        try {
+            dataStore.edit(transform)
+        } catch (_: IOException) {
+            // Preference persistence must not turn an otherwise successful user/network
+            // action into an unrelated UI failure. A later write can persist the latest state.
+        }
     }
 
     private companion object {

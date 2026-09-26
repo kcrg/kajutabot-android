@@ -7,8 +7,6 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +30,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -46,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -83,6 +83,9 @@ import com.tryniecki.kajutabot.ui.more.LibrariesScreen
 import com.tryniecki.kajutabot.ui.more.MoreRootScreen
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
 import com.tryniecki.kajutabot.ui.navigation.AppRoute
+import com.tryniecki.kajutabot.ui.navigation.kajutaForwardTransition
+import com.tryniecki.kajutabot.ui.navigation.kajutaPopTransition
+import com.tryniecki.kajutabot.ui.navigation.navigationMotionMetadata
 import com.tryniecki.kajutabot.ui.onboarding.AccessCheckingScreen
 import com.tryniecki.kajutabot.ui.onboarding.AccessErrorScreen
 import com.tryniecki.kajutabot.ui.onboarding.NoAccessScreen
@@ -100,7 +103,9 @@ import com.tryniecki.kajutabot.ui.text.asString
 import com.tryniecki.kajutabot.ui.text.resolve
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import com.tryniecki.kajutabot.ui.theme.KbMotion
+import com.tryniecki.kajutabot.ui.theme.directionalSharedAxisXMotion
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.map
 
 @Composable
 fun KajutaBotApp(
@@ -204,6 +209,7 @@ private fun RestoreErrorScreen(message: UiText, onRetry: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 private fun AuthenticatedShell(
     container: AppContainer,
@@ -223,7 +229,9 @@ private fun AuthenticatedShell(
     val onboardingCompletedFlow = remember(appViewModel, discordUserId, sessionType) {
         appViewModel.onboardingCompleted(sessionType, discordUserId)
     }
-    val onboardingCompleted by onboardingCompletedFlow.collectAsStateWithLifecycle(initialValue = false)
+    val onboardingCompleted by remember(onboardingCompletedFlow) {
+        onboardingCompletedFlow.map<Boolean, Boolean?> { it }
+    }.collectAsStateWithLifecycle(initialValue = null)
     var manualOnboardingRequested by rememberSaveable(discordUserId, sessionType) { mutableStateOf(false) }
     val adaptiveInfo = currentWindowAdaptiveInfoV2()
     val constrainWideContent = adaptiveInfo.windowSizeClass
@@ -235,6 +243,8 @@ private fun AuthenticatedShell(
         manualOnboardingRequested = manualOnboardingRequested,
     )
     val motion = MaterialTheme.motionScheme
+    val density = LocalDensity.current
+    val hierarchySlideDistancePx = with(density) { KbMotion.HIERARCHY_SLIDE_DISTANCE.roundToPx() }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(
@@ -249,23 +259,21 @@ private fun AuthenticatedShell(
             transitionSpec = {
                 when {
                     targetState == AuthenticatedGate.ONBOARDING ->
-                        (fadeIn(motion.defaultEffectsSpec()) +
-                            slideInHorizontally(motion.slowSpatialSpec()) {
-                                (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
-                            }) togetherWith
-                            (fadeOut(motion.fastEffectsSpec()) +
-                                slideOutHorizontally(motion.slowSpatialSpec()) {
-                                    -(it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
-                                })
+                        directionalSharedAxisXMotion(
+                            spatialSpec = motion.defaultSpatialSpec(),
+                            effectsSpec = motion.fastEffectsSpec(),
+                            direction = 1,
+                            slideDistancePx = hierarchySlideDistancePx,
+                            initialAlpha = KbMotion.HIERARCHY_INITIAL_ALPHA,
+                        )
                     initialState == AuthenticatedGate.ONBOARDING ->
-                        (fadeIn(motion.defaultEffectsSpec()) +
-                            slideInHorizontally(motion.slowSpatialSpec()) {
-                                -(it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
-                            }) togetherWith
-                            (fadeOut(motion.fastEffectsSpec()) +
-                                slideOutHorizontally(motion.slowSpatialSpec()) {
-                                    (it * KbMotion.HIERARCHY_SLIDE_FRACTION).toInt()
-                                })
+                        directionalSharedAxisXMotion(
+                            spatialSpec = motion.defaultSpatialSpec(),
+                            effectsSpec = motion.fastEffectsSpec(),
+                            direction = -1,
+                            slideDistancePx = hierarchySlideDistancePx,
+                            initialAlpha = KbMotion.HIERARCHY_INITIAL_ALPHA,
+                        )
                     else -> fadeIn(motion.defaultEffectsSpec()) togetherWith
                         fadeOut(motion.fastEffectsSpec())
                 }
@@ -287,8 +295,8 @@ private fun AuthenticatedShell(
                 )
                 AuthenticatedGate.ONBOARDING -> {
                     // Keep the close affordance stable while this screen slides out.
-                    val canDismissOnboarding = remember {
-                        manualOnboardingRequested && onboardingCompleted
+                    val canDismissOnboarding = remember(manualOnboardingRequested, onboardingCompleted) {
+                        manualOnboardingRequested && (onboardingCompleted == true)
                     }
                     OnboardingScreen(
                         guilds = entryState.guilds,
@@ -387,6 +395,8 @@ private fun AuthenticatedContent(
     val appUi by appViewModel.ui.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val motion = MaterialTheme.motionScheme
+    val density = LocalDensity.current
+    val hierarchySlideDistancePx = with(density) { KbMotion.HIERARCHY_SLIDE_DISTANCE.roundToPx() }
 
     LaunchedEffect(favoritesUi.transientMessage?.id) {
         val message = favoritesUi.transientMessage ?: return@LaunchedEffect
@@ -443,7 +453,7 @@ private fun AuthenticatedContent(
 
     SharedTransitionLayout {
         val appEntryProvider: (NavKey) -> NavEntry<NavKey> = entryProvider {
-            entry<AppRoute.Player> {
+            entry<AppRoute.Player>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
                 PlayerRoute(
                     viewModel = playerViewModel,
                     favoritesViewModel = favoritesViewModel,
@@ -461,10 +471,10 @@ private fun AuthenticatedContent(
                     animatedVisibilityScope = LocalNavAnimatedContentScope.current,
                 )
             }
-            entry<AppRoute.Favorites> {
+            entry<AppRoute.Favorites>(metadata = navigationMotionMetadata(AppDestination.FAVORITES)) {
                 FavoritesRoute(viewModel = favoritesViewModel)
             }
-            entry<AppRoute.More> {
+            entry<AppRoute.More>(metadata = navigationMotionMetadata(AppDestination.MORE)) {
                 MoreRootScreen(
                     appViewModel = appViewModel,
                     playerViewModel = playerViewModel,
@@ -484,13 +494,13 @@ private fun AuthenticatedContent(
                     },
                 )
             }
-            entry<AppRoute.Libraries> {
+            entry<AppRoute.Libraries>(metadata = navigationMotionMetadata(AppDestination.MORE)) {
                 LibrariesScreen(onBack = { popActiveBackStack() })
             }
-            entry<AppRoute.Contact> {
+            entry<AppRoute.Contact>(metadata = navigationMotionMetadata(AppDestination.MORE)) {
                 ContactScreen(onBack = { popActiveBackStack() })
             }
-            entry<AppRoute.AddTrack> {
+            entry<AppRoute.AddTrack>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
                 // Disposal follows the actual Navigation 3 exit transition,
                 // including system and predictive Back.
                 DisposableEffect(Unit) {
@@ -502,7 +512,7 @@ private fun AuthenticatedContent(
                     onClose = { popActiveBackStack() },
                 )
             }
-            entry<AppRoute.DiscordSelection> {
+            entry<AppRoute.DiscordSelection>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
                 DiscordSelectionRoute(
                     viewModel = playerViewModel,
                     onBack = { popActiveBackStack() },
@@ -595,13 +605,33 @@ private fun AuthenticatedContent(
                 }
             },
         ) { innerPadding ->
-            // Navigation 3 owns the regular forward/back/predictive-back animations.
-            // The authenticated shell is already centered/capped on expanded windows,
-            // so screen composition itself stays identical to the phone layout.
+            // Peer tabs fade through; detail pages use directional Shared Axis X.
+            // The same pop policy drives toolbar, system and predictive Back.
             NavDisplay(
                 entries = activeEntries,
                 onBack = { popActiveBackStack() },
                 sharedTransitionScope = this@SharedTransitionLayout,
+                transitionSpec = {
+                    kajutaForwardTransition(
+                        hierarchySpatialSpec = motion.defaultSpatialSpec(),
+                        hierarchyEffectsSpec = motion.fastEffectsSpec(),
+                        hierarchySlideDistancePx = hierarchySlideDistancePx,
+                    )
+                },
+                popTransitionSpec = {
+                    kajutaPopTransition(
+                        hierarchySpatialSpec = motion.defaultSpatialSpec(),
+                        hierarchyEffectsSpec = motion.fastEffectsSpec(),
+                        hierarchySlideDistancePx = hierarchySlideDistancePx,
+                    )
+                },
+                predictivePopTransitionSpec = {
+                    kajutaPopTransition(
+                        hierarchySpatialSpec = motion.defaultSpatialSpec(),
+                        hierarchyEffectsSpec = motion.fastEffectsSpec(),
+                        hierarchySlideDistancePx = hierarchySlideDistancePx,
+                    )
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(bottom = innerPadding.calculateBottomPadding()),

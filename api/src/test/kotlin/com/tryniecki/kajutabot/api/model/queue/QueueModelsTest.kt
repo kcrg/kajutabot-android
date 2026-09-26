@@ -17,6 +17,14 @@ class QueueModelsTest {
     }
 
     @Test
+    fun `swap request contains both entry ids and version`() {
+        val body = Json.encodeToString(SwapQueueEntriesRequest("first", "second", 123))
+        assertTrue(body.contains("\"firstEntryId\":\"first\""))
+        assertTrue(body.contains("\"secondEntryId\":\"second\""))
+        assertTrue(body.contains("\"expectedVersion\":123"))
+    }
+
+    @Test
     fun `playback track contains artwork URL but no internal cache fields`() {
         val body = Json.encodeToString(PlaybackTrackResponse(
             contentId = "id", contentType = "YouTube", title = "Title", url = "https://example.com",

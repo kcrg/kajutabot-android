@@ -24,7 +24,7 @@ data class PlaybackProgressAnchor(
 
 /** Stable key of one concrete playback instance (track + its start moment). */
 fun playbackIdentity(track: PlaybackTrackResponse, startedAt: String?): String =
-    "${track.contentType}:${track.contentId}:$startedAt"
+    "${track.contentType}:${track.contentId}:${parseStartedAtEpochMs(startedAt) ?: startedAt?.trim()}"
 
 /** Parses a backend ISO-8601 timestamp to epoch millis, or null when unusable. */
 fun parseStartedAtEpochMs(raw: String?): Long? {

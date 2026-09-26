@@ -6,6 +6,18 @@ import org.junit.Test
 
 class AuthenticatedGateTest {
     @Test
+    fun `unknown onboarding state stays on access check instead of flashing onboarding`() {
+        assertEquals(
+            AuthenticatedGate.CHECKING_ACCESS,
+            resolveAuthenticatedGate(
+                guildAccessState = GuildAccessState.AVAILABLE,
+                onboardingCompleted = null,
+                manualOnboardingRequested = false,
+            ),
+        )
+    }
+
+    @Test
     fun `first successful access check opens onboarding`() {
         assertEquals(
             AuthenticatedGate.ONBOARDING,

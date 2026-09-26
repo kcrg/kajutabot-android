@@ -3,6 +3,7 @@ package com.tryniecki.kajutabot.api.client
 import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
 import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.api.model.error.KajutaBotProblemDetailsParser
+import com.tryniecki.kajutabot.api.model.queue.SwapQueueEntriesRequest
 import kotlinx.serialization.json.Json
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -137,6 +138,40 @@ class KajutaBotApiClientTest {
         val delete = server.takeRequest()
         assertTrue(delete.path!!.startsWith("/api/v1/app/users/me/favorites?"))
         assertTrue(delete.path!!.contains("contentUrl="))
+    }
+
+    @Test
+    fun `swap queue entries posts contract body and reads direct snapshot`() {
+        server.enqueue(MockResponse().setBody("""
+            {
+              "guildId":"123456789", "voiceChannelId":"987654321", "nowPlaying":null,
+              "nowPlayingFromRadio":false, "radio":{"isEnabled":false},
+              "pendingEntries":[{"entryId":"33333333-3333-3333-3333-333333333333", "position":1,
+                "track":{"contentId":"C","contentType":"YouTube","title":"C",
+                  "url":"https://example.test/C","durationMilliseconds":120000,
+                  "thumbnailUrl":null,"playCount":0}}],
+              "pendingDurationMilliseconds":120000, "version":124
+            }
+        """.trimIndent()))
+        val api = KajutaBotApiClientFactory.create(server.url("/").toString()) { "token-123" }
+        val snapshot = kotlinx.coroutines.runBlocking {
+            api.swapQueueEntries("123456789", SwapQueueEntriesRequest(
+                "11111111-1111-1111-1111-111111111111",
+                "33333333-3333-3333-3333-333333333333",
+                123,
+            ))
+        }
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/v1/app/guilds/123456789/queue/items/swap", request.path)
+        assertEquals("Bearer token-123", request.getHeader("Authorization"))
+        val body = json.parseToJsonElement(request.body.readUtf8()).toString()
+        assertTrue(body.contains("\"firstEntryId\":\"11111111-1111-1111-1111-111111111111\""))
+        assertTrue(body.contains("\"secondEntryId\":\"33333333-3333-3333-3333-333333333333\""))
+        assertTrue(body.contains("\"expectedVersion\":123"))
+        assertEquals(124L, snapshot.version)
+        assertEquals("C", snapshot.pendingEntries.single().track.title)
     }
 
     @Test

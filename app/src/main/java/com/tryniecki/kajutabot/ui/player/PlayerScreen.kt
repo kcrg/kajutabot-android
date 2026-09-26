@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -130,7 +129,7 @@ fun PlayerRoute(
         onRepeatToggle = { viewModel.setRepeat(ui.queue?.isRepeatEnabled != true) },
         onRadioToggle = viewModel::toggleRadio,
         onRemoveEntry = viewModel::removeEntry,
-        onMoveEntry = viewModel::moveEntry,
+        onSwapEntries = viewModel::swapEntries,
         onClearQueue = viewModel::clearQueue,
         isFavorite = favoritesViewModel::isFavorite,
         onToggleFavorite = favoritesViewModel::toggle,
@@ -211,7 +210,7 @@ fun PlayerScreen(
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,
     onRemoveEntry: (String) -> Unit,
-    onMoveEntry: (String, Int, Long) -> Unit,
+    onSwapEntries: (String, String, Long) -> Boolean,
     onClearQueue: () -> Unit,
     isFavorite: (PlaybackTrackResponse) -> Boolean,
     onToggleFavorite: (PlaybackTrackResponse) -> Unit,
@@ -231,11 +230,11 @@ fun PlayerScreen(
     var dragOffsetPx by remember { mutableStateOf(0f) }
     var dragTargetIndex by remember { mutableStateOf(-1) }
     var dragExpectedVersion by remember { mutableStateOf<Long?>(null) }
-    var previewOrder by remember(ui.queue?.guildId, ui.queue?.version) {
+    var previewOrder by remember(ui.queue?.guildId) {
         mutableStateOf<List<QueueEntryResponse>?>(null)
     }
-    LaunchedEffect(ui.error) {
-        if (ui.error != null) previewOrder = null
+    LaunchedEffect(ui.isMutating, ui.error) {
+        if (!ui.isMutating || ui.error != null) previewOrder = null
     }
     val pending = previewOrder ?: ui.queue?.pendingEntries.orEmpty()
     val pendingIndexById = remember(pending) {
@@ -450,14 +449,12 @@ fun PlayerScreen(
                                                 customActions = listOf(
                                                     CustomAccessibilityAction(moveUpDescription) {
                                                         if (index > 0 && !ui.isMutating && ui.queue != null) {
-                                                            onMoveEntry(entry.entryId, index, ui.queue.version)
-                                                            true
+                                                            onSwapEntries(entry.entryId, pending[index - 1].entryId, ui.queue.version)
                                                         } else false
                                                     },
                                                     CustomAccessibilityAction(moveDownDescription) {
                                                         if (index in 0 until pending.lastIndex && !ui.isMutating && ui.queue != null) {
-                                                            onMoveEntry(entry.entryId, index + 2, ui.queue.version)
-                                                            true
+                                                            onSwapEntries(entry.entryId, pending[index + 1].entryId, ui.queue.version)
                                                         } else false
                                                     },
                                                 )
@@ -494,14 +491,13 @@ fun PlayerScreen(
                                                         }
                                                     },
                                                     onDragEnd = {
-                                                        val sourceIndex = entryIndex
-                                                        val newIndex = dragTargetIndex
+                                                        val targetEntryId = pending.getOrNull(dragTargetIndex)?.entryId
                                                         val version = dragExpectedVersion
-                                                        if (sourceIndex >= 0 && newIndex >= 0 && sourceIndex != newIndex && version != null) {
-                                                            previewOrder = pending.toMutableList().apply {
-                                                                add(newIndex, removeAt(sourceIndex))
+                                                        if (targetEntryId != null && version != null) {
+                                                            val swapped = swappedQueueEntries(pending, entry.entryId, targetEntryId)
+                                                            if (swapped != null && onSwapEntries(entry.entryId, targetEntryId, version)) {
+                                                                previewOrder = swapped
                                                             }
-                                                            onMoveEntry(entry.entryId, newIndex + 1, version)
                                                         }
                                                         draggingEntryId = null
                                                         dragOffsetPx = 0f
@@ -660,6 +656,7 @@ private fun NowPlayingCard(
 
                 AnimatedContent(
                     targetState = currentSlide,
+                    contentKey = { it.identity },
                     transitionSpec = {
                         val contentTransition = if (initialState.hasTrack == targetState.hasTrack) {
                             forwardSharedAxisY(
@@ -790,13 +787,19 @@ private fun SmoothArtworkGlow(
         0.18f,
     )
 
-    Crossfade(
+    AnimatedContent(
         targetState = slide,
-        animationSpec = motion.slowEffectsSpec(),
+        contentKey = { it.identity },
+        transitionSpec = {
+            fadeThrough(
+                enterSpec = motion.slowEffectsSpec(),
+                exitSpec = motion.slowEffectsSpec(),
+            )
+        },
         modifier = modifier,
         label = "nowPlayingGlow",
     ) { current ->
-        if (!current.hasTrack) return@Crossfade
+        if (!current.hasTrack) return@AnimatedContent
 
         AccentArtworkGlow(
             accent = current.artworkAccentColor.toArtworkAccentColor() ?: fallbackAccent,

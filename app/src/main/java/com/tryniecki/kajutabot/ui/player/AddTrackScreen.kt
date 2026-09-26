@@ -134,19 +134,17 @@ fun AddTrackScreen(
                 )
             },
             bottomBar = {
-                Surface(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .imePadding(),
-                    tonalElevation = 3.dp,
+                        .imePadding()
+                        .padding(horizontal = 16.dp),
                 ) {
                     Button(
                         onClick = submitAndHideKeyboard,
                         enabled = !ui.isMutating && !ui.isSearching && trimmed.isNotBlank(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(if (isUrlInput) R.string.action_add_to_queue else R.string.action_search))
                     }
@@ -159,7 +157,8 @@ fun AddTrackScreen(
                     start = 16.dp,
                     top = innerPadding.calculateTopPadding() + 8.dp,
                     end = 16.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 16.dp,
+                    // Include the transparent action area and leave space after the last result.
+                    bottom = innerPadding.calculateBottomPadding() + 24.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {

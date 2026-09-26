@@ -109,6 +109,7 @@ fun MiniPlayer(
             ) {
                 AnimatedContent(
                     targetState = slide,
+                    contentKey = { it.identity },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),

@@ -21,6 +21,7 @@ import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
 import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
+import com.tryniecki.kajutabot.api.model.queue.SwapQueueEntriesRequest
 import com.tryniecki.kajutabot.api.model.radio.EnableRadioRequest
 import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
 import com.tryniecki.kajutabot.api.model.search.SearchResponse
@@ -746,6 +747,7 @@ class SessionManagerTest {
         override suspend fun enqueue(guildId: String, request: EnqueueRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun removeQueueEntry(guildId: String, entryId: String, expectedVersion: Long?): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun moveQueueEntry(guildId: String, entryId: String, request: MoveQueueEntryRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
+        override suspend fun swapQueueEntries(guildId: String, request: SwapQueueEntriesRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun clearPendingQueue(guildId: String, expectedVersion: Long?): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun skip(guildId: String, request: SkipQueueRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun setRepeat(guildId: String, request: SetQueueRepeatRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
