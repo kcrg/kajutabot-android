@@ -1,5 +1,7 @@
 package com.tryniecki.kajutabot.ui.more
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -56,6 +58,15 @@ private fun ContactLinks() {
         title = "kacper@tryniecki.com",
         subtitle = stringResource(R.string.contact_email_label),
         onClick = { uriHandler.openUri("mailto:kacper@tryniecki.com") },
+    )
+    val phoneNumber = stringResource(R.string.contact_phone_number)
+    SettingsRow(
+        icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_phone_outline,
+        title = phoneNumber,
+        subtitle = stringResource(R.string.contact_phone_label),
+        onClick = {
+            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneNumber")))
+        },
     )
     SettingsRow(
         icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_github_outline,

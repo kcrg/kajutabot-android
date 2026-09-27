@@ -398,10 +398,19 @@ private fun AuthenticatedContent(
     val density = LocalDensity.current
     val hierarchySlideDistancePx = with(density) { KbMotion.HIERARCHY_SLIDE_DISTANCE.roundToPx() }
 
-    LaunchedEffect(favoritesUi.transientMessage?.id) {
+    LaunchedEffect(favoritesUi.transientMessage?.id, currentDestination) {
+        if (currentDestination == AppDestination.FAVORITES) return@LaunchedEffect
         val message = favoritesUi.transientMessage ?: return@LaunchedEffect
         Toast.makeText(context, message.text.resolve(context), Toast.LENGTH_SHORT).show()
         favoritesViewModel.acknowledgeTransientMessage(message.id)
+    }
+
+    val favoritesErrorMessage = favoritesUi.error?.asString()
+    LaunchedEffect(favoritesErrorMessage, currentDestination) {
+        if (currentDestination != AppDestination.FAVORITES && favoritesErrorMessage != null) {
+            Toast.makeText(context, favoritesErrorMessage, Toast.LENGTH_SHORT).show()
+            favoritesViewModel.dismissMessage()
+        }
     }
 
     LaunchedEffect(controlMessage?.id) {
@@ -577,8 +586,8 @@ private fun AuthenticatedContent(
                                     isQueueReordering = state.isQueueReordering,
                                     activeControlAction = state.activeControlAction,
                                     isFavorite = favoritesViewModel.isFavorite(state.track),
-                                    favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
-                                    onToggleFavorite = favoritesViewModel::toggle,
+                                    favoritesBusy = favoritesUi.isFavoriteMutating || favoritesUi.isLoading,
+                                    onToggleFavorite = favoritesViewModel::toggleSilently,
                                     onOpenPlayer = { selectTopLevel(AppDestination.PLAYER) },
                                     onSkip = playerViewModel::skip,
                                     sharedTransitionScope = this@SharedTransitionLayout,

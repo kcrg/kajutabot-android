@@ -103,39 +103,11 @@ data class NowPlayingSlide(
     val startedAt: String?,
 )
 
-/**
- * Stable UI/media representation of the currently playing track.
- *
- * The raw queue snapshot can briefly report `nowPlaying = null` while the backend
- * switches tracks. Keeping this projection separate lets the UI hold the previous
- * track until the next concrete track is known instead of flashing an idle state.
- */
+/** Stable UI/media representation derived from the latest backend snapshot. */
 data class NowPlayingPresentation(
     val track: PlaybackTrackResponse,
     val startedAt: String?,
 )
-
-/** Keep known artwork when a fresh snapshot omits it for the same playback. */
-fun mergeNowPlayingPresentation(
-    previous: NowPlayingPresentation?,
-    incoming: NowPlayingPresentation,
-): NowPlayingPresentation {
-    if (previous == null ||
-        previous.track.contentType != incoming.track.contentType ||
-        previous.track.contentId != incoming.track.contentId ||
-        (previous.startedAt != null && incoming.startedAt != null &&
-            playbackIdentity(previous.track, previous.startedAt) !=
-            playbackIdentity(incoming.track, incoming.startedAt))
-    ) return incoming
-
-    return incoming.copy(
-        track = incoming.track.copy(
-            artworkUrl = incoming.track.artworkUrl?.takeIf { it.isNotBlank() } ?: previous.track.artworkUrl,
-            artworkAccentColor = incoming.track.artworkAccentColor ?: previous.track.artworkAccentColor,
-        ),
-        startedAt = incoming.startedAt ?: previous.startedAt,
-    )
-}
 
 fun QueueSnapshotResponse.nowPlayingPresentationOrNull(): NowPlayingPresentation? =
     nowPlaying?.let { track -> NowPlayingPresentation(track, nowPlayingStartedAt) }

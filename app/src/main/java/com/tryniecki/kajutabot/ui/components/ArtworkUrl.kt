@@ -22,6 +22,12 @@ fun resolveArtworkUrl(
     val value = imageUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     val apiRoot = apiBaseUrl.trim().trimEnd('/').toHttpUrlOrNull() ?: return null
 
+    // OkHttp normalizes https:///path into a host; reject the malformed authority first.
+    if (value.startsWith("http://") || value.startsWith("https://")) {
+        val authority = value.substringAfter("://").substringBefore('/')
+        if (authority.isBlank()) return null
+    }
+
     if (value.startsWith("//")) {
         return "${apiRoot.scheme}:$value".toHttpUrlOrNull()?.toString()
     }

@@ -91,7 +91,9 @@ class GuestFavoritesViewModelTest {
 
             server.enqueue(MockResponse().setBody(queueResponseJson()))
             viewModel.queueAll()
-            withTimeout(5_000) { viewModel.ui.first { it.info == uiText(R.string.favorites_queued_all) } }
+            withTimeout(5_000) {
+                viewModel.ui.first { it.transientMessage?.text == uiText(R.string.favorites_queued_all) }
+            }
             val queue = server.takeRequest()
             assertEquals("/api/v1/app/users/me/favorites/queue", queue.path)
             assertTrue(queue.body.readUtf8().contains("\"shuffle\":true"))

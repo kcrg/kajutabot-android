@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -57,9 +58,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -68,6 +72,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Modifier
@@ -112,6 +117,8 @@ import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 private val artworkAccentColorRegex = Regex("#[0-9a-fA-F]{6}")
 
@@ -163,7 +170,7 @@ fun PlayerRoute(
         onClearQueue = viewModel::clearQueue,
         isFavorite = favoritesViewModel::isFavorite,
         onToggleFavorite = favoritesViewModel::toggle,
-        favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
+        favoritesBusy = favoritesUi.isFavoriteMutating || favoritesUi.isLoading,
         onDismissMessage = viewModel::dismissMessage,
         onAddTrackOpen = onAddTrackOpen,
         onRetryQueue = {
@@ -225,7 +232,7 @@ fun AddTrackRoute(
         onResultClick = viewModel::enqueueSearchResult,
         isFavorite = favoritesViewModel::isFavorite,
         onToggleFavorite = favoritesViewModel::toggle,
-        favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,
+        favoritesBusy = favoritesUi.isFavoriteMutating || favoritesUi.isLoading,
         onDismissMessage = viewModel::dismissMessage,
     )
 }
@@ -257,6 +264,14 @@ fun PlayerScreen(
     var confirmClear by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val showFloatingActions = rememberScrollAwareFabVisible(listState)
+    val showBackToTop by remember(listState) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 4 ||
+                (listState.firstVisibleItemIndex > 0 && listState.firstVisibleItemScrollOffset > 600)
+        }
+    }
+    val scrollScope = rememberCoroutineScope()
+    var scrollToTopJob by remember { mutableStateOf<Job?>(null) }
     var draggingEntryId by remember { mutableStateOf<String?>(null) }
     var dragOffsetPx by remember { mutableStateOf(0f) }
     var dragStartTopPx by remember { mutableStateOf(0f) }
@@ -265,6 +280,10 @@ fun PlayerScreen(
     var dragTargetIndex by remember { mutableStateOf(-1) }
     var dragExpectedVersion by remember { mutableStateOf<Long?>(null) }
     var listCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var viewportHeightPx by remember { mutableIntStateOf(0) }
+    var messageHeightPx by remember { mutableIntStateOf(0) }
+    var nowPlayingHeightPx by remember { mutableIntStateOf(0) }
+    var queueHeaderHeightPx by remember { mutableIntStateOf(0) }
     val dragHandleBounds = remember { mutableMapOf<String, Rect>() }
     var previewOrder by remember(ui.queue?.guildId) {
         mutableStateOf<List<QueueEntryResponse>?>(null)
@@ -301,50 +320,76 @@ fun PlayerScreen(
     val changeServerChannelDesc = stringResource(R.string.player_change_server_channel)
     Scaffold(
         floatingActionButton = {
-            AnimatedVisibility(
-                visible = showFloatingActions,
-                enter = fadeIn(animationSpec = motion.fastEffectsSpec()) +
-                        scaleIn(animationSpec = motion.fastSpatialSpec(), initialScale = 0.82f),
-                exit = fadeOut(animationSpec = motion.fastEffectsSpec()) +
-                        scaleOut(animationSpec = motion.fastSpatialSpec(), targetScale = 0.82f),
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (showBackToTop) {
                     SmallFloatingActionButton(
-                        onClick = onDiscordSelectionOpen,
-                        modifier = Modifier.semantics {
-                            contentDescription = changeServerChannelDesc
+                        onClick = {
+                            if (scrollToTopJob?.isActive != true) {
+                                scrollToTopJob = scrollScope.launch { listState.animateScrollToItem(0) }
+                            }
                         },
                     ) {
-                        if (ui.selectedGuild != null) {
-                            GuildAvatar(
-                                iconUrl = ui.selectedGuild.iconUrl,
-                                modifier = Modifier.size(32.dp),
-                                iconSize = 18.dp,
-                            )
-                        } else {
+                        Icon(
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_up_outline),
+                            contentDescription = stringResource(R.string.action_back_to_top),
+                        )
+                    }
+                }
+                AnimatedVisibility(
+                    visible = showFloatingActions,
+                    enter = fadeIn(animationSpec = motion.fastEffectsSpec()) +
+                        scaleIn(animationSpec = motion.fastSpatialSpec(), initialScale = 0.82f),
+                    exit = fadeOut(animationSpec = motion.fastEffectsSpec()) +
+                        scaleOut(animationSpec = motion.fastSpatialSpec(), targetScale = 0.82f),
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SmallFloatingActionButton(
+                            onClick = onDiscordSelectionOpen,
+                            modifier = Modifier.semantics { contentDescription = changeServerChannelDesc },
+                        ) {
+                            if (ui.selectedGuild != null) {
+                                GuildAvatar(
+                                    iconUrl = ui.selectedGuild.iconUrl,
+                                    modifier = Modifier.size(32.dp),
+                                    iconSize = 18.dp,
+                                )
+                            } else {
+                                Icon(
+                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_discord_outline),
+                                    contentDescription = null,
+                                )
+                            }
+                        }
+                        FloatingActionButton(onClick = onAddTrackOpen) {
                             Icon(
-                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_discord_outline),
-                                contentDescription = null,
+                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
+                                contentDescription = stringResource(R.string.action_add_track),
                             )
                         }
-                    }
-                    FloatingActionButton(onClick = onAddTrackOpen) {
-                        Icon(
-                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
-                            contentDescription = stringResource(R.string.action_add_track),
-                        )
                     }
                 }
             }
         },
     ) { innerPadding ->
+        val hasMessage = ui.error != null || ui.info != null
+        val emptyQueueMinHeight = with(density) {
+            val gaps = (if (hasMessage) 3 else 2) * 16.dp.toPx()
+            (viewportHeightPx - nowPlayingHeightPx - queueHeaderHeightPx -
+                (if (hasMessage) messageHeightPx else 0) - gaps -
+                (innerPadding.calculateTopPadding() + 8.dp).toPx() -
+                (innerPadding.calculateBottomPadding() + 24.dp).toPx())
+                .coerceAtLeast(0f).toDp()
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .onGloballyPositioned { listCoordinates = it }
+                .onGloballyPositioned {
+                    listCoordinates = it
+                    viewportHeightPx = it.size.height
+                }
                 .pointerInput(pendingIndexById, ui.queue?.version, ui.isMutating) {
                     if (ui.isMutating || pending.size < 2) return@pointerInput
                     awaitEachGesture {
@@ -415,6 +460,7 @@ fun PlayerScreen(
             if (ui.error != null || ui.info != null) {
                 item {
                     Card(
+                        modifier = Modifier.onSizeChanged { messageHeightPx = it.height },
                         colors = CardDefaults.cardColors(
                             containerColor = if (ui.error != null) {
                                 MaterialTheme.colorScheme.errorContainer
@@ -445,6 +491,7 @@ fun PlayerScreen(
                     else -> PlayerSurfaceState.READY
                 }
                 AnimatedContent(
+                    modifier = Modifier.onSizeChanged { nowPlayingHeightPx = it.height },
                     targetState = surfaceState,
                     transitionSpec = {
                         fadeThrough(
@@ -484,15 +531,24 @@ fun PlayerScreen(
 
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().onSizeChanged { queueHeaderHeightPx = it.height },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        stringResource(R.string.player_queue_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Column {
+                        Text(
+                            stringResource(R.string.player_queue_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (ui.queue?.pendingEntries?.isNotEmpty() == true) {
+                            Text(
+                                "${ui.queue.pendingEntries.size} · ${formatQueueDuration(ui.queue.pendingDurationMilliseconds)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                     if (!ui.queue?.pendingEntries.isNullOrEmpty()) {
                         IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
                             Icon(
@@ -517,13 +573,18 @@ fun PlayerScreen(
                 }
             } else if (pending.isEmpty()) {
                 item(key = "queue-empty") {
-                    EmptyQueueCard(
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = motion.defaultEffectsSpec(),
-                            fadeOutSpec = motion.fastEffectsSpec(),
-                            placementSpec = motion.defaultSpatialSpec(),
-                        ),
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth()
+                            .heightIn(min = emptyQueueMinHeight)
+                            .animateItem(
+                                fadeInSpec = motion.defaultEffectsSpec(),
+                                fadeOutSpec = motion.fastEffectsSpec(),
+                                placementSpec = motion.defaultSpatialSpec(),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        EmptyQueueCard(onAddTrackOpen = onAddTrackOpen)
+                    }
                 }
             } else {
                 items(pending, key = { it.entryId }) { entry ->
@@ -846,9 +907,9 @@ private fun NowPlayingCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedIconButton(
+                if (queue?.nowPlaying != null) OutlinedIconButton(
                     onClick = onStop,
-                    enabled = !playbackControlsBlocked && presentedNowPlaying != null,
+                    enabled = !playbackControlsBlocked,
                 ) {
                     Icon(
                         painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_stop_outline),
@@ -996,7 +1057,7 @@ private fun AccentArtworkGlow(
 }
 
 @Composable
-private fun EmptyQueueCard(modifier: Modifier = Modifier) {
+private fun EmptyQueueCard(onAddTrackOpen: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
@@ -1022,6 +1083,9 @@ private fun EmptyQueueCard(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Button(onClick = onAddTrackOpen) {
+                Text(stringResource(R.string.action_add_track))
+            }
         }
     }
 }
@@ -1156,4 +1220,9 @@ internal fun formatDuration(ms: Long): String {
     } else {
         "%d:%02d".format(minutes, seconds)
     }
+}
+
+internal fun formatQueueDuration(ms: Long): String {
+    val seconds = (ms.coerceAtLeast(0) / 1_000)
+    return "%02d:%02d:%02d".format(seconds / 3_600, (seconds % 3_600) / 60, seconds % 60)
 }

@@ -131,7 +131,7 @@ class SessionManager(
             // Invalid refresh already changed the state.
         } catch (e: Exception) {
             synchronized(lock) {
-                if (generation == epoch) _authState.value = AuthState.RecoverableError(
+                if (generation == epoch && e !is PersistenceSessionException) _authState.value = AuthState.RecoverableError(
                     uiText(R.string.auth_session_refresh_failed),
                 )
             }

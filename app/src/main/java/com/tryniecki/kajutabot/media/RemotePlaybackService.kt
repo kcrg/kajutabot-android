@@ -65,8 +65,7 @@ class RemotePlaybackService : MediaSessionService() {
             if (!controlsBlocked) playerState.skip()
         }
         remotePlayer = player
-        // Project the same transition-stabilized item as the app UI. Queue mutation
-        // responses may briefly expose nowPlaying=null while the next track starts.
+        // Project only the current backend snapshot into the long-lived MediaSession.
         player.update(playerState.ui.value.effectiveNowPlaying)
         val session = MediaSession.Builder(this, player)
             .setCallback(RemoteSessionCallback(playerState, favoritesState))
@@ -86,11 +85,10 @@ class RemotePlaybackService : MediaSessionService() {
 
         scope.launch {
             playerState.ui.collectLatest { state ->
-                // Never bounce Media3 through STATE_IDLE during a normal track transition.
                 player.update(state.effectiveNowPlaying)
                 session.setMediaButtonPreferences(mediaButtons(this@RemotePlaybackService, playerState, favoritesState))
                 // Stop foreground playback promptly when the bot disconnects.
-                if (state.queue != null && state.effectiveNowPlaying == null && state.queue.voiceChannelId == null) {
+                if (state.queue != null && state.queue.nowPlaying == null && state.queue.voiceChannelId == null) {
                     stopSelf()
                 }
             }
@@ -158,7 +156,7 @@ class RemotePlaybackService : MediaSessionService() {
         ): ListenableFuture<SessionResult> {
             val state = player.ui.value
             val queue = state.queue
-            val track = state.effectiveNowPlaying?.track
+            val track = queue?.nowPlaying
             val playbackControlsBlocked = shouldBlockPlaybackControls(
                 state.isMutating, state.activeControlAction, state.isQueueReordering,
             )
@@ -172,10 +170,10 @@ class RemotePlaybackService : MediaSessionService() {
                 REPEAT.customAction -> player.setRepeat(!queue.isRepeatEnabled)
                 RADIO.customAction -> player.toggleRadio()
                 FAVORITE.customAction -> {
-                    if (favorites.ui.value.isLoading || favorites.ui.value.isMutating) {
+                    if (favorites.ui.value.isLoading || favorites.ui.value.isFavoriteMutating) {
                         return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
                     }
-                    favorites.toggle(track)
+                    favorites.toggleSilently(track)
                 }
                 else -> return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
             }
@@ -205,7 +203,7 @@ class RemotePlaybackService : MediaSessionService() {
         fun mediaButtons(context: Context, player: PlayerViewModel, favorites: FavoritesViewModel): List<CommandButton> {
             val state = player.ui.value
             val queue = state.queue ?: return emptyList()
-            val track = state.effectiveNowPlaying?.track ?: return emptyList()
+            val track = queue.nowPlaying ?: return emptyList()
             val playbackControlsBlocked = shouldBlockPlaybackControls(
                 state.isMutating, state.activeControlAction, state.isQueueReordering,
             )
@@ -251,7 +249,7 @@ class RemotePlaybackService : MediaSessionService() {
                     )
                     .setDisplayName(context.getString(if (isFavorite) R.string.action_remove_favorite else R.string.action_add_favorite))
                     .setSessionCommand(FAVORITE)
-                    .setEnabled(!playbackControlsBlocked && !favorites.ui.value.isMutating && !favorites.ui.value.isLoading)
+                    .setEnabled(!playbackControlsBlocked && !favorites.ui.value.isFavoriteMutating && !favorites.ui.value.isLoading)
                     .build(),
             )
         }

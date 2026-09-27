@@ -4,10 +4,19 @@ import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class QueueModelsTest {
+    @Test
+    fun `skip response carries repeated track outcome`() {
+        val response = Json.decodeFromString<QueueSnapshotResponse>(
+            """{"guildId":"g","voiceChannelId":"c","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingDurationMilliseconds":0,"version":2,"skipOutcome":"RestartedRepeatedTrack"}""",
+        )
+        assertEquals(SkipOutcome.RestartedRepeatedTrack, response.skipOutcome)
+    }
+
     @Test
     fun `move request contains only position and version`() {
         val body = Json.encodeToString(MoveQueueEntryRequest(newPosition = 2, expectedVersion = 7))

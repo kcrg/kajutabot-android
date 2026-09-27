@@ -69,7 +69,7 @@ class PlayerActionsTest {
                     ui = state(nowPlaying = true),
                     onDiscordSelectionOpen = {},
                     onSkip = {}, onStop = { stops++ }, onRepeatToggle = {}, onRadioToggle = {},
-                    onRemoveEntry = {}, onMoveEntry = { _, _, _ -> }, onClearQueue = { clears++ },
+                    onRemoveEntry = {}, onSwapEntries = { _, _, _ -> true }, onClearQueue = { clears++ },
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
                     onDismissMessage = {}, onAddTrackOpen = {},
                 )
@@ -89,16 +89,17 @@ class PlayerActionsTest {
     }
 
     @Test
-    fun dragUsesOneBasedPositionAndOriginalQueueVersion() {
-        var moved: Triple<String, Int, Long>? = null
+    fun dragSwapsEntriesWithOriginalQueueVersion() {
+        var moved: Triple<String, String, Long>? = null
         compose.setContent {
             MaterialTheme {
                 PlayerScreen(
                     ui = state(),
                     onDiscordSelectionOpen = {},
                     onSkip = {}, onStop = {}, onRepeatToggle = {}, onRadioToggle = {},
-                    onRemoveEntry = {}, onMoveEntry = { id, position, version ->
-                        moved = Triple(id, position, version)
+                    onRemoveEntry = {}, onSwapEntries = { first, second, version ->
+                        moved = Triple(first, second, version)
+                        true
                     }, onClearQueue = {}, isFavorite = { false }, onToggleFavorite = {},
                     favoritesBusy = false, onDismissMessage = {}, onAddTrackOpen = {},
                 )
@@ -116,6 +117,6 @@ class PlayerActionsTest {
             up()
         }
         compose.waitForIdle()
-        assertEquals(Triple("first", 2, 7L), moved)
+        assertEquals(Triple("first", "second", 7L), moved)
     }
 }

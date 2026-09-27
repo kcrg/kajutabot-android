@@ -27,9 +27,10 @@ data class FavoritesUiState(
     val favorites: List<FavoriteResponse> = emptyList(),
     val isLoading: Boolean = false,
     val isMutating: Boolean = false,
+    val isFavoriteMutating: Boolean = false,
+    val isQueueMutating: Boolean = false,
     val shuffle: Boolean = false,
     val error: UiText? = null,
-    val info: UiText? = null,
     val transientMessage: UiMessage? = null,
 )
 
@@ -86,7 +87,7 @@ class FavoritesViewModel(
     }
 
     fun dismissMessage() {
-        _ui.update { it.copy(error = null, info = null) }
+        _ui.update { it.copy(error = null) }
     }
 
     fun acknowledgeTransientMessage(id: Long) {
@@ -109,56 +110,50 @@ class FavoritesViewModel(
     fun isFavorite(track: PlaybackTrackResponse): Boolean =
         track.favoriteIdentities().any(favoriteIdentities::contains)
 
-    fun toggle(track: PlaybackTrackResponse) {
-        if (_ui.value.isMutating || _ui.value.isLoading) return
+    fun toggle(track: PlaybackTrackResponse) = toggle(track, showFeedback = true)
+
+    fun toggleSilently(track: PlaybackTrackResponse) = toggle(track, showFeedback = false)
+
+    private fun toggle(track: PlaybackTrackResponse, showFeedback: Boolean) {
+        if (_ui.value.isFavoriteMutating || _ui.value.isLoading) return
         val identities = track.favoriteIdentities()
         val existing = _ui.value.favorites.firstOrNull { favoriteIdentity(it.contentUrl) in identities }
         if (existing != null) {
-            delete(existing.contentUrl, toggleFeedback = true)
+            delete(existing.contentUrl, toggleFeedback = showFeedback)
         } else {
-            add(track.url, track.title, track.artworkUrl, toggleFeedback = true)
+            add(track, showFeedback)
         }
     }
 
-    fun addByUrl(contentUrl: String) = add(contentUrl.trim(), null, null, toggleFeedback = false)
-
-    private fun add(
-        contentUrl: String,
-        title: String?,
-        thumbnailUrl: String?,
-        toggleFeedback: Boolean,
-    ) {
-        if (_ui.value.isMutating || contentUrl.isBlank()) return
+    private fun add(track: PlaybackTrackResponse, showFeedback: Boolean) {
+        if (_ui.value.isFavoriteMutating) return
         viewModelScope.launch {
-            _ui.update { it.copy(isMutating = true, error = null, info = null) }
+            _ui.update { it.copy(isMutating = true, isFavoriteMutating = true, error = null) }
             try {
                 val added = repository.addFavorite(
                     expectedIdentity = sessionIdentity,
-                    contentUrl = contentUrl,
-                    title = title,
-                    thumbnailUrl = thumbnailUrl,
+                    contentType = track.contentType,
+                    contentId = track.contentId,
                 )
                 mutationRevision++
                 val identity = favoriteIdentity(added.contentUrl)
-                val transientMessage = if (toggleFeedback) {
+                val transientMessage = if (showFeedback) {
                     UiMessage(++messageSequence, uiText(R.string.favorites_added))
-                } else {
-                    null
-                }
+                } else null
                 favoriteIdentities = favoriteIdentities + identity
                 _ui.update { current ->
                     current.copy(
                         favorites = listOf(added) + current.favorites.filterNot {
                             favoriteIdentity(it.contentUrl) == identity
                         },
-                        isMutating = false,
+                        isMutating = current.isQueueMutating,
+                        isFavoriteMutating = false,
                         isLoading = false,
-                        info = if (toggleFeedback) null else uiText(R.string.favorites_saved),
                         transientMessage = transientMessage ?: current.transientMessage,
                     )
                 }
             } catch (e: Exception) {
-                _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
+                _ui.update { it.copy(isMutating = it.isQueueMutating, isFavoriteMutating = false, error = userMessageForError(e)) }
             }
         }
     }
@@ -166,9 +161,9 @@ class FavoritesViewModel(
     fun delete(contentUrl: String) = delete(contentUrl, toggleFeedback = false)
 
     private fun delete(contentUrl: String, toggleFeedback: Boolean) {
-        if (_ui.value.isMutating) return
+        if (_ui.value.isFavoriteMutating) return
         viewModelScope.launch {
-            _ui.update { it.copy(isMutating = true, error = null) }
+            _ui.update { it.copy(isMutating = true, isFavoriteMutating = true, error = null) }
             try {
                 repository.deleteFavorite(sessionIdentity, contentUrl)
                 mutationRevision++
@@ -182,13 +177,14 @@ class FavoritesViewModel(
                 _ui.update { current ->
                     current.copy(
                         favorites = current.favorites.filterNot { favoriteIdentity(it.contentUrl) == identity },
-                        isMutating = false,
+                        isMutating = current.isQueueMutating,
+                        isFavoriteMutating = false,
                         isLoading = false,
                         transientMessage = transientMessage ?: current.transientMessage,
                     )
                 }
             } catch (e: Exception) {
-                _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
+                _ui.update { it.copy(isMutating = it.isQueueMutating, isFavoriteMutating = false, error = userMessageForError(e)) }
             }
         }
     }
@@ -203,7 +199,7 @@ class FavoritesViewModel(
                 _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_all)) }
                 return@launch
             }
-            _ui.update { it.copy(isMutating = true, error = null, info = null) }
+            _ui.update { it.copy(isMutating = true, isQueueMutating = true, error = null) }
             try {
                 repository.queueFavorites(
                     expectedIdentity = sessionIdentity,
@@ -211,9 +207,9 @@ class FavoritesViewModel(
                     channelId = channelId,
                     shuffle = _ui.value.shuffle,
                 )
-                _ui.update { it.copy(isMutating = false, info = uiText(R.string.favorites_queued_all)) }
+                _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false, transientMessage = UiMessage(++messageSequence, uiText(R.string.favorites_queued_all))) }
             } catch (e: Exception) {
-                _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
+                _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false, error = userMessageForError(e)) }
             }
         }
     }
@@ -228,7 +224,7 @@ class FavoritesViewModel(
                 _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_play)) }
                 return@launch
             }
-            _ui.update { it.copy(isMutating = true, error = null, info = null) }
+            _ui.update { it.copy(isMutating = true, isQueueMutating = true, error = null) }
             try {
                 repository.playSingle(
                     expectedIdentity = sessionIdentity,
@@ -236,9 +232,9 @@ class FavoritesViewModel(
                     channelId = channelId,
                     contentUrl = contentUrl,
                 )
-                _ui.update { it.copy(isMutating = false, info = uiText(R.string.favorites_queued_one)) }
+                _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false, transientMessage = UiMessage(++messageSequence, uiText(R.string.favorites_queued_one))) }
             } catch (e: Exception) {
-                _ui.update { it.copy(isMutating = false, error = userMessageForError(e)) }
+                _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false, error = userMessageForError(e)) }
             }
         }
     }

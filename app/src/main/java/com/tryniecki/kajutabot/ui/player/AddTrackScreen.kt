@@ -40,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,12 +49,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -97,6 +101,8 @@ fun AddTrackScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val appLocale = LocalConfiguration.current.locales[0]
+    var searchFieldHeightPx by remember { mutableIntStateOf(0) }
+    val searchFieldHeight = with(LocalDensity.current) { searchFieldHeightPx.toDp() }
     val submitAndHideKeyboard = remember(onSubmit, keyboardController, focusManager) {
         {
             keyboardController?.hide()
@@ -151,6 +157,7 @@ fun AddTrackScreen(
                 }
             },
         ) { innerPadding ->
+            Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
@@ -166,7 +173,7 @@ fun AddTrackScreen(
                     OutlinedTextField(
                         value = ui.searchQuery,
                         onValueChange = onQueryChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().onSizeChanged { searchFieldHeightPx = it.height },
                         singleLine = true,
                         leadingIcon = {
                             Icon(
@@ -330,27 +337,33 @@ fun AddTrackScreen(
                             }
                         }
                     }
-                } else if (shouldShowSearchEmptyState(ui, trimmed, isUrlInput)) {
-                    item {
-                        Column(
-                            modifier = Modifier
-                                .animateItem()
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                stringResource(R.string.add_track_no_results_title),
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                stringResource(R.string.add_track_no_results_body),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                }
+            }
+            if (searchFieldHeightPx > 0 && ui.error == null && ui.info == null &&
+                shouldShowSearchEmptyState(ui, trimmed, isUrlInput)) {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(
+                        start = 16.dp,
+                        top = innerPadding.calculateTopPadding() + searchFieldHeight + 20.dp,
+                        end = 16.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 24.dp,
+                    ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            stringResource(R.string.add_track_no_results_title),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            stringResource(R.string.add_track_no_results_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
                     }
                 }
+            }
             }
         }
     }

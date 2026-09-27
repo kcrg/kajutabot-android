@@ -69,7 +69,7 @@ class GuestUiTest {
                     ui = playingState(),
                     onDiscordSelectionOpen = {},
                     onSkip = {}, onStop = {}, onRepeatToggle = {}, onRadioToggle = {},
-                    onRemoveEntry = {}, onMoveEntry = { _, _, _ -> }, onClearQueue = {},
+                    onRemoveEntry = {}, onSwapEntries = { _, _, _ -> true }, onClearQueue = {},
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
                     onDismissMessage = {}, onAddTrackOpen = {},
                 )
@@ -86,7 +86,7 @@ class GuestUiTest {
                     ui = playingState(),
                     onDiscordSelectionOpen = {},
                     onSkip = {}, onStop = {}, onRepeatToggle = {}, onRadioToggle = {},
-                    onRemoveEntry = {}, onMoveEntry = { _, _, _ -> }, onClearQueue = {},
+                    onRemoveEntry = {}, onSwapEntries = { _, _, _ -> true }, onClearQueue = {},
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
                     onDismissMessage = {}, onAddTrackOpen = {},
                 )
@@ -103,6 +103,7 @@ class GuestUiTest {
                     slide = NowPlayingSlide("demo", true, "Demo", null, null, 60_000, null),
                     track = playing,
                     isMutating = false,
+                    isQueueReordering = false,
                     activeControlAction = null,
                     isFavorite = false,
                     favoritesBusy = false,

@@ -23,7 +23,11 @@ data class QueueSnapshotResponse(
     val version: Long,
     val nowPlayingStartedAt: String? = null,
     val isRepeatEnabled: Boolean = false,
+    val skipOutcome: SkipOutcome? = null,
 )
+
+@Serializable
+enum class SkipOutcome { Advanced, RestartedRepeatedTrack }
 
 @Serializable
 data class EnqueueRequest(

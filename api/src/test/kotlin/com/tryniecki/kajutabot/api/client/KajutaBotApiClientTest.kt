@@ -129,9 +129,11 @@ class KajutaBotApiClientTest {
             ),
         )
         kotlinx.coroutines.runBlocking {
-            api.addFavorite(com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest("https://x"))
+            api.addFavorite(com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest("YouTube", "x"))
         }
-        assertEquals("/api/v1/app/users/me/favorites", server.takeRequest().path)
+        val addFavorite = server.takeRequest()
+        assertEquals("/api/v1/app/users/me/favorites", addFavorite.path)
+        assertEquals("""{"contentType":"YouTube","contentId":"x"}""", addFavorite.body.readUtf8())
 
         server.enqueue(MockResponse().setResponseCode(204))
         kotlinx.coroutines.runBlocking { api.deleteFavorite("https://youtu.be/abc") }

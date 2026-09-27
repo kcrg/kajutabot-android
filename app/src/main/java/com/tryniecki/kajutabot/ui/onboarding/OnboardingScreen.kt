@@ -260,7 +260,7 @@ fun OnboardingScreen(
                     ) {
                         Text(
                             if (pagerState.currentPage == selectionPageIndex) {
-                                stringResource(if (canDismiss) R.string.action_done else R.string.action_get_started)
+                                stringResource(R.string.action_get_started)
                             } else {
                                 stringResource(R.string.action_next)
                             },

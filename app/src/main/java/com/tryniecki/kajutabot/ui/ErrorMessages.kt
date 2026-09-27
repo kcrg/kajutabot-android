@@ -2,6 +2,7 @@ package com.tryniecki.kajutabot.ui
 
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.client.KajutaBotApiErrors
+import com.tryniecki.kajutabot.api.model.error.KajutaBotProblemDetails
 import com.tryniecki.kajutabot.auth.ContractSessionException
 import com.tryniecki.kajutabot.auth.PersistenceSessionException
 import com.tryniecki.kajutabot.auth.SessionSignedOutException
@@ -10,17 +11,24 @@ import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.uiText
 import retrofit2.HttpException
 import java.io.IOException
+import java.net.SocketTimeoutException
 
-fun userMessageForError(e: Throwable?): UiText {
+fun userMessageForError(e: Throwable?, parsedProblem: KajutaBotProblemDetails? = null): UiText {
     if (e is SessionSignedOutException) return uiText(R.string.auth_session_expired)
-    if (e is TransientSessionException) return uiText(R.string.error_connection)
+    if (e is TransientSessionException) {
+        if (e.cause is HttpException || e.cause is SocketTimeoutException) {
+            return userMessageForError(e.cause)
+        }
+        return uiText(R.string.error_connection)
+    }
     if (e is ContractSessionException) return uiText(R.string.error_invalid_server_response)
     if (e is PersistenceSessionException) return uiText(R.string.error_session_save)
+    if (e is SocketTimeoutException) return uiText(R.string.error_timeout)
     if (e is IOException) return uiText(R.string.auth_no_server_connection)
     if (e is HttpException) {
         if (e.code() == 429) {
             val retry = KajutaBotApiErrors.retryAfterSeconds(e)
-            return if (retry != null) {
+            return if (retry != null && retry > 0) {
                 uiText(R.string.error_rate_limit_retry_seconds, retry)
             } else {
                 uiText(R.string.error_rate_limit_wait)
@@ -28,13 +36,10 @@ fun userMessageForError(e: Throwable?): UiText {
         }
         // Map backend error codes to app-owned localized UI copy. We intentionally do not
         // translate or rewrite arbitrary response payload text from the API.
-        val problem = try {
-            KajutaBotApiErrors.problemDetailsOf(e)
-        } catch (_: Exception) {
-            null
-        }
+        val problem = parsedProblem ?: runCatching { KajutaBotApiErrors.problemDetailsOf(e) }.getOrNull()
         return when (problem?.errorCode) {
             "queue_version_conflict" -> uiText(R.string.error_queue_conflict)
+            "queue_full" -> uiText(R.string.error_queue_full)
             "queue_bound_to_other_channel" -> uiText(R.string.error_queue_other_channel)
             "guild_access_denied" -> uiText(R.string.error_guild_access)
             "discord_guild_access_denied" -> uiText(R.string.error_discord_guild_access)
@@ -47,7 +52,7 @@ fun userMessageForError(e: Throwable?): UiText {
                 403 -> uiText(R.string.error_access_denied)
                 404 -> uiText(R.string.error_not_found)
                 409 -> uiText(R.string.error_queue_conflict)
-                502, 503, 504 -> uiText(R.string.error_server_unavailable)
+                in 500..599 -> uiText(R.string.error_server_unavailable)
                 else -> uiText(R.string.error_generic)
             }
         }

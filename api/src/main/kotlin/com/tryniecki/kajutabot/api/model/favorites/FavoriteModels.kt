@@ -12,9 +12,8 @@ data class FavoriteResponse(
 
 @Serializable
 data class AddFavoriteRequest(
-    val contentUrl: String,
-    val title: String? = null,
-    val thumbnailUrl: String? = null,
+    val contentType: String,
+    val contentId: String,
 )
 
 @Serializable

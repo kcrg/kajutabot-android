@@ -4,6 +4,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -93,9 +94,15 @@ fun DiscordTargetPicker(
         Spacer(Modifier.size(8.dp))
 
         when {
-            selectedGuildId == null -> SelectionHint(R.string.discord_select_server_first)
+            selectedGuildId == null -> Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center,
+            ) { SelectionHint(R.string.discord_select_server_first) }
             isLoadingVoiceChannels -> VoiceChannelSkeletons()
-            voiceChannels.isEmpty() -> SelectionHint(R.string.discord_no_voice_channels)
+            voiceChannels.isEmpty() -> Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center,
+            ) { SelectionHint(R.string.discord_no_voice_channels) }
             else -> LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()

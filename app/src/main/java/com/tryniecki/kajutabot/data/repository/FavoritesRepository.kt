@@ -21,11 +21,10 @@ class FavoritesRepository(
 
     suspend fun addFavorite(
         expectedIdentity: Long,
-        contentUrl: String,
-        title: String?,
-        thumbnailUrl: String?,
+        contentType: String,
+        contentId: String,
     ): FavoriteResponse = sessionManager.withApiForSession(expectedIdentity) {
-        it.addFavorite(AddFavoriteRequest(contentUrl, title, thumbnailUrl))
+        it.addFavorite(AddFavoriteRequest(contentType, contentId))
     }
 
     suspend fun deleteFavorite(expectedIdentity: Long, contentUrl: String) {

@@ -2,6 +2,10 @@ package com.tryniecki.kajutabot.api.client
 
 import com.tryniecki.kajutabot.api.model.error.KajutaBotProblemDetailsParser
 import retrofit2.HttpException
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 object KajutaBotApiErrors {
     const val QUEUE_VERSION_CONFLICT = "queue_version_conflict"
@@ -44,6 +48,9 @@ object KajutaBotApiErrors {
         val http = throwable as? HttpException ?: return null
         if (http.code() != 429) return null
         val header = http.response()?.headers()?.get("Retry-After") ?: return null
-        return header.trim().toLongOrNull()
+        return header.trim().toLongOrNull()?.coerceAtLeast(0) ?: runCatching {
+            val deadline = ZonedDateTime.parse(header.trim(), DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
+            ChronoUnit.SECONDS.between(Instant.now(), deadline).coerceAtLeast(0)
+        }.getOrNull()
     }
 }
