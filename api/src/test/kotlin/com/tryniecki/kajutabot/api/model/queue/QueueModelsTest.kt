@@ -10,9 +10,21 @@ import org.junit.Test
 
 class QueueModelsTest {
     @Test
+    fun `snapshot decodes queue totals and playback instance from REST and realtime payload`() {
+        val response = Json.decodeFromString<QueueSnapshotResponse>(
+            """{"guildId":"g","voiceChannelId":"c","nowPlaying":{"contentId":"x","contentType":"YouTube","title":"Song","url":"https://example.com/x","durationMilliseconds":120000,"artworkUrl":"/api/v1/artwork/x","playCount":0},"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingEntriesCount":0,"pendingDurationMilliseconds":0,"version":3,"nowPlayingStartedAt":null,"playbackInstanceId":"c95a67b2-a247-456b-b33e-fc9cd03f79d1","playbackPositionMilliseconds":0}""",
+        )
+        assertEquals(0, response.pendingEntriesCount)
+        assertEquals("c95a67b2-a247-456b-b33e-fc9cd03f79d1", response.playbackInstanceId)
+        assertEquals(0L, response.playbackPositionMilliseconds)
+        assertEquals("/api/v1/artwork/x", response.nowPlaying?.artworkUrl)
+        assertEquals(null, response.nowPlayingStartedAt)
+    }
+
+    @Test
     fun `skip response carries repeated track outcome`() {
         val response = Json.decodeFromString<QueueSnapshotResponse>(
-            """{"guildId":"g","voiceChannelId":"c","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingDurationMilliseconds":0,"version":2,"skipOutcome":"RestartedRepeatedTrack"}""",
+            """{"guildId":"g","voiceChannelId":"c","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingEntriesCount":0,"pendingDurationMilliseconds":0,"version":2,"playbackInstanceId":null,"playbackPositionMilliseconds":null,"skipOutcome":"RestartedRepeatedTrack"}""",
         )
         assertEquals(SkipOutcome.RestartedRepeatedTrack, response.skipOutcome)
     }

@@ -1,8 +1,15 @@
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.baselineprofile)
+}
+
+tasks.withType<Test>().configureEach {
+    // Robolectric accesses FileDescriptor internals when the Gradle daemon uses JDK 25.
+    jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
 }
 
 val kajutaApiBaseUrl: String =

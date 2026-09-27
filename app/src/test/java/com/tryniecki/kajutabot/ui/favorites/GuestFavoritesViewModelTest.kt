@@ -161,5 +161,5 @@ class GuestFavoritesViewModelTest {
         }
     }
 
-    private fun queueResponseJson() = """{"guildId":"demo-guild","voiceChannelId":"voice","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingDurationMilliseconds":0,"version":1}"""
+    private fun queueResponseJson() = """{"guildId":"demo-guild","voiceChannelId":"voice","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingEntriesCount":0,"pendingDurationMilliseconds":0,"version":1}"""
 }

@@ -152,7 +152,7 @@ class KajutaBotApiClientTest {
                 "track":{"contentId":"C","contentType":"YouTube","title":"C",
                   "url":"https://example.test/C","durationMilliseconds":120000,
                   "thumbnailUrl":null,"playCount":0}}],
-              "pendingDurationMilliseconds":120000, "version":124
+              "pendingEntriesCount":1, "pendingDurationMilliseconds":120000, "version":124
             }
         """.trimIndent()))
         val api = KajutaBotApiClientFactory.create(server.url("/").toString()) { "token-123" }
@@ -173,6 +173,7 @@ class KajutaBotApiClientTest {
         assertTrue(body.contains("\"secondEntryId\":\"33333333-3333-3333-3333-333333333333\""))
         assertTrue(body.contains("\"expectedVersion\":123"))
         assertEquals(124L, snapshot.version)
+        assertEquals(1, snapshot.pendingEntriesCount)
         assertEquals("C", snapshot.pendingEntries.single().track.title)
     }
 

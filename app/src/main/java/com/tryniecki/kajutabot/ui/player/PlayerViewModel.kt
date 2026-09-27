@@ -885,7 +885,19 @@ class PlayerViewModel(
                 _ui.update { it.copy(isMutating = false, activeControlAction = null) }
                 return
             }
-            applyQueueSnapshot(response)
+            if (controlAction == PlayerControlAction.SKIP) {
+                // The Skip response can describe the transition. QueueUpdated (or this
+                // single GET if the event is missed) supplies the final playback state.
+                try {
+                    applyQueueSnapshot(fetchQueueSnapshot(response.guildId))
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Skip succeeded; the realtime snapshot can still complete sync.
+                }
+            } else {
+                applyQueueSnapshot(response)
+            }
             val message = successMessage?.invoke(response)
             val uiMessage = message?.let { UiMessage(++messageSequence, it) }
             _ui.update { current ->

@@ -13,7 +13,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.tryniecki.kajutabot.ui.components.ArtworkSource
 import com.tryniecki.kajutabot.ui.components.resolveArtworkSource
 import com.tryniecki.kajutabot.ui.player.NowPlayingPresentation
-import com.tryniecki.kajutabot.ui.player.initialPositionMs
+import com.tryniecki.kajutabot.ui.player.backendPositionMs
 import com.tryniecki.kajutabot.ui.player.playbackIdentity
 
 /** Media3 projection of the bot's queue. It never opens or renders an audio stream. */
@@ -22,11 +22,20 @@ class RemoteQueuePlayer(
     private val onSkip: () -> Unit,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
     private var nowPlaying: NowPlayingPresentation? = null
+    private var artworkData: ByteArray? = null
 
     fun update(presentation: NowPlayingPresentation?) {
         verifyApplicationThread()
         if (nowPlaying == presentation) return
+        if (nowPlaying?.track?.artworkUrl != presentation?.track?.artworkUrl) artworkData = null
         nowPlaying = presentation
+        invalidateState()
+    }
+
+    fun updateArtwork(artworkUrl: String, data: ByteArray) {
+        verifyApplicationThread()
+        if (nowPlaying?.track?.artworkUrl != artworkUrl || artworkData?.contentEquals(data) == true) return
+        artworkData = data
         invalidateState()
     }
 
@@ -43,13 +52,14 @@ class RemoteQueuePlayer(
         val track = presentation.track
 
         commands.add(Player.COMMAND_SEEK_TO_NEXT)
-        val identity = playbackIdentity(track, presentation.startedAt)
+        val identity = playbackIdentity(track, presentation.playbackInstanceId)
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
             .setDisplayTitle(track.title)
             .apply {
                 val artwork = resolveArtworkSource(track.artworkUrl)
                 if (artwork is ArtworkSource.Remote) setArtworkUri(Uri.parse(artwork.url))
+                artworkData?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) }
                 // The Control API's PlaybackTrackResponse has no artist/author field.
             }
             .build()
@@ -59,22 +69,18 @@ class RemoteQueuePlayer(
             .build()
         val durationMs = track.durationMilliseconds
         val durationUs = if (durationMs > 0) durationMs * 1_000 else C.TIME_UNSET
-        val positionMs = initialPositionMs(
-            presentation.startedAt,
-            durationMs,
-            System.currentTimeMillis(),
-        ) ?: 0L
+        val positionMs = backendPositionMs(presentation.positionMs, durationMs) ?: 0L
         return State.Builder()
             .setAvailableCommands(commands.build())
             .setPlaylist(
-                listOf(MediaItemData.Builder(identity)
+                listOf(MediaItemData.Builder(CURRENT_ITEM_UID)
                     .setMediaItem(item)
                     .setDurationUs(durationUs)
                     .build()),
             )
             .setCurrentMediaItemIndex(0)
             .setContentPositionMs(positionMs)
-            .setPlaybackState(Player.STATE_READY)
+            .setPlaybackState(if (presentation.isPlaying) Player.STATE_READY else Player.STATE_BUFFERING)
             // Reports remote progress; COMMAND_PLAY_PAUSE is deliberately unavailable.
             .setPlayWhenReady(true, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .build()
@@ -90,4 +96,8 @@ class RemoteQueuePlayer(
     }
 
     override fun handleRelease(): ListenableFuture<*> = Futures.immediateVoidFuture()
+
+    private companion object {
+        const val CURRENT_ITEM_UID = "remote-current-item"
+    }
 }

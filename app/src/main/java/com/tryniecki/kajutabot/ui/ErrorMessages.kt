@@ -40,6 +40,7 @@ fun userMessageForError(e: Throwable?, parsedProblem: KajutaBotProblemDetails? =
         return when (problem?.errorCode) {
             "queue_version_conflict" -> uiText(R.string.error_queue_conflict)
             "queue_full" -> uiText(R.string.error_queue_full)
+            "content_unavailable" -> uiText(R.string.error_content_unavailable)
             "queue_bound_to_other_channel" -> uiText(R.string.error_queue_other_channel)
             "guild_access_denied" -> uiText(R.string.error_guild_access)
             "discord_guild_access_denied" -> uiText(R.string.error_discord_guild_access)

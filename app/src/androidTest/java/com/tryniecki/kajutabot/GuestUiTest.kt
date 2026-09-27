@@ -39,7 +39,8 @@ class GuestUiTest {
         queue = QueueSnapshotResponse(
             guildId = "demo-guild", voiceChannelId = "voice", nowPlaying = playing,
             nowPlayingFromRadio = false, radio = RadioStateResponse(false),
-            pendingEntries = emptyList(), pendingDurationMilliseconds = 0, version = 1,
+            pendingEntries = emptyList(), pendingEntriesCount = 0,
+            pendingDurationMilliseconds = 0, version = 1,
         ),
     )
 

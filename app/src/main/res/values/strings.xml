@@ -86,6 +86,7 @@
     <string name="error_invalid_discord_id">Invalid Discord identifier.</string>
     <string name="error_access_denied">Access denied.</string>
     <string name="error_not_found">Resource not found.</string>
+    <string name="error_content_unavailable">This track is no longer available.</string>
     <string name="error_server_unavailable">The server is temporarily unavailable. Try again.</string>
     <string name="error_generic">Something went wrong. Try again.</string>
     <string name="discord_server">Discord server</string>

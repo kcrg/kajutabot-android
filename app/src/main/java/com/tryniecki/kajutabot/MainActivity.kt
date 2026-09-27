@@ -11,7 +11,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
 import com.tryniecki.kajutabot.auth.DiscordOAuth
-import com.tryniecki.kajutabot.image.CoilSetup
 import com.tryniecki.kajutabot.ui.KajutaBotApp
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.theme.KajutaBotTheme
@@ -38,11 +37,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         container = (application as KajutaBotApplication).container
-        CoilSetup.init(
-            context = this,
-            apiBaseUrl = container.appConfig.apiBaseUrl,
-            sessionManager = container.sessionManager,
-        )
         appViewModel = ViewModelProvider(
             this,
             AppViewModel.factory(container),

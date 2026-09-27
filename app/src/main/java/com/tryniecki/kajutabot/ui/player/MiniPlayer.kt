@@ -89,11 +89,12 @@ fun MiniPlayer(
 
     val progress = rememberPlaybackProgress(
         playbackKey = slide.identity,
-        startedAtRaw = slide.startedAt,
+        reportedPositionMs = slide.positionMs,
         durationMs = slide.durationMs,
+        isPlaying = slide.isPlaying,
     )
 
-    val animatedFraction = rememberSmoothPlaybackFraction(progress.fraction)
+    val animatedFraction = rememberSmoothPlaybackFraction(slide.identity, progress.fraction)
 
     Surface(
         tonalElevation = 2.dp,

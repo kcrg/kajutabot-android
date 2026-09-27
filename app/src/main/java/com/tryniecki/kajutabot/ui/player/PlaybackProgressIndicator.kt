@@ -15,21 +15,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import java.time.Instant
 import kotlinx.coroutines.delay
 
 /**
  * Shared local playback-progress state.
  *
- * Anchored once per playback identity from wall clock, then advanced on the
- * monotonic clock with a small local ticker. No network, no timestamp parsing
- * per tick, no [PlayerUiState] updates — only the tiny reading subtree
- * recomposes. Used by both the full Now Playing card and the MiniPlayer.
+ * Anchored to the latest backend position and playback instance, then advanced
+ * on the monotonic clock between snapshots. Only the reading subtree recomposes.
  */
 data class PlaybackProgress(
     val positionMs: Long?,
@@ -39,24 +37,22 @@ data class PlaybackProgress(
 @Composable
 fun rememberPlaybackProgress(
     playbackKey: String,
-    startedAtRaw: String?,
+    reportedPositionMs: Long?,
     durationMs: Long,
+    isPlaying: Boolean,
     tickMs: Long = PROGRESS_TICK_MS,
 ): PlaybackProgress {
-    val anchor = remember(playbackKey) {
+    val anchor = remember(playbackKey, reportedPositionMs, durationMs, isPlaying) {
         PlaybackProgressAnchor(
-            positionAtAnchorMs = initialPositionMs(
-                startedAtRaw,
-                durationMs,
-                Instant.now().toEpochMilli(),
-            ),
+            positionAtAnchorMs = backendPositionMs(reportedPositionMs, durationMs),
             elapsedRealtimeAnchorMs = SystemClock.elapsedRealtime(),
         )
     }
-    var nowElapsedRealtime by remember(playbackKey) {
+    var nowElapsedRealtime by remember(playbackKey, reportedPositionMs, durationMs, isPlaying) {
         mutableLongStateOf(anchor.elapsedRealtimeAnchorMs)
     }
-    LaunchedEffect(playbackKey) {
+    LaunchedEffect(playbackKey, reportedPositionMs, durationMs, isPlaying) {
+        if (!isPlaying) return@LaunchedEffect
         while (true) {
             delay(tickMs)
             nowElapsedRealtime = SystemClock.elapsedRealtime()
@@ -73,13 +69,15 @@ fun rememberPlaybackProgress(
 
 /** Progress represents elapsed time, so its interpolation stays linear. */
 @Composable
-fun rememberSmoothPlaybackFraction(fraction: Float): Float {
-    val animatedFraction by animateFloatAsState(
-        targetValue = fraction,
-        animationSpec = tween(durationMillis = PROGRESS_TICK_MS.toInt(), easing = LinearEasing),
-        label = "playbackProgress",
-    )
-    return animatedFraction
+fun rememberSmoothPlaybackFraction(playbackKey: String, fraction: Float): Float {
+    return key(playbackKey) {
+        val animatedFraction by animateFloatAsState(
+            targetValue = fraction,
+            animationSpec = tween(durationMillis = PROGRESS_TICK_MS.toInt(), easing = LinearEasing),
+            label = "playbackProgress",
+        )
+        animatedFraction
+    }
 }
 
 /**
@@ -89,12 +87,13 @@ fun rememberSmoothPlaybackFraction(fraction: Float): Float {
 @Composable
 fun PlaybackProgressIndicator(
     playbackKey: String,
-    startedAtRaw: String?,
+    reportedPositionMs: Long?,
     durationMs: Long,
+    isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val progress = rememberPlaybackProgress(playbackKey, startedAtRaw, durationMs)
-    val animatedFraction = rememberSmoothPlaybackFraction(progress.fraction)
+    val progress = rememberPlaybackProgress(playbackKey, reportedPositionMs, durationMs, isPlaying)
+    val animatedFraction = rememberSmoothPlaybackFraction(playbackKey, progress.fraction)
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         LinearWavyProgressIndicator(

@@ -23,6 +23,7 @@ class RadioToggleTest {
             maximumDurationSeconds = max,
         ),
         pendingEntries = emptyList(),
+        pendingEntriesCount = 0,
         pendingDurationMilliseconds = 0,
         version = version,
     )

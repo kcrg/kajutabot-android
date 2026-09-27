@@ -541,9 +541,9 @@ fun PlayerScreen(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        if (ui.queue?.pendingEntries?.isNotEmpty() == true) {
+                        ui.queue?.takeIf { it.pendingEntriesCount > 0 }?.let { queue ->
                             Text(
-                                "${ui.queue.pendingEntries.size} · ${formatQueueDuration(ui.queue.pendingDurationMilliseconds)}",
+                                "${queue.pendingEntriesCount} · ${formatQueueDuration(queue.pendingDurationMilliseconds)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -878,8 +878,9 @@ private fun NowPlayingCard(
                         if (slide.hasTrack) {
                             PlaybackProgressIndicator(
                                 playbackKey = slide.identity,
-                                startedAtRaw = slide.startedAt,
+                                reportedPositionMs = slide.positionMs,
                                 durationMs = slide.durationMs,
+                                isPlaying = slide.isPlaying,
                             )
                         }
                     }

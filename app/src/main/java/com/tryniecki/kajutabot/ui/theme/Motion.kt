@@ -33,10 +33,10 @@ import androidx.compose.ui.unit.dp
  */
 object KbMotion {
     /** Shared-axis travel for the full Now Playing card. */
-    const val TRACK_SLIDE_FRACTION = 0.08f
+    const val TRACK_SLIDE_FRACTION = 0.16f
 
     /** Subtler shared-axis travel for the MiniPlayer. */
-    const val MINI_TRACK_SLIDE_FRACTION = 0.06f
+    const val MINI_TRACK_SLIDE_FRACTION = 0.24f
 
     /**
      * Hierarchical navigation uses a restrained fixed travel distance. Keeping this

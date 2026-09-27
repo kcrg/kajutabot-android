@@ -86,6 +86,7 @@
     <string name="error_invalid_discord_id">Nieprawidłowy identyfikator Discord.</string>
     <string name="error_access_denied">Brak dostępu.</string>
     <string name="error_not_found">Nie znaleziono zasobu.</string>
+    <string name="error_content_unavailable">Ten utwór nie jest już dostępny.</string>
     <string name="error_server_unavailable">Serwer jest chwilowo niedostępny. Spróbuj ponownie.</string>
     <string name="error_generic">Coś poszło nie tak. Spróbuj ponownie.</string>
     <string name="discord_server">Serwer Discord</string>

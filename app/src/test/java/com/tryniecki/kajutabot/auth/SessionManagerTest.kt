@@ -735,6 +735,7 @@ class SessionManagerTest {
         nowPlayingFromRadio = false,
         radio = RadioStateResponse(false),
         pendingEntries = emptyList(),
+        pendingEntriesCount = 0,
         pendingDurationMilliseconds = 0,
         version = 1,
     )

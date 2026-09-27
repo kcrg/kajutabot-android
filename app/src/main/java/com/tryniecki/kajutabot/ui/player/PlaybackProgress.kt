@@ -2,54 +2,28 @@ package com.tryniecki.kajutabot.ui.player
 
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
-import java.time.Instant
-import java.time.OffsetDateTime
 
 /**
  * Pure playback-progress and queue-snapshot helpers.
  *
- * Everything here is JVM-testable: wall-clock instants and monotonic-clock readings
- * are passed in as plain [Long] values. Android-only [android.os.SystemClock] stays
- * in the Compose layer, which anchors [PlaybackProgressAnchor] once per playback
- * identity and then advances locally without network or timestamp parsing.
+ * The backend supplies the position; the UI advances it using a monotonic clock
+ * between snapshots. Android-only [android.os.SystemClock] stays in Compose.
  */
 const val PROGRESS_TICK_MS = 200L
 
 data class PlaybackProgressAnchor(
-    /** Position derived from wall clock at anchor time, or null when timing is invalid. */
+    /** Backend position at anchor time, or null while playback is preparing. */
     val positionAtAnchorMs: Long?,
     /** `SystemClock.elapsedRealtime()` captured together with the anchor position. */
     val elapsedRealtimeAnchorMs: Long,
 )
 
-/** Stable key of one concrete playback instance (track + its start moment). */
-fun playbackIdentity(track: PlaybackTrackResponse, startedAt: String?): String =
-    "${track.contentType}:${track.contentId}:${parseStartedAtEpochMs(startedAt) ?: startedAt?.trim()}"
+/** Stable key of the backend's concrete playback instance. */
+fun playbackIdentity(track: PlaybackTrackResponse, instanceId: String?): String =
+    instanceId ?: "preparing:${track.contentType}:${track.contentId}"
 
-/** Parses a backend ISO-8601 timestamp to epoch millis, or null when unusable. */
-fun parseStartedAtEpochMs(raw: String?): Long? {
-    if (raw.isNullOrBlank()) return null
-    return try {
-        Instant.parse(raw.trim()).toEpochMilli()
-    } catch (_: Exception) {
-        try {
-            OffsetDateTime.parse(raw.trim()).toInstant().toEpochMilli()
-        } catch (_: Exception) {
-            null
-        }
-    }
-}
-
-/**
- * Initial position from wall clock: `nowUtcMs - startedAt`, clamped to
- * `0..durationMs`. Null when timing data is missing or unusable — the UI must
- * show 0 / `--:--` instead of inventing a value.
- */
-fun initialPositionMs(startedAtRaw: String?, durationMs: Long, nowUtcMs: Long): Long? {
-    if (durationMs <= 0) return null
-    val startedAt = parseStartedAtEpochMs(startedAtRaw) ?: return null
-    return (nowUtcMs - startedAt).coerceIn(0, durationMs)
-}
+fun backendPositionMs(positionMs: Long?, durationMs: Long): Long? =
+    if (positionMs == null || durationMs <= 0) null else positionMs.coerceIn(0, durationMs)
 
 /** Monotonic position from a previously computed anchor. Clamped to `0..durationMs`. */
 fun currentPositionMs(
@@ -67,12 +41,6 @@ fun currentPositionMs(
 fun progressFraction(positionMs: Long, durationMs: Long): Float {
     if (durationMs <= 0) return 0f
     return (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-}
-
-/** Milliseconds left until the expected track end, or null when timing is invalid. */
-fun remainingMs(startedAtRaw: String?, durationMs: Long, nowUtcMs: Long): Long? {
-    val position = initialPositionMs(startedAtRaw, durationMs, nowUtcMs) ?: return null
-    return durationMs - position
 }
 
 /**
@@ -100,17 +68,22 @@ data class NowPlayingSlide(
     val thumbnailUrl: String?,
     val artworkAccentColor: String?,
     val durationMs: Long,
-    val startedAt: String?,
+    val positionMs: Long?,
+    val isPlaying: Boolean,
 )
 
 /** Stable UI/media representation derived from the latest backend snapshot. */
 data class NowPlayingPresentation(
     val track: PlaybackTrackResponse,
-    val startedAt: String?,
+    val playbackInstanceId: String?,
+    val positionMs: Long?,
+    val isPlaying: Boolean,
 )
 
 fun QueueSnapshotResponse.nowPlayingPresentationOrNull(): NowPlayingPresentation? =
-    nowPlaying?.let { track -> NowPlayingPresentation(track, nowPlayingStartedAt) }
+    nowPlaying?.let { track ->
+        NowPlayingPresentation(track, playbackInstanceId, playbackPositionMilliseconds, nowPlayingStartedAt != null)
+    }
 
 fun nowPlayingSlide(
     presentation: NowPlayingPresentation?,
@@ -125,18 +98,20 @@ fun nowPlayingSlide(
             thumbnailUrl = null,
             artworkAccentColor = null,
             durationMs = 0,
-            startedAt = null,
+            positionMs = null,
+            isPlaying = false,
         )
     }
 
     return NowPlayingSlide(
-        identity = playbackIdentity(track, presentation.startedAt),
+        identity = playbackIdentity(track, presentation.playbackInstanceId),
         hasTrack = true,
         title = track.title,
         thumbnailUrl = track.artworkUrl,
         artworkAccentColor = track.artworkAccentColor,
         durationMs = track.durationMilliseconds,
-        startedAt = presentation.startedAt,
+        positionMs = presentation.positionMs,
+        isPlaying = presentation.isPlaying,
     )
 }
 

@@ -3,6 +3,7 @@ package com.tryniecki.kajutabot.media
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.lifecycle.ViewModelProvider
 import androidx.media3.common.Player
@@ -20,16 +21,27 @@ import com.tryniecki.kajutabot.AppContainer
 import com.tryniecki.kajutabot.KajutaBotApplication
 import com.tryniecki.kajutabot.MainActivity
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.components.resolveArtworkUrl
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.RealtimeOwner
 import com.tryniecki.kajutabot.ui.player.shouldBlockPlaybackControls
+import coil3.BitmapImage
+import coil3.SingletonImageLoader
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Exposes the Discord bot's remote playback; the device never plays audio. */
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
@@ -39,6 +51,7 @@ class RemotePlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var remotePlayer: RemoteQueuePlayer? = null
     private var playerState: PlayerViewModel? = null
+    private var lastMediaButtons: List<CommandButton> = emptyList()
 
     override fun onCreate() {
         super.onCreate()
@@ -67,9 +80,10 @@ class RemotePlaybackService : MediaSessionService() {
         remotePlayer = player
         // Project only the current backend snapshot into the long-lived MediaSession.
         player.update(playerState.ui.value.effectiveNowPlaying)
+        lastMediaButtons = mediaButtons(this, playerState, favoritesState)
         val session = MediaSession.Builder(this, player)
             .setCallback(RemoteSessionCallback(playerState, favoritesState))
-            .setMediaButtonPreferences(mediaButtons(this, playerState, favoritesState))
+            .setMediaButtonPreferences(lastMediaButtons)
             .setSessionActivity(
                 PendingIntent.getActivity(
                     this,
@@ -86,17 +100,31 @@ class RemotePlaybackService : MediaSessionService() {
         scope.launch {
             playerState.ui.collectLatest { state ->
                 player.update(state.effectiveNowPlaying)
-                session.setMediaButtonPreferences(mediaButtons(this@RemotePlaybackService, playerState, favoritesState))
-                // Stop foreground playback promptly when the bot disconnects.
-                if (state.queue != null && state.queue.nowPlaying == null && state.queue.voiceChannelId == null) {
+                syncMediaButtons(session, playerState, favoritesState)
+                // Keep this MediaSession through an in-flight remote command. Once the
+                // backend response settles, an inactive session can be released.
+                if (!state.isMutating && state.queue != null &&
+                    state.queue.nowPlaying == null && state.queue.voiceChannelId == null
+                ) {
                     stopSelf()
                 }
             }
         }
         scope.launch {
             favoritesState.ui.collectLatest {
-                session.setMediaButtonPreferences(mediaButtons(this@RemotePlaybackService, playerState, favoritesState))
+                syncMediaButtons(session, playerState, favoritesState)
             }
+        }
+        scope.launch {
+            playerState.ui
+                .map { it.effectiveNowPlaying?.track?.artworkUrl }
+                .distinctUntilChanged()
+                .collectLatest { artworkUrl ->
+                    if (artworkUrl == null) return@collectLatest
+                    val resolvedUrl = resolveArtworkUrl(artworkUrl) ?: return@collectLatest
+                    val data = loadArtwork(resolvedUrl) ?: return@collectLatest
+                    player.updateArtwork(artworkUrl, data)
+                }
         }
         scope.launch {
             container.sessionManager.sessionIdentity.collectLatest { current ->
@@ -107,6 +135,37 @@ class RemotePlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
+    private fun syncMediaButtons(
+        session: MediaSession,
+        player: PlayerViewModel,
+        favorites: FavoritesViewModel,
+    ) {
+        val buttons = mediaButtons(this, player, favorites)
+        if (buttons == lastMediaButtons) return
+        lastMediaButtons = buttons
+        session.setMediaButtonPreferences(buttons)
+    }
+
+    private suspend fun loadArtwork(url: String): ByteArray? = withContext(Dispatchers.IO) {
+        try {
+            val request = ImageRequest.Builder(this@RemotePlaybackService)
+                .data(url)
+                .size(512)
+                .allowHardware(false)
+                .build()
+            val image = (SingletonImageLoader.get(this@RemotePlaybackService).execute(request) as? SuccessResult)
+                ?.image as? BitmapImage ?: return@withContext null
+            ByteArrayOutputStream().use { output ->
+                if (!image.bitmap.compress(Bitmap.CompressFormat.JPEG, 85, output)) return@withContext null
+                output.toByteArray()
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     override fun onDestroy() {
         playerState?.setRealtimeOwner(RealtimeOwner.MEDIA_SERVICE, false)
         playerState = null
@@ -116,6 +175,7 @@ class RemotePlaybackService : MediaSessionService() {
         remotePlayer?.release()
         mediaSession = null
         remotePlayer = null
+        lastMediaButtons = emptyList()
         super.onDestroy()
     }
 
@@ -131,6 +191,7 @@ class RemotePlaybackService : MediaSessionService() {
                 return super.onConnectAsync(session, controller)
             }
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                .add(SKIP)
                 .add(STOP)
                 .add(REPEAT)
                 .add(RADIO)
@@ -166,6 +227,7 @@ class RemotePlaybackService : MediaSessionService() {
                 return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
             }
             when (customCommand.customAction) {
+                SKIP.customAction -> player.skip()
                 STOP.customAction -> player.stop()
                 REPEAT.customAction -> player.setRepeat(!queue.isRepeatEnabled)
                 RADIO.customAction -> player.toggleRadio()
@@ -183,10 +245,12 @@ class RemotePlaybackService : MediaSessionService() {
 
     companion object {
         const val ACTION_STOP = "com.tryniecki.kajutabot.media.STOP_DISCONNECT"
+        const val ACTION_SKIP = "com.tryniecki.kajutabot.media.SKIP"
         const val ACTION_REPEAT = "com.tryniecki.kajutabot.media.REPEAT"
         const val ACTION_RADIO = "com.tryniecki.kajutabot.media.RADIO"
         const val ACTION_FAVORITE = "com.tryniecki.kajutabot.media.FAVORITE"
         val STOP = SessionCommand(ACTION_STOP, Bundle.EMPTY)
+        val SKIP = SessionCommand(ACTION_SKIP, Bundle.EMPTY)
         val REPEAT = SessionCommand(ACTION_REPEAT, Bundle.EMPTY)
         val RADIO = SessionCommand(ACTION_RADIO, Bundle.EMPTY)
         val FAVORITE = SessionCommand(ACTION_FAVORITE, Bundle.EMPTY)
@@ -204,16 +268,13 @@ class RemotePlaybackService : MediaSessionService() {
             val state = player.ui.value
             val queue = state.queue ?: return emptyList()
             val track = queue.nowPlaying ?: return emptyList()
-            val playbackControlsBlocked = shouldBlockPlaybackControls(
-                state.isMutating, state.activeControlAction, state.isQueueReordering,
-            )
             val isFavorite = favorites.isFavorite(track)
             return listOf(
                 CommandButton.Builder(CommandButton.ICON_NEXT)
                     .setCustomIconResId(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_skip_forward_outline)
                     .setDisplayName(context.getString(R.string.action_skip_track))
-                    .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT)
-                    .setEnabled(!playbackControlsBlocked)
+                    .setSessionCommand(SKIP)
+                    .setEnabled(true)
                     .build(),
                 CommandButton.Builder(if (queue.isRepeatEnabled) CommandButton.ICON_REPEAT_ALL else CommandButton.ICON_REPEAT_OFF)
                     .setCustomIconResId(
@@ -225,7 +286,7 @@ class RemotePlaybackService : MediaSessionService() {
                     )
                     .setDisplayName(context.getString(if (queue.isRepeatEnabled) R.string.player_repeat_disable else R.string.player_repeat_enable))
                     .setSessionCommand(REPEAT)
-                    .setEnabled(!playbackControlsBlocked)
+                    .setEnabled(true)
                     .build(),
                 CommandButton.Builder(CommandButton.ICON_RADIO)
                     .setCustomIconResId(
@@ -237,7 +298,7 @@ class RemotePlaybackService : MediaSessionService() {
                     )
                     .setDisplayName(context.getString(if (queue.radio.isEnabled) R.string.player_radio_disable else R.string.player_radio_enable))
                     .setSessionCommand(RADIO)
-                    .setEnabled(!playbackControlsBlocked && (queue.radio.isEnabled || state.selectedVoiceChannelId != null))
+                    .setEnabled(queue.radio.isEnabled || state.selectedVoiceChannelId != null)
                     .build(),
                 CommandButton.Builder(if (isFavorite) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
                     .setCustomIconResId(
@@ -249,7 +310,7 @@ class RemotePlaybackService : MediaSessionService() {
                     )
                     .setDisplayName(context.getString(if (isFavorite) R.string.action_remove_favorite else R.string.action_add_favorite))
                     .setSessionCommand(FAVORITE)
-                    .setEnabled(!playbackControlsBlocked && !favorites.ui.value.isFavoriteMutating && !favorites.ui.value.isLoading)
+                    .setEnabled(!favorites.ui.value.isLoading)
                     .build(),
             )
         }

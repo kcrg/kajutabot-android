@@ -19,9 +19,12 @@ data class QueueSnapshotResponse(
     val nowPlayingFromRadio: Boolean,
     val radio: RadioStateResponse,
     val pendingEntries: List<QueueEntryResponse>,
+    val pendingEntriesCount: Int,
     val pendingDurationMilliseconds: Long,
     val version: Long,
     val nowPlayingStartedAt: String? = null,
+    val playbackInstanceId: String? = null,
+    val playbackPositionMilliseconds: Long? = null,
     val isRepeatEnabled: Boolean = false,
     val skipOutcome: SkipOutcome? = null,
 )

@@ -43,6 +43,7 @@ class PlayerStateProjectionTest {
         nowPlayingFromRadio = false,
         radio = RadioStateResponse(isEnabled = false),
         pendingEntries = emptyList(),
+        pendingEntriesCount = 0,
         pendingDurationMilliseconds = 0,
         version = version,
         nowPlayingStartedAt = "2026-09-18T12:00:00Z",

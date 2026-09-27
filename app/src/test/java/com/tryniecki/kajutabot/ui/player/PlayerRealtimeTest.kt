@@ -24,6 +24,7 @@ class PlayerRealtimeTest {
         nowPlayingFromRadio = false,
         radio = RadioStateResponse(isEnabled = false),
         pendingEntries = emptyList(),
+        pendingEntriesCount = 0,
         pendingDurationMilliseconds = 0,
         version = version,
     )

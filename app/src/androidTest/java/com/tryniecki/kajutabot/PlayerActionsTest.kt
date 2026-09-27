@@ -54,6 +54,7 @@ class PlayerActionsTest {
                 QueueEntryResponse("first", 1, track("First")),
                 QueueEntryResponse("second", 2, track("Second")),
             ),
+            pendingEntriesCount = 2,
             pendingDurationMilliseconds = 120_000,
             version = 7,
         ),
