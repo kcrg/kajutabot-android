@@ -40,6 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -407,13 +408,26 @@ private fun ScreenshotHero(
     @DrawableRes drawable: Int,
     modifier: Modifier = Modifier,
 ) {
-    Image(
-        painter = painterResource(drawable),
-        contentDescription = null,
-        modifier = modifier,
-        contentScale = ContentScale.Fit,
-        alignment = Alignment.Center,
-    )
+    val painter = painterResource(drawable)
+    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+        val intrinsicSize = painter.intrinsicSize
+        val aspectRatio = if (intrinsicSize.width > 0f && intrinsicSize.height > 0f) {
+            intrinsicSize.width / intrinsicSize.height
+        } else {
+            16f / 9f
+        }
+        val imageWidth = minOf(maxWidth, maxHeight * aspectRatio)
+        val imageHeight = imageWidth / aspectRatio
+        Image(
+            painter = painter,
+            contentDescription = null,
+            modifier = Modifier
+                .width(imageWidth)
+                .height(imageHeight)
+                .clip(RoundedCornerShape(16.dp)),
+            contentScale = ContentScale.Fit,
+        )
+    }
 }
 
 @Composable

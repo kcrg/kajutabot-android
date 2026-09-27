@@ -154,6 +154,27 @@ class PlaybackProgressTest {
     }
 
     @Test
+    fun `missing artwork in queue mutation snapshot keeps current artwork`() {
+        val previous = NowPlayingPresentation(
+            track().copy(artworkUrl = "https://example.com/art.jpg", artworkAccentColor = "#123456"),
+            "2026-09-18T12:00:00Z",
+        )
+        val incoming = NowPlayingPresentation(
+            track().copy(artworkUrl = null, artworkAccentColor = null),
+            "2026-09-18T12:00:00+00:00",
+        )
+
+        val merged = mergeNowPlayingPresentation(previous, incoming)
+        assertEquals(previous.track.artworkUrl, merged.track.artworkUrl)
+        assertEquals(previous.track.artworkAccentColor, merged.track.artworkAccentColor)
+        assertEquals(incoming.startedAt, merged.startedAt)
+        assertNull(mergeNowPlayingPresentation(
+            previous,
+            incoming.copy(startedAt = "2026-09-18T12:04:00Z"),
+        ).track.artworkUrl)
+    }
+
+    @Test
     fun `older snapshot version does not overwrite`() {
         assertFalse(
             shouldApplyQueueSnapshot(

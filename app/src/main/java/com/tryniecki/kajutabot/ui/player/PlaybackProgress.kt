@@ -115,6 +115,28 @@ data class NowPlayingPresentation(
     val startedAt: String?,
 )
 
+/** Keep known artwork when a fresh snapshot omits it for the same playback. */
+fun mergeNowPlayingPresentation(
+    previous: NowPlayingPresentation?,
+    incoming: NowPlayingPresentation,
+): NowPlayingPresentation {
+    if (previous == null ||
+        previous.track.contentType != incoming.track.contentType ||
+        previous.track.contentId != incoming.track.contentId ||
+        (previous.startedAt != null && incoming.startedAt != null &&
+            playbackIdentity(previous.track, previous.startedAt) !=
+            playbackIdentity(incoming.track, incoming.startedAt))
+    ) return incoming
+
+    return incoming.copy(
+        track = incoming.track.copy(
+            artworkUrl = incoming.track.artworkUrl?.takeIf { it.isNotBlank() } ?: previous.track.artworkUrl,
+            artworkAccentColor = incoming.track.artworkAccentColor ?: previous.track.artworkAccentColor,
+        ),
+        startedAt = incoming.startedAt ?: previous.startedAt,
+    )
+}
+
 fun QueueSnapshotResponse.nowPlayingPresentationOrNull(): NowPlayingPresentation? =
     nowPlaying?.let { track -> NowPlayingPresentation(track, nowPlayingStartedAt) }
 

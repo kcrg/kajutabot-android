@@ -574,6 +574,7 @@ private fun AuthenticatedContent(
                                     slide = state.slide,
                                     track = state.track,
                                     isMutating = state.isMutating,
+                                    isQueueReordering = state.isQueueReordering,
                                     activeControlAction = state.activeControlAction,
                                     isFavorite = favoritesViewModel.isFavorite(state.track),
                                     favoritesBusy = favoritesUi.isMutating || favoritesUi.isLoading,

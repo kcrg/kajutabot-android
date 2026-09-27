@@ -197,6 +197,7 @@
     <string name="player_clear_dialog_title">Wyczyścić kolejkę?</string>
     <string name="player_clear_dialog_body">Wszystkie oczekujące utwory zostaną usunięte. Aktualny utwór będzie grał dalej.</string>
     <string name="player_now_playing">TERAZ ODTWARZANE</string>
+    <string name="player_requeue_now_playing">Dodaj ponownie do kolejki</string>
     <string name="player_repeat_disable">Wyłącz powtarzanie</string>
     <string name="player_repeat_enable">Włącz powtarzanie</string>
     <string name="player_radio_disable">Wyłącz radio</string>

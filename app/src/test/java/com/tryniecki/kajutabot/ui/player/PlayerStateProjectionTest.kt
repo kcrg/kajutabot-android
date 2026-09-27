@@ -16,6 +16,12 @@ import org.junit.Test
  */
 class PlayerStateProjectionTest {
 
+    @Test
+    fun `queue reorder keeps playback controls available`() {
+        assertFalse(shouldBlockPlaybackControls(true, null, true))
+        assertTrue(shouldBlockPlaybackControls(true, null, false))
+    }
+
     private fun track(title: String = "Track") = PlaybackTrackResponse(
         contentId = "vid-1",
         contentType = "youtube",

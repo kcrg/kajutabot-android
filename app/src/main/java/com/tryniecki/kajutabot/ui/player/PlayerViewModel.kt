@@ -51,7 +51,14 @@ enum class PlayerControlAction {
     SKIP,
     REPEAT,
     RADIO,
+    REQUEUE,
 }
+
+internal fun shouldBlockPlaybackControls(
+    isMutating: Boolean,
+    activeControlAction: PlayerControlAction?,
+    isQueueReordering: Boolean,
+): Boolean = isMutating && activeControlAction == null && !isQueueReordering
 
 enum class QueueLoadState {
     IDLE,
@@ -90,6 +97,7 @@ data class PlayerUiState(
     val queueLoadError: UiText? = null,
     val isSearching: Boolean = false,
     val isMutating: Boolean = false,
+    val isQueueReordering: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
     val error: UiText? = null,
     val info: UiText? = null,
@@ -119,6 +127,7 @@ data class PlayerScreenState(
     val queueLoadState: QueueLoadState = QueueLoadState.IDLE,
     val queueLoadError: UiText? = null,
     val isMutating: Boolean = false,
+    val isQueueReordering: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
     val error: UiText? = null,
     val info: UiText? = null,
@@ -158,6 +167,7 @@ data class MiniPlayerState(
     val slide: NowPlayingSlide,
     val track: PlaybackTrackResponse,
     val isMutating: Boolean,
+    val isQueueReordering: Boolean,
     val activeControlAction: PlayerControlAction?,
 )
 
@@ -173,6 +183,7 @@ fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     queueLoadState = queueLoadState,
     queueLoadError = queueLoadError,
     isMutating = isMutating,
+    isQueueReordering = isQueueReordering,
     activeControlAction = activeControlAction,
     error = error,
     info = info,
@@ -208,6 +219,7 @@ fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
         slide = nowPlayingSlide(presentation, hasQueue = queue != null),
         track = presentation.track,
         isMutating = isMutating,
+        isQueueReordering = isQueueReordering,
         activeControlAction = activeControlAction,
     )
 }
@@ -583,7 +595,10 @@ class PlayerViewModel(
                 }
                 applied = true
                 val nextPresentation = when {
-                    snapshot.nowPlaying != null -> snapshot.nowPlayingPresentationOrNull()
+                    snapshot.nowPlaying != null -> mergeNowPlayingPresentation(
+                        previous = current.effectiveNowPlaying,
+                        incoming = snapshot.nowPlayingPresentationOrNull()!!,
+                    )
                     forcePresentationIdle -> null
                     current.effectiveNowPlaying != null -> {
                         holdsPreviousTrack = true
@@ -793,6 +808,20 @@ class PlayerViewModel(
         }
     }
 
+    fun requeueNowPlaying() {
+        val state = _ui.value
+        val trackUrl = state.effectiveNowPlaying?.track?.url?.takeIf { it.isNotBlank() } ?: return
+        val guildId = state.selectedGuildId ?: return
+        val channelId = state.queue?.voiceChannelId ?: state.selectedVoiceChannelId ?: return
+        mutate(controlAction = PlayerControlAction.REQUEUE) { version ->
+            repository.enqueue(
+                expectedIdentity = sessionIdentity,
+                guildId = guildId,
+                request = EnqueueRequest(channelId, listOf(trackUrl), version),
+            )
+        }
+    }
+
     fun stop() {
         mutate(
             controlAction = PlayerControlAction.STOP,
@@ -867,18 +896,20 @@ class PlayerViewModel(
         if (state.isMutating || snapshot.version != expectedVersion || snapshot.guildId != guildId) return false
         if (swappedQueueEntries(snapshot.pendingEntries, sourceEntryId, targetEntryId) == null) return false
 
-        _ui.update { it.copy(isMutating = true, error = null) }
+        _ui.update { it.copy(isMutating = true, isQueueReordering = true, error = null) }
         viewModelScope.launch {
             try {
-                val response = repository.swapQueueEntries(
-                    expectedIdentity = sessionIdentity,
-                    guildId = guildId,
-                    firstEntryId = sourceEntryId,
-                    secondEntryId = targetEntryId,
-                    expectedVersion = expectedVersion,
-                )
-                applyQueueSnapshot(response)
-                _ui.update { it.copy(isMutating = false) }
+                controlMutationMutex.withLock {
+                    val response = repository.swapQueueEntries(
+                        expectedIdentity = sessionIdentity,
+                        guildId = guildId,
+                        firstEntryId = sourceEntryId,
+                        secondEntryId = targetEntryId,
+                        expectedVersion = expectedVersion,
+                    )
+                    applyQueueSnapshot(response)
+                    _ui.update { it.copy(isMutating = false, isQueueReordering = false) }
+                }
             } catch (e: Exception) {
                 handleMutationError(e)
             }
@@ -977,6 +1008,7 @@ class PlayerViewModel(
                         _ui.update {
                             it.copy(
                                 isMutating = false,
+                                isQueueReordering = false,
                                 activeControlAction = null,
                                 error = if (applied) {
                                     uiText(R.string.player_queue_conflict_refreshed)
@@ -994,6 +1026,7 @@ class PlayerViewModel(
         _ui.update {
             it.copy(
                 isMutating = false,
+                isQueueReordering = false,
                 activeControlAction = null,
                 error = userMessageForError(e),
             )

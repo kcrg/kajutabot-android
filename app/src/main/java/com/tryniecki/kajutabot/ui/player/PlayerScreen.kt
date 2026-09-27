@@ -25,7 +25,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -45,6 +49,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
@@ -55,9 +60,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
@@ -67,7 +79,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.lerp
@@ -100,8 +111,26 @@ import com.tryniecki.kajutabot.ui.theme.fadeThrough
 import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
+import kotlin.math.roundToInt
 
 private val artworkAccentColorRegex = Regex("#[0-9a-fA-F]{6}")
+
+internal fun queueDragAutoScrollDelta(
+    pointerY: Float,
+    viewportHeight: Float,
+    edgeSize: Float,
+    maxStep: Float,
+): Float {
+    if (viewportHeight <= 0f || edgeSize <= 0f) return 0f
+    val activeEdge = minOf(edgeSize, viewportHeight / 2f)
+    val topProximity = ((activeEdge - pointerY) / activeEdge).coerceIn(0f, 1f)
+    val bottomProximity = ((pointerY - (viewportHeight - activeEdge)) / activeEdge).coerceIn(0f, 1f)
+    return when {
+        topProximity > 0f -> -maxStep * topProximity
+        bottomProximity > 0f -> maxStep * bottomProximity
+        else -> 0f
+    }
+}
 
 private enum class PlayerSurfaceState {
     LOADING,
@@ -125,6 +154,7 @@ fun PlayerRoute(
         ui = ui,
         onDiscordSelectionOpen = onDiscordSelectionOpen,
         onSkip = viewModel::skip,
+        onRequeueNowPlaying = viewModel::requeueNowPlaying,
         onStop = viewModel::stop,
         onRepeatToggle = { viewModel.setRepeat(ui.queue?.isRepeatEnabled != true) },
         onRadioToggle = viewModel::toggleRadio,
@@ -206,6 +236,7 @@ fun PlayerScreen(
     ui: PlayerScreenState,
     onDiscordSelectionOpen: () -> Unit,
     onSkip: () -> Unit,
+    onRequeueNowPlaying: () -> Unit = {},
     onStop: () -> Unit,
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,
@@ -228,8 +259,13 @@ fun PlayerScreen(
     val showFloatingActions = rememberScrollAwareFabVisible(listState)
     var draggingEntryId by remember { mutableStateOf<String?>(null) }
     var dragOffsetPx by remember { mutableStateOf(0f) }
+    var dragStartTopPx by remember { mutableStateOf(0f) }
+    var dragHeightPx by remember { mutableStateOf(0) }
+    var dragPointerY by remember { mutableStateOf(0f) }
     var dragTargetIndex by remember { mutableStateOf(-1) }
     var dragExpectedVersion by remember { mutableStateOf<Long?>(null) }
+    var listCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val dragHandleBounds = remember { mutableMapOf<String, Rect>() }
     var previewOrder by remember(ui.queue?.guildId) {
         mutableStateOf<List<QueueEntryResponse>?>(null)
     }
@@ -245,6 +281,23 @@ fun PlayerScreen(
         }
     }
     val pendingEntryIds = pendingIndexById.keys
+    val density = LocalDensity.current
+    val scrollEdgePx = with(density) { 72.dp.toPx() }
+    val maxScrollPerFramePx = with(density) { 18.dp.toPx() }
+    fun updateDragTarget() {
+        val closest = listState.layoutInfo.visibleItemsInfo
+            .filter { it.key in pendingEntryIds }
+            .minByOrNull { info ->
+                kotlin.math.abs(dragPointerY - (info.offset + info.size / 2f))
+            }
+        dragTargetIndex = (closest?.key as? String)?.let(pendingIndexById::get) ?: dragTargetIndex
+    }
+    fun resetDrag() {
+        draggingEntryId = null
+        dragOffsetPx = 0f
+        dragTargetIndex = -1
+        dragExpectedVersion = null
+    }
     val changeServerChannelDesc = stringResource(R.string.player_change_server_channel)
     Scaffold(
         floatingActionButton = {
@@ -288,9 +341,69 @@ fun PlayerScreen(
             }
         },
     ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { listCoordinates = it }
+                .pointerInput(pendingIndexById, ui.queue?.version, ui.isMutating) {
+                    if (ui.isMutating || pending.size < 2) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val sourceInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                            val id = info.key as? String
+                            id != null && id in pendingEntryIds &&
+                                dragHandleBounds[id]?.contains(down.position) == true
+                        } ?: return@awaitEachGesture
+                        val sourceId = sourceInfo.key as String
+                        val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                        longPress.consume()
+                        draggingEntryId = sourceId
+                        dragStartTopPx = sourceInfo.offset.toFloat()
+                        dragHeightPx = sourceInfo.size
+                        dragOffsetPx = 0f
+                        dragPointerY = longPress.position.y
+                        dragTargetIndex = pendingIndexById[sourceId] ?: -1
+                        dragExpectedVersion = ui.queue?.version
+                        try {
+                            val completed = drag(longPress.id) { change ->
+                                dragOffsetPx += change.position.y - change.previousPosition.y
+                                dragPointerY = change.position.y
+                                change.consume()
+                                updateDragTarget()
+                            }
+                            if (completed) {
+                                val targetId = pending.getOrNull(dragTargetIndex)?.entryId
+                                val version = dragExpectedVersion
+                                if (targetId != null && version != null) {
+                                    val swapped = swappedQueueEntries(pending, sourceId, targetId)
+                                    if (swapped != null && onSwapEntries(sourceId, targetId, version)) {
+                                        previewOrder = swapped
+                                    }
+                                }
+                            }
+                        } finally {
+                            resetDrag()
+                        }
+                    }
+                },
+        ) {
+            LaunchedEffect(draggingEntryId) {
+                if (draggingEntryId == null) return@LaunchedEffect
+                while (true) {
+                    withFrameNanos { }
+                    val delta = queueDragAutoScrollDelta(
+                        dragPointerY,
+                        listState.layoutInfo.viewportEndOffset.toFloat(),
+                        scrollEdgePx,
+                        maxScrollPerFramePx,
+                    )
+                    if (delta != 0f && listState.scrollBy(delta) != 0f) updateDragTarget()
+                }
+            }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
+            userScrollEnabled = draggingEntryId == null,
             contentPadding = PaddingValues(
                 start = 16.dp,
                 top = innerPadding.calculateTopPadding() + 8.dp,
@@ -352,8 +465,10 @@ fun PlayerScreen(
                             presentedNowPlaying = ui.presentedNowPlaying
                                 ?: ui.queue?.nowPlayingPresentationOrNull(),
                             isMutating = ui.isMutating,
+                            isQueueReordering = ui.isQueueReordering,
                             activeControlAction = ui.activeControlAction,
                             onSkip = onSkip,
+                            onRequeueNowPlaying = onRequeueNowPlaying,
                             onStop = { confirmStop = true },
                             isFavorite = isFavorite,
                             onToggleFavorite = onToggleFavorite,
@@ -420,9 +535,7 @@ fun PlayerScreen(
                     val moveDownDescription = stringResource(R.string.action_move_down)
                     Card(
                         modifier = Modifier
-                            .zIndex(if (dragged) 1f else 0f)
-                            .graphicsLayer { translationY = if (dragged) dragOffsetPx else 0f }
-                            .shadow(if (dragged) 8.dp else 0.dp, RoundedCornerShape(12.dp))
+                            .alpha(if (dragged) 0f else 1f)
                             .animateItem(
                                 fadeInSpec = motion.fastEffectsSpec(),
                                 fadeOutSpec = motion.fastEffectsSpec(),
@@ -459,57 +572,14 @@ fun PlayerScreen(
                                                     },
                                                 )
                                             }
-                                            .pointerInput(entry.entryId, pendingIndexById, ui.queue?.version, ui.isMutating) {
-                                                if (ui.isMutating || pending.size < 2) return@pointerInput
-                                                detectDragGesturesAfterLongPress(
-                                                    onDragStart = {
-                                                        draggingEntryId = entry.entryId
-                                                        dragOffsetPx = 0f
-                                                        dragTargetIndex = entryIndex
-                                                        dragExpectedVersion = ui.queue?.version
-                                                    },
-                                                    onDrag = { change, amount ->
-                                                        change.consume()
-                                                        dragOffsetPx += amount.y
-                                                        val source = listState.layoutInfo.visibleItemsInfo
-                                                            .firstOrNull { it.key == entry.entryId }
-                                                            ?: return@detectDragGesturesAfterLongPress
-                                                        val center = source.offset + source.size / 2f + dragOffsetPx
-                                                        val closest = listState.layoutInfo.visibleItemsInfo
-                                                            .filter { info ->
-                                                                val key = info.key as? String
-                                                                key != null && key in pendingEntryIds
-                                                            }
-                                                            .minByOrNull { info ->
-                                                                kotlin.math.abs(center - (info.offset + info.size / 2f))
-                                                            }
-                                                        if (closest != null) {
-                                                            val closestEntryId = closest.key as? String
-                                                            dragTargetIndex = closestEntryId
-                                                                ?.let { pendingIndexById[it] }
-                                                                ?: -1
-                                                        }
-                                                    },
-                                                    onDragEnd = {
-                                                        val targetEntryId = pending.getOrNull(dragTargetIndex)?.entryId
-                                                        val version = dragExpectedVersion
-                                                        if (targetEntryId != null && version != null) {
-                                                            val swapped = swappedQueueEntries(pending, entry.entryId, targetEntryId)
-                                                            if (swapped != null && onSwapEntries(entry.entryId, targetEntryId, version)) {
-                                                                previewOrder = swapped
-                                                            }
-                                                        }
-                                                        draggingEntryId = null
-                                                        dragOffsetPx = 0f
-                                                        dragTargetIndex = -1
-                                                        dragExpectedVersion = null
-                                                    },
-                                                    onDragCancel = {
-                                                        draggingEntryId = null
-                                                        dragOffsetPx = 0f
-                                                        dragTargetIndex = -1
-                                                        dragExpectedVersion = null
-                                                    },
+                                            .onGloballyPositioned { coordinates ->
+                                                val origin = listCoordinates?.boundsInRoot()?.topLeft ?: return@onGloballyPositioned
+                                                val bounds = coordinates.boundsInRoot()
+                                                dragHandleBounds[entry.entryId] = Rect(
+                                                    bounds.left - origin.x,
+                                                    bounds.top - origin.y,
+                                                    bounds.right - origin.x,
+                                                    bounds.bottom - origin.y,
                                                 )
                                             },
                                         contentAlignment = Alignment.Center,
@@ -573,6 +643,38 @@ fun PlayerScreen(
             }
         }
 
+            val draggedEntry = pending.firstOrNull { it.entryId == draggingEntryId }
+            if (draggedEntry != null) {
+                Card(
+                    modifier = Modifier
+                        .offset { IntOffset(0, (dragStartTopPx + dragOffsetPx).roundToInt()) }
+                        .padding(horizontal = 16.dp)
+                        .fillMaxWidth()
+                        .height(with(density) { dragHeightPx.toDp() })
+                        .shadow(8.dp, RoundedCornerShape(12.dp)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                ) {
+                    ListItem(
+                        modifier = Modifier.fillMaxSize(),
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        leadingContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_grip_vertical_outline),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                                TrackArtwork(draggedEntry.track.artworkUrl, modifier = Modifier.size(56.dp))
+                            }
+                        },
+                        supportingContent = { Text(formatDuration(draggedEntry.track.durationMilliseconds)) },
+                    ) {
+                        Text(draggedEntry.track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+
         if (confirmStop) {
             AlertDialog(
                 onDismissRequest = { confirmStop = false },
@@ -607,8 +709,10 @@ private fun NowPlayingCard(
     queue: QueueSnapshotResponse?,
     presentedNowPlaying: NowPlayingPresentation?,
     isMutating: Boolean,
+    isQueueReordering: Boolean,
     activeControlAction: PlayerControlAction?,
     onSkip: () -> Unit,
+    onRequeueNowPlaying: () -> Unit,
     onStop: () -> Unit,
     isFavorite: (PlaybackTrackResponse) -> Boolean,
     onToggleFavorite: (PlaybackTrackResponse) -> Unit,
@@ -625,9 +729,9 @@ private fun NowPlayingCard(
         presentation = presentedNowPlaying,
         hasQueue = queue != null,
     )
-    // Queue mutations such as reorder/remove still block playback controls, but a
-    // control mutation must not make its sibling buttons flash disabled.
-    val playbackControlsBlocked = isMutating && activeControlAction == null
+    val playbackControlsBlocked = shouldBlockPlaybackControls(
+        isMutating, activeControlAction, isQueueReordering,
+    )
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -718,6 +822,22 @@ private fun NowPlayingCard(
                             )
                         }
                     }
+                }
+            }
+
+            if (presentedNowPlaying != null) {
+                OutlinedButton(
+                    onClick = onRequeueNowPlaying,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = queue != null && activeControlAction != PlayerControlAction.REQUEUE,
+                ) {
+                    Icon(
+                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.player_requeue_now_playing))
                 }
             }
 

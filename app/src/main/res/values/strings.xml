@@ -197,6 +197,7 @@
     <string name="player_clear_dialog_title">Clear the queue?</string>
     <string name="player_clear_dialog_body">All waiting tracks will be removed. The current track will keep playing.</string>
     <string name="player_now_playing">NOW PLAYING</string>
+    <string name="player_requeue_now_playing">Add to queue again</string>
     <string name="player_repeat_disable">Disable repeat</string>
     <string name="player_repeat_enable">Enable repeat</string>
     <string name="player_radio_disable">Disable radio</string>

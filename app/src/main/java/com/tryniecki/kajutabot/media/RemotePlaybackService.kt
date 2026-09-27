@@ -23,6 +23,7 @@ import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.RealtimeOwner
+import com.tryniecki.kajutabot.ui.player.shouldBlockPlaybackControls
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -58,7 +59,10 @@ class RemotePlaybackService : MediaSessionService() {
         val favoritesState = ViewModelProvider(owner, FavoritesViewModel.factory(container))[FavoritesViewModel::class.java]
         val player = RemoteQueuePlayer {
             val state = playerState.ui.value
-            if (!state.isMutating || state.activeControlAction != null) playerState.skip()
+            val controlsBlocked = shouldBlockPlaybackControls(
+                state.isMutating, state.activeControlAction, state.isQueueReordering,
+            )
+            if (!controlsBlocked) playerState.skip()
         }
         remotePlayer = player
         // Project the same transition-stabilized item as the app UI. Queue mutation
@@ -155,7 +159,9 @@ class RemotePlaybackService : MediaSessionService() {
             val state = player.ui.value
             val queue = state.queue
             val track = state.effectiveNowPlaying?.track
-            val playbackControlsBlocked = state.isMutating && state.activeControlAction == null
+            val playbackControlsBlocked = shouldBlockPlaybackControls(
+                state.isMutating, state.activeControlAction, state.isQueueReordering,
+            )
             if ((!controller.isTrusted && !session.isMediaNotificationController(controller)) ||
                 queue == null || track == null || playbackControlsBlocked
             ) {
@@ -200,7 +206,9 @@ class RemotePlaybackService : MediaSessionService() {
             val state = player.ui.value
             val queue = state.queue ?: return emptyList()
             val track = state.effectiveNowPlaying?.track ?: return emptyList()
-            val playbackControlsBlocked = state.isMutating && state.activeControlAction == null
+            val playbackControlsBlocked = shouldBlockPlaybackControls(
+                state.isMutating, state.activeControlAction, state.isQueueReordering,
+            )
             val isFavorite = favorites.isFavorite(track)
             return listOf(
                 CommandButton.Builder(CommandButton.ICON_NEXT)

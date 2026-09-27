@@ -71,6 +71,7 @@ fun MiniPlayer(
     slide: NowPlayingSlide,
     track: PlaybackTrackResponse,
     isMutating: Boolean,
+    isQueueReordering: Boolean,
     activeControlAction: PlayerControlAction?,
     isFavorite: Boolean,
     favoritesBusy: Boolean,
@@ -82,7 +83,9 @@ fun MiniPlayer(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     val motion = MaterialTheme.motionScheme
-    val playbackControlsBlocked = isMutating && activeControlAction == null
+    val playbackControlsBlocked = shouldBlockPlaybackControls(
+        isMutating, activeControlAction, isQueueReordering,
+    )
 
     val progress = rememberPlaybackProgress(
         playbackKey = slide.identity,
