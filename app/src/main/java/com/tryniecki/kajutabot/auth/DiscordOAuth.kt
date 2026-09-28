@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.auth
 
 import android.net.Uri
+import androidx.core.net.toUri
 
 object DiscordOAuth {
     const val AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
@@ -14,7 +15,7 @@ object DiscordOAuth {
         codeChallenge: String,
         state: String,
     ): String {
-        return Uri.parse(AUTHORIZE_URL).buildUpon()
+        return AUTHORIZE_URL.toUri().buildUpon()
             .appendQueryParameter("client_id", clientId)
             .appendQueryParameter("response_type", "code")
             .appendQueryParameter("redirect_uri", redirectUri)

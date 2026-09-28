@@ -1,7 +1,7 @@
 package com.tryniecki.kajutabot.ui.more
 
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -65,7 +65,7 @@ private fun ContactLinks() {
         title = phoneNumber,
         subtitle = stringResource(R.string.contact_phone_label),
         onClick = {
-            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneNumber")))
+            context.startActivity(Intent(Intent.ACTION_DIAL, "tel:$phoneNumber".toUri()))
         },
     )
     SettingsRow(

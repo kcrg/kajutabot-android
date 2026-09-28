@@ -31,7 +31,6 @@ class PkceGeneratorTest {
         val challenge = PkceGenerator.challengeForVerifier(verifier)
         assertFalse(challenge.contains("="))
         assertTrue(challenge.all { it.isLetterOrDigit() || it == '-' || it == '_' })
-        // SHA-256 -> 32 bytes -> 43 chars Base64Url no padding
         assertEquals(43, challenge.length)
     }
 

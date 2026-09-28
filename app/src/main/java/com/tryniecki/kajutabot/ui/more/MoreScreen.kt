@@ -25,7 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -176,7 +176,7 @@ fun MoreRootScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text(
-                                    text = logoutError?.asString().orEmpty(),
+                                    text = logoutError.asString(),
                                     modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error,
@@ -267,7 +267,7 @@ fun MoreRootScreen(
 private fun RealtimeStatusCard(playerViewModel: PlayerViewModel) {
     val diagnostics by playerViewModel.realtimeDiagnostics.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
-    var nowMs by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    var nowMs by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {

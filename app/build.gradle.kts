@@ -10,6 +10,7 @@ plugins {
 tasks.withType<Test>().configureEach {
     // Robolectric accesses FileDescriptor internals when the Gradle daemon uses JDK 25.
     jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 val kajutaApiBaseUrl: String =
@@ -44,9 +45,7 @@ android {
 
     buildTypes {
         release {
-            // Local compilation check only: no release signing is configured.
             proguardFiles("proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
             optimization {
                 enable = true
             }

@@ -1,6 +1,6 @@
 package com.tryniecki.kajutabot.media
 
-import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Looper
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -58,7 +58,7 @@ class RemoteQueuePlayer(
             .setDisplayTitle(track.title)
             .apply {
                 val artwork = resolveArtworkSource(track.artworkUrl)
-                if (artwork is ArtworkSource.Remote) setArtworkUri(Uri.parse(artwork.url))
+                if (artwork is ArtworkSource.Remote) setArtworkUri(artwork.url.toUri())
                 artworkData?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) }
                 // The Control API's PlaybackTrackResponse has no artist/author field.
             }

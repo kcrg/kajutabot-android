@@ -66,6 +66,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -286,11 +287,11 @@ fun PlayerScreen(
     val scrollScope = rememberCoroutineScope()
     var scrollToTopJob by remember { mutableStateOf<Job?>(null) }
     var draggingEntryId by remember { mutableStateOf<String?>(null) }
-    var dragOffsetPx by remember { mutableStateOf(0f) }
-    var dragStartTopPx by remember { mutableStateOf(0f) }
-    var dragHeightPx by remember { mutableStateOf(0) }
-    var dragPointerY by remember { mutableStateOf(0f) }
-    var dragTargetIndex by remember { mutableStateOf(-1) }
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    var dragStartTopPx by remember { mutableFloatStateOf(0f) }
+    var dragHeightPx by remember { mutableIntStateOf(0) }
+    var dragPointerY by remember { mutableFloatStateOf(0f) }
+    var dragTargetIndex by remember { mutableIntStateOf(-1) }
     var dragSnapshotVersion by remember { mutableStateOf<Long?>(null) }
     var listCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var viewportHeightPx by remember { mutableIntStateOf(0) }

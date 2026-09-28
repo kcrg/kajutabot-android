@@ -1,5 +1,6 @@
 package com.tryniecki.kajutabot.auth
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
@@ -39,6 +40,7 @@ class SecureSessionStore(context: Context) : SessionStore {
         Context.MODE_PRIVATE,
     )
 
+    @SuppressLint("UseKtx") // SharedPreferences.edit(commit = true) does not expose the commit result.
     override fun save(session: UserSession) {
         val payload = JSONObject()
             .put(KEY_ACCESS, session.accessToken)
@@ -110,6 +112,7 @@ class SecureSessionStore(context: Context) : SessionStore {
         }
     }
 
+    @SuppressLint("UseKtx") // Session removal must confirm both synchronous commits.
     override fun clear() {
         check(secretPrefs.edit().clear().commit()) { "Could not clear encrypted session" }
         check(metaPrefs.edit().clear().commit()) { "Could not clear session metadata" }

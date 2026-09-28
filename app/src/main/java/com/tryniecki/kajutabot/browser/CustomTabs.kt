@@ -2,9 +2,9 @@ package com.tryniecki.kajutabot.browser
 
 import android.content.ActivityNotFoundException
 import android.content.Context
-import android.net.Uri
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.core.net.toUri
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.toArgb
@@ -27,7 +27,7 @@ fun openCustomTab(
         .setShareState(CustomTabsIntent.SHARE_STATE_ON)
         .build()
     try {
-        intent.launchUrl(context, Uri.parse(url))
+        intent.launchUrl(context, url.toUri())
     } catch (_: ActivityNotFoundException) {
         uriHandler.openUri(url)
     }

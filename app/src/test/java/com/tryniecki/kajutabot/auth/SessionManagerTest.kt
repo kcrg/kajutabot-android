@@ -329,7 +329,6 @@ class SessionManagerTest {
         val sm = manager(store = store, authApi = authApi)
         sm.restore()
         assertTrue(sm.authState.value is AuthState.RecoverableError)
-        // Session must NOT be cleared.
         assertEquals("refresh-1", store.session?.refreshToken)
     }
 
@@ -376,23 +375,13 @@ class SessionManagerTest {
             }
         }
         val sm = manager(store = store, authApi = authApi, apiProvider = { fakeApi })
-        sm.restore()
-        // Force expiry again for withApi path: set stored session back to expired but keep new refresh?
-        // Instead test directly: reset to expired and run concurrent withApi.
-        store.session = sessionWith(accessExp = "2020-01-01T00:00:00Z")
-        // Need fresh manager state: create new manager sharing same store/api to simulate app restart.
-        val authApi2 = FakeAuthApi(refreshHandler = { delay(50); authResponse("a3", "r3") })
-        val sm2 = manager(store = store, authApi = authApi2, apiProvider = { fakeApi })
-        // Preload currentSession via restore without refresh? Use valid? Manually: call restore with valid? Simpler:
-        // Load expired into sm2 by calling restore which will trigger one refresh; we want concurrent, so bypass restore:
-        // Use reflection-free approach: call withApi concurrently before any restore; withApi loads from store.
         val jobs = (1..10).map {
             async {
-                sm2.withApi { it.getQueue("g1") }
+                sm.withApi { it.getQueue("g1") }
             }
         }
         jobs.awaitAll()
-        assertEquals(1, authApi2.refreshCount.get())
+        assertEquals(1, authApi.refreshCount.get())
     }
 
     @Test
@@ -432,7 +421,6 @@ class SessionManagerTest {
             assertTrue("expected HttpException", false)
         } catch (_: HttpException) {
         }
-        // 1 initial + 1 retry = 2, no more.
         assertEquals(2, calls)
     }
 

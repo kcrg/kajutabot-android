@@ -19,12 +19,13 @@ Native Android client for controlling KajutaBot, a Discord music bot, through it
 
 ## Tech stack
 
-Kotlin, Jetpack Compose, Material 3, Coroutines/Flow, Retrofit, OkHttp, kotlinx.serialization, SignalR, Coil 3, Media3, Navigation Compose and Gradle Kotlin DSL. Unit tests use JUnit, kotlinx-coroutines-test, MockWebServer and Turbine.
+Kotlin, Jetpack Compose, Material 3, Coroutines/Flow, Retrofit, OkHttp, kotlinx.serialization, SignalR, Coil 3, Media3, Navigation 3 and Gradle Kotlin DSL. Unit tests use JUnit, kotlinx-coroutines-test, MockWebServer and Turbine.
 
 ## Architecture
 
 - `:app` contains the Compose UI, ViewModels, navigation, Android session storage and media service. ViewModels expose `StateFlow` UI state; route Composables collect it and send user actions back to the ViewModels.
 - `:api` is a Kotlin/JVM module with Retrofit endpoints, transport configuration, SignalR client and API DTOs. It has no Android SDK dependency. `:app` depends on `:api`.
+- `:baselineprofile` generates Baseline and Startup Profiles on a connected device.
 - A small application-owned container constructs shared services and scopes player state to the signed-in session.
 
 ## Interesting implementation details

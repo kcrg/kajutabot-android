@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -52,10 +53,10 @@ fun SwipeActionCard(
     addLabel: String,
     removeLabel: String,
     enabled: Boolean,
+    modifier: Modifier = Modifier,
     addStatus: SwipeActionStatus = SwipeActionStatus.IDLE,
     onAdd: () -> Unit,
     onRemove: () -> Unit,
-    modifier: Modifier = Modifier,
     content: @Composable (Modifier) -> Unit,
 ) {
     val revealWidth = with(LocalDensity.current) { (48.dp + 32.dp).toPx() }
@@ -120,7 +121,9 @@ fun SwipeActionCard(
             flingBehavior = flingBehavior,
         ),
     ) {
-        val removing = swipeState.requireOffset() < 0f
+        val removing by remember(swipeState) {
+            derivedStateOf { swipeState.requireOffset() < 0f }
+        }
         val failedAdd = addTriggered && addStatus == SwipeActionStatus.FAILURE
         Row(
             modifier = Modifier.matchParentSize()

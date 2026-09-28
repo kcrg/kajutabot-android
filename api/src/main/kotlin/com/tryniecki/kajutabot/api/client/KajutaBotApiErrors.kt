@@ -1,11 +1,12 @@
 package com.tryniecki.kajutabot.api.client
 
 import com.tryniecki.kajutabot.api.model.error.KajutaBotProblemDetailsParser
-import retrofit2.HttpException
+import com.tryniecki.kajutabot.api.model.error.KajutaBotProblemDetails
+import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.time.Instant
 import java.time.temporal.ChronoUnit
+import retrofit2.HttpException
 
 object KajutaBotApiErrors {
     const val QUEUE_VERSION_CONFLICT = "queue_version_conflict"
@@ -17,7 +18,7 @@ object KajutaBotApiErrors {
         "refresh_token_reuse_detected",
     )
 
-    fun problemDetailsOf(throwable: Throwable?): com.tryniecki.kajutabot.api.model.error.KajutaBotProblemDetails? {
+    fun problemDetailsOf(throwable: Throwable?): KajutaBotProblemDetails? {
         val http = throwable as? HttpException ?: return null
         val raw = try {
             http.response()?.errorBody()?.string()

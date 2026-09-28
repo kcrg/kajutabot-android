@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.prefs
 
 import android.content.Context
+import androidx.core.content.edit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -15,9 +16,7 @@ class SearchHistoryPreferences(context: Context) {
 
     fun add(query: String): List<String> {
         val updated = updateSearchHistory(entries(), query)
-        prefs.edit()
-            .putString(KEY_ENTRIES, Json.encodeToString(updated))
-            .apply()
+        prefs.edit { putString(KEY_ENTRIES, Json.encodeToString(updated)) }
         return updated
     }
 

@@ -3,6 +3,7 @@ package com.tryniecki.kajutabot.ui.theme
 import android.app.UiModeManager
 import android.content.Context
 import android.os.Build
+import androidx.core.content.edit
 
 class ThemePreferences(context: Context) {
     private val appContext = context.applicationContext
@@ -17,9 +18,7 @@ class ThemePreferences(context: Context) {
             return ThemeMode.entries.firstOrNull { it.name == storedValue } ?: ThemeMode.NATIVE
         }
         set(value) {
-            preferences.edit()
-                .putString(KEY_THEME_MODE, value.name)
-                .apply()
+            preferences.edit { putString(KEY_THEME_MODE, value.name) }
             applyPlatformNightMode(value)
         }
 

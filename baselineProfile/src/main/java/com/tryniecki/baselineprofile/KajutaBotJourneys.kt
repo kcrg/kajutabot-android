@@ -12,7 +12,7 @@ import androidx.test.uiautomator.Until
 
 private const val DEFAULT_TIMEOUT_MS = 60_000L
 private const val SHORT_TIMEOUT_MS = 3_000L
-private const val MAIN_ACTIVITY = ".MainActivity"
+private const val SETUP_ACTIVITY = ".BaselineProfileSetupActivity"
 private const val SETUP_ACTION = "com.tryniecki.kajutabot.action.BASELINE_PROFILE_SETUP"
 private const val SETUP_ERROR_PREFIX = "BASELINE_PROFILE_SETUP_ERROR: "
 private const val SETUP_SUCCESS_MARKER = "BASELINE_PROFILE_SETUP_OK"
@@ -22,10 +22,8 @@ internal object KajutaBotJourneys {
     /**
      * Prepares a stable returning-user state outside BaselineProfileRule.collect.
      *
-     * The generator starts the app's normal exported MainActivity with a dedicated setup action.
-     * MainActivity accepts that action only when the installed APK is profileable-by-shell, which
-     * is true for the Baseline Profile plugin's nonMinified target and false for a normal release.
-     * This prepares persisted guest/onboarding state without a variant-only manifest component.
+     * The setup activity exists only in benchmark target variants and persists guest/onboarding
+     * state before collection starts from a stopped process.
      */
     fun prepareAuthenticatedSession(packageName: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -44,7 +42,7 @@ internal object KajutaBotJourneys {
         )
         instrumentation.context.startActivity(
             Intent(SETUP_ACTION).apply {
-                setClassName(packageName, "$packageName$MAIN_ACTIVITY")
+                setClassName(packageName, "$packageName$SETUP_ACTIVITY")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             },
         )

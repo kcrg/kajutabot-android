@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.prefs
 
 import android.content.Context
+import androidx.core.content.edit
 import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.auth.UserSession
 
@@ -16,6 +17,6 @@ class FavoritesPreferences(context: Context) {
     fun shuffle(ownerKey: String): Boolean = prefs.getBoolean("shuffle_$ownerKey", false)
 
     fun setShuffle(ownerKey: String, enabled: Boolean) {
-        prefs.edit().putBoolean("shuffle_$ownerKey", enabled).apply()
+        prefs.edit { putBoolean("shuffle_$ownerKey", enabled) }
     }
 }

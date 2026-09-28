@@ -2,6 +2,7 @@ package com.tryniecki.kajutabot.auth
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 data class PendingOAuth(
     val state: String,
@@ -19,11 +20,11 @@ class PendingOAuthStore(
     )
 
     fun save(state: String, codeVerifier: String) {
-        prefs.edit()
-            .putString(KEY_STATE, state)
-            .putString(KEY_VERIFIER, codeVerifier)
-            .putLong(KEY_CREATED_AT, timeProvider())
-            .apply()
+        prefs.edit {
+            putString(KEY_STATE, state)
+            putString(KEY_VERIFIER, codeVerifier)
+            putLong(KEY_CREATED_AT, timeProvider())
+        }
     }
 
     fun load(): PendingOAuth? {
@@ -44,7 +45,7 @@ class PendingOAuthStore(
     }
 
     fun clear() {
-        prefs.edit().clear().apply()
+        prefs.edit { clear() }
     }
 
     companion object {

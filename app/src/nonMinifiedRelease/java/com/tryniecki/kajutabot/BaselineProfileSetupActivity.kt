@@ -1,6 +1,5 @@
 package com.tryniecki.kajutabot
 
-import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.widget.TextView
@@ -23,7 +22,7 @@ class BaselineProfileSetupActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             runCatching { prepareState() }
-                .onSuccess { launchTargetApp() }
+                .onSuccess { showStatus(SUCCESS_MARKER) }
                 .onFailure(::showFailure)
         }
     }
@@ -56,22 +55,17 @@ class BaselineProfileSetupActivity : ComponentActivity() {
         )
     }
 
-    private fun launchTargetApp() {
-        startActivity(
-            Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            },
-        )
-        finish()
-    }
-
     private fun showFailure(error: Throwable) {
         val message = error.message ?: error::class.java.simpleName
         Log.e(TAG, "Baseline Profile setup failed", error)
+        showStatus("$ERROR_PREFIX$message")
+    }
+
+    private fun showStatus(message: String) {
         setContentView(
             TextView(this).apply {
-                text = "$ERROR_PREFIX$message"
-                contentDescription = "$ERROR_PREFIX$message"
+                text = message
+                contentDescription = message
                 textSize = 16f
                 setPadding(32, 32, 32, 32)
             },
@@ -80,6 +74,7 @@ class BaselineProfileSetupActivity : ComponentActivity() {
 
     companion object {
         const val ERROR_PREFIX = "BASELINE_PROFILE_SETUP_ERROR: "
+        const val SUCCESS_MARKER = "BASELINE_PROFILE_SETUP_OK"
         private const val TAG = "BaselineProfileSetup"
     }
 }

@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.prefs
 
 import android.content.Context
+import androidx.core.content.edit
 import com.tryniecki.kajutabot.api.model.auth.SessionType
 
 class OnboardingPreferences(context: Context) {
@@ -13,7 +14,7 @@ class OnboardingPreferences(context: Context) {
         isCompletedFor(identityKey(sessionType, discordUserId))
 
     fun setCompletedFor(discordUserId: String, completed: Boolean = true) {
-        prefs.edit().putBoolean(completedKey(discordUserId), completed).apply()
+        prefs.edit { putBoolean(completedKey(discordUserId), completed) }
     }
 
     fun setCompletedFor(sessionType: SessionType, discordUserId: String, completed: Boolean = true) =

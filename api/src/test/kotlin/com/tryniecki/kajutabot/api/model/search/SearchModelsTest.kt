@@ -5,10 +5,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SearchModelsTest {
+    private val json = Json { ignoreUnknownKeys = true }
 
     @Test
     fun `deserializes search result thumbnail from track`() {
-        val response = Json { ignoreUnknownKeys = true }.decodeFromString<SearchResponse>(
+        val response = json.decodeFromString<SearchResponse>(
             """
             {
               "query": "demo",

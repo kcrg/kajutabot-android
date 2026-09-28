@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.prefs
 
 import android.content.Context
+import androidx.core.content.edit
 
 class GuildSelectionStore(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -8,21 +9,21 @@ class GuildSelectionStore(context: Context) {
     var guildId: String?
         get() = prefs.getString(KEY_GUILD, null)
         set(value) {
-            prefs.edit().apply {
+            prefs.edit {
                 if (value == null) remove(KEY_GUILD) else putString(KEY_GUILD, value)
-            }.apply()
+            }
         }
 
     var voiceChannelId: String?
         get() = prefs.getString(KEY_CHANNEL, null)
         set(value) {
-            prefs.edit().apply {
+            prefs.edit {
                 if (value == null) remove(KEY_CHANNEL) else putString(KEY_CHANNEL, value)
-            }.apply()
+            }
         }
 
     fun clear() {
-        prefs.edit().clear().apply()
+        prefs.edit { clear() }
     }
 
     companion object {
