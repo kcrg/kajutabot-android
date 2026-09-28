@@ -191,6 +191,7 @@
     <string name="shared_track_title">Shared link</string>
     <string name="shared_track_loading">Adding shared content…</string>
     <string name="shared_track_added">Added to the queue</string>
+    <string name="shared_tracks_added_count">Added %1$d tracks to the queue</string>
     <string name="shared_track_failed">Couldn’t add the shared track</string>
     <string name="shared_track_unconfirmed">Couldn’t confirm whether the track was added. Check the queue in the app.</string>
     <string name="shared_track_open_app">Go to app</string>

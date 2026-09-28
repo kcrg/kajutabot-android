@@ -6,8 +6,11 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -125,14 +128,28 @@ fun KajutaBotApp(
 
     when (val state = authState) {
         AuthState.Restoring -> RestoringScreen()
-        is AuthState.SignedOut -> LoginScreen(
-            isSigningIn = appUi.isSigningIn,
-            isGuestSigningIn = appUi.isGuestSigningIn,
-            errorMessage = appUi.accountError ?: state.message,
-            isOAuthConfigured = appViewModel.isOAuthConfigured,
-            onLoginClick = { appViewModel.startLogin() },
-            onGuestClick = { appViewModel.continueAsGuest() },
-        )
+        is AuthState.SignedOut -> {
+            val loginVisible = remember { MutableTransitionState(false).apply { targetState = true } }
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                AnimatedVisibility(
+                    visibleState = loginVisible,
+                    enter = fadeIn(tween(280)) + slideInVertically(
+                        animationSpec = tween(360),
+                        initialOffsetY = { it / 12 },
+                    ),
+                    label = "loginEntrance",
+                ) {
+                    LoginScreen(
+                        isSigningIn = appUi.isSigningIn,
+                        isGuestSigningIn = appUi.isGuestSigningIn,
+                        errorMessage = appUi.accountError ?: state.message,
+                        isOAuthConfigured = appViewModel.isOAuthConfigured,
+                        onLoginClick = { appViewModel.startLogin() },
+                        onGuestClick = { appViewModel.continueAsGuest() },
+                    )
+                }
+            }
+        }
         is AuthState.RecoverableError -> RestoreErrorScreen(
             message = state.message,
             onRetry = { appViewModel.retryRestore() },

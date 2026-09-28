@@ -174,7 +174,7 @@ data class SearchUiState(
 
 sealed interface SharedEnqueueStatus {
     data object Loading : SharedEnqueueStatus
-    data class Added(val track: PlaybackTrackResponse?) : SharedEnqueueStatus
+    data class Added(val tracks: List<PlaybackTrackResponse>) : SharedEnqueueStatus
     data class Failed(val message: UiText) : SharedEnqueueStatus
 }
 
@@ -774,10 +774,10 @@ class PlayerViewModel(
                     request = EnqueueRequest(channelId, listOf(url)),
                 )
                 applyQueueSnapshot(response)
-                val addedTrack = response.addedTracks?.firstOrNull()
+                val addedTracks = response.addedTracks.orEmpty()
                 _sharedEnqueue.update { current ->
                     if (current.requestId == requestId) {
-                        current.copy(status = SharedEnqueueStatus.Added(addedTrack))
+                        current.copy(status = SharedEnqueueStatus.Added(addedTracks))
                     } else current
                 }
             } catch (cancelled: CancellationException) {

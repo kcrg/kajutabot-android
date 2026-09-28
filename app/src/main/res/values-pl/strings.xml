@@ -190,6 +190,7 @@
     <string name="shared_track_title">Udostępniony link</string>
     <string name="shared_track_loading">Dodawanie do kolejki…</string>
     <string name="shared_track_added">Dodano do kolejki</string>
+    <string name="shared_tracks_added_count">Dodano %1$d utworów do kolejki</string>
     <string name="shared_track_failed">Nie udało się dodać udostępnionego utworu</string>
     <string name="shared_track_unconfirmed">Nie udało się potwierdzić dodania utworu. Sprawdź kolejkę w aplikacji.</string>
     <string name="shared_track_open_app">Przejdź do aplikacji</string>

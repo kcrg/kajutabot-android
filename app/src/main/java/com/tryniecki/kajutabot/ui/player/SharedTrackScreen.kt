@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.ui.player
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -11,7 +12,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -96,6 +101,32 @@ fun SharedTrackScreen(
             }
         },
     ) { innerPadding ->
+        if (status is SharedEnqueueStatus.Added && status.tracks.size > 1) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item(key = "playlist-summary") {
+                    Text(
+                        stringResource(R.string.shared_tracks_added_count, status.tracks.size),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                itemsIndexed(
+                    status.tracks,
+                    key = { index, track -> "${track.contentType}:${track.contentId}:$index" },
+                ) { index, track ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                    ) {
+                        QueueTrackCardContent(track = track, position = index + 1)
+                    }
+                }
+            }
+            return@Scaffold
+        }
         Column(
             modifier = Modifier.fillMaxSize().padding(innerPadding).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -123,7 +154,7 @@ fun SharedTrackScreen(
                     )
                 }
                 status is SharedEnqueueStatus.Added -> {
-                    status.track?.let { track ->
+                    status.tracks.singleOrNull()?.let { track ->
                         TrackArtwork(
                             imageUrl = track.artworkUrl,
                             modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth().aspectRatio(16f / 9f),

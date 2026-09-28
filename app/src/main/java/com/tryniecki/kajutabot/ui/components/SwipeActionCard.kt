@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.gestures.snapTo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 
 enum class SwipeActionStatus { IDLE, PENDING, SUCCESS, FAILURE }
@@ -77,6 +79,8 @@ fun SwipeActionCard(
     val currentEnabled = rememberUpdatedState(enabled)
     val currentAdd = rememberUpdatedState(onAdd)
     val currentRemove = rememberUpdatedState(onRemove)
+    val currentAddStatus = rememberUpdatedState(addStatus)
+    val currentRemoveStatus = rememberUpdatedState(removeStatus)
     var addTriggered by remember { mutableStateOf(false) }
     var removeTriggered by remember { mutableStateOf(false) }
     val operationDescription = when {
@@ -89,20 +93,22 @@ fun SwipeActionCard(
         else -> null
     }
 
-    LaunchedEffect(removeStatus, removeTriggered) {
-        if (removeTriggered && (removeStatus == SwipeActionStatus.SUCCESS || removeStatus == SwipeActionStatus.FAILURE)) {
-            delay(900)
-            swipeState.animateTo(SwipeToDismissBoxValue.Settled)
-            removeTriggered = false
-        }
+    LaunchedEffect(removeTriggered) {
+        if (!removeTriggered) return@LaunchedEffect
+        snapshotFlow { currentRemoveStatus.value }.first { it.isTerminal() }
+        delay(900)
+        swipeState.animateTo(SwipeToDismissBoxValue.Settled)
+        swipeState.snapTo(SwipeToDismissBoxValue.Settled)
+        removeTriggered = false
     }
 
-    LaunchedEffect(addStatus, addTriggered) {
-        if (addTriggered && (addStatus == SwipeActionStatus.SUCCESS || addStatus == SwipeActionStatus.FAILURE)) {
-            delay(900)
-            swipeState.animateTo(SwipeToDismissBoxValue.Settled)
-            addTriggered = false
-        }
+    LaunchedEffect(addTriggered) {
+        if (!addTriggered) return@LaunchedEffect
+        snapshotFlow { currentAddStatus.value }.first { it.isTerminal() }
+        delay(900)
+        swipeState.animateTo(SwipeToDismissBoxValue.Settled)
+        swipeState.snapTo(SwipeToDismissBoxValue.Settled)
+        addTriggered = false
     }
 
     LaunchedEffect(swipeState) {
@@ -181,13 +187,18 @@ fun SwipeActionCard(
                 .semantics {
                     customActions = listOf(
                         CustomAccessibilityAction(addLabel) {
-                            if (!enabled) false else { onAdd(); true }
+                            if (!enabled || addTriggered || removeTriggered) false
+                            else { addTriggered = true; onAdd(); true }
                         },
                         CustomAccessibilityAction(removeLabel) {
-                            if (!enabled) false else { onRemove(); true }
+                            if (!enabled || addTriggered || removeTriggered) false
+                            else { removeTriggered = true; onRemove(); true }
                         },
                     )
                 },
         )
     }
 }
+
+private fun SwipeActionStatus.isTerminal(): Boolean =
+    this == SwipeActionStatus.SUCCESS || this == SwipeActionStatus.FAILURE

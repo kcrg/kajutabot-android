@@ -6,6 +6,8 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.SizeTransform
@@ -393,12 +395,13 @@ fun PlayerScreen(
         },
     ) { innerPadding ->
         val hasMessage = ui.error != null || ui.info != null
+        val queueBottomClearance = 144.dp
         val emptyQueueMinHeight = with(density) {
             val gaps = (if (hasMessage) 3 else 2) * 16.dp.toPx()
             (viewportHeightPx - nowPlayingHeightPx - queueHeaderHeightPx -
                 (if (hasMessage) messageHeightPx else 0) - gaps -
                 (innerPadding.calculateTopPadding() + 8.dp).toPx() -
-                (innerPadding.calculateBottomPadding() + 24.dp).toPx())
+                (innerPadding.calculateBottomPadding() + queueBottomClearance).toPx())
                 .coerceAtLeast(0f).toDp()
         }
         Box(
@@ -472,7 +475,7 @@ fun PlayerScreen(
                 start = 16.dp,
                 top = innerPadding.calculateTopPadding() + 8.dp,
                 end = 16.dp,
-                bottom = innerPadding.calculateBottomPadding() + 24.dp,
+                bottom = innerPadding.calculateBottomPadding() + queueBottomClearance,
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -550,55 +553,72 @@ fun PlayerScreen(
                 }
             }
 
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth().onSizeChanged { queueHeaderHeightPx = it.height },
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+            item(key = "queue-header") {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().onSizeChanged { queueHeaderHeightPx = it.height },
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Column {
-                            Text(
-                                stringResource(R.string.player_queue_title),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            ui.queue?.takeIf { it.pendingEntriesCount > 0 }?.let { queue ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
                                 Text(
-                                    "${queue.pendingEntriesCount} · ${formatQueueDuration(queue.pendingDurationMilliseconds)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    stringResource(R.string.player_queue_title),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold,
                                 )
+                                ui.queue?.takeIf { it.pendingEntriesCount > 0 }?.let { queue ->
+                                    Text(
+                                        "${queue.pendingEntriesCount} · ${formatQueueDuration(queue.pendingDurationMilliseconds)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            if (pending.isNotEmpty()) {
+                                IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
+                                    Icon(
+                                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_x_outline),
+                                        contentDescription = stringResource(R.string.player_clear_queue),
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                }
                             }
                         }
                         if (pending.isNotEmpty()) {
-                            IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
-                                Icon(
-                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_x_outline),
-                                    contentDescription = stringResource(R.string.player_clear_queue),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                SwipeActionHints()
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_grip_vertical_outline),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Text(
+                                        stringResource(R.string.player_drag_reorder_hint),
+                                        modifier = Modifier.padding(start = 4.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                }
                             }
                         }
                     }
-                    if (pending.isNotEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            SwipeActionHints()
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_grip_vertical_outline),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Text(
-                                    stringResource(R.string.player_drag_reorder_hint),
-                                    modifier = Modifier.padding(start = 4.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
+                    AnimatedVisibility(
+                        visible = !ui.isInitialContentLoading && pending.isEmpty(),
+                        enter = fadeIn(tween(220, delayMillis = 80)) + expandVertically(tween(320)),
+                        exit = fadeOut(tween(150)) + shrinkVertically(tween(280)),
+                        label = "emptyQueueTransition",
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(top = 16.dp)
+                                .heightIn(min = emptyQueueMinHeight),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            EmptyQueueCard(onSearchOpen = onSearchOpen)
                         }
                     }
                 }
@@ -614,22 +634,7 @@ fun PlayerScreen(
                         ),
                     )
                 }
-            } else if (pending.isEmpty()) {
-                item(key = "queue-empty") {
-                    Box(
-                        modifier = Modifier.fillMaxWidth()
-                            .heightIn(min = emptyQueueMinHeight)
-                            .animateItem(
-                                fadeInSpec = motion.defaultEffectsSpec(),
-                                fadeOutSpec = motion.fastEffectsSpec(),
-                                placementSpec = motion.defaultSpatialSpec(),
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        EmptyQueueCard(onSearchOpen = onSearchOpen)
-                    }
-                }
-            } else {
+            } else if (pending.isNotEmpty()) {
                 items(pending, key = { it.entryId }) { entry ->
                     val entryIndex = pendingIndexById[entry.entryId] ?: -1
                     val dragged = draggingEntryId == entry.entryId
@@ -670,52 +675,33 @@ fun PlayerScreen(
                                 else MaterialTheme.colorScheme.surfaceContainer,
                             ),
                         ) {
-                            Box {
-                                ListItem(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                    contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
-                                    leadingContent = {
-                                        TrackArtwork(
-                                            imageUrl = entry.track.artworkUrl,
-                                            modifier = Modifier.size(64.dp),
-                                        )
-                                    },
-                                    supportingContent = {
-                                        Text(formatDuration(entry.track.durationMilliseconds))
-                                    },
-                                    trailingContent = {
-                                        FavoriteTrackButton(
-                                            track = entry.track,
-                                            checked = isFavorite(entry.track),
-                                            status = favoriteStatus(entry.track),
-                                            enabled = !favoritesBusy,
-                                            onToggle = onToggleFavorite,
-                                        )
-                                    },
-                                ) {
-                                    Text(
-                                        entry.track.title,
-                                        modifier = Modifier.semantics {
-                                            customActions = listOf(
-                                                CustomAccessibilityAction(moveUpDescription) {
-                                                    if (entryIndex > 0 && !ui.isMutating && ui.queue != null) {
-                                                        onSwapEntries(entry.entryId, pending[entryIndex - 1].entryId, ui.queue.version)
-                                                    } else false
-                                                },
-                                                CustomAccessibilityAction(moveDownDescription) {
-                                                    if (entryIndex in 0 until pending.lastIndex && !ui.isMutating && ui.queue != null) {
-                                                        onSwapEntries(entry.entryId, pending[entryIndex + 1].entryId, ui.queue.version)
-                                                    } else false
-                                                },
-                                            )
+                            QueueTrackCardContent(
+                                track = entry.track,
+                                position = entryIndex + 1,
+                                titleModifier = Modifier.semantics {
+                                    customActions = listOf(
+                                        CustomAccessibilityAction(moveUpDescription) {
+                                            if (entryIndex > 0 && !ui.isMutating && ui.queue != null) {
+                                                onSwapEntries(entry.entryId, pending[entryIndex - 1].entryId, ui.queue.version)
+                                            } else false
                                         },
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
+                                        CustomAccessibilityAction(moveDownDescription) {
+                                            if (entryIndex in 0 until pending.lastIndex && !ui.isMutating && ui.queue != null) {
+                                                onSwapEntries(entry.entryId, pending[entryIndex + 1].entryId, ui.queue.version)
+                                            } else false
+                                        },
                                     )
-                                }
-                                QueuePositionIndicator(entryIndex + 1, Modifier.align(Alignment.TopEnd))
-                            }
+                                },
+                                trailingContent = {
+                                    FavoriteTrackButton(
+                                        track = entry.track,
+                                        checked = isFavorite(entry.track),
+                                        status = favoriteStatus(entry.track),
+                                        enabled = !favoritesBusy,
+                                        onToggle = onToggleFavorite,
+                                    )
+                                },
+                            )
                         }
                     }
                 }
@@ -790,20 +776,6 @@ fun PlayerScreen(
             )
         }
     }
-}
-
-@Composable
-private fun QueuePositionIndicator(position: Int, modifier: Modifier = Modifier) {
-    val description = stringResource(R.string.player_queue_position, position)
-    Text(
-        text = position.toString(),
-        modifier = modifier
-            .padding(top = 4.dp, end = 4.dp)
-            .semantics { contentDescription = description },
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 @Composable

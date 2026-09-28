@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tryniecki.kajutabot.ui.components.SwipeActionCard
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -58,5 +59,32 @@ class SwipeActionCardTest {
         compose.onNodeWithTag("swipeActionCard").performTouchInput { swipeRight() }
         compose.runOnIdle { status = SwipeActionStatus.FAILURE }
         compose.onNodeWithTag("swipeActionCard").assert(hasStateDescription(compose.activity.getString(R.string.swipe_add_failure)))
+    }
+
+    @Test fun cardAcceptsAnotherSwipeAfterFeedbackResetsDuringReturnAnimation() {
+        var status by mutableStateOf(SwipeActionStatus.IDLE)
+        var addCount = 0
+        compose.setContent {
+            MaterialTheme {
+                SwipeActionCard(
+                    addLabel = "Add", removeLabel = "Remove", enabled = true,
+                    addStatus = status,
+                    onAdd = { addCount++; status = SwipeActionStatus.PENDING },
+                    onRemove = {},
+                ) { modifier -> Box(modifier.fillMaxWidth().height(80.dp)) { Text("Track") } }
+            }
+        }
+
+        compose.onNodeWithTag("swipeActionCard").performTouchInput { swipeRight() }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { status = SwipeActionStatus.SUCCESS }
+        compose.mainClock.advanceTimeBy(100)
+        compose.runOnIdle { status = SwipeActionStatus.IDLE }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("swipeActionCard").performTouchInput { swipeRight() }
+        compose.runOnIdle { assertEquals(2, addCount) }
     }
 }

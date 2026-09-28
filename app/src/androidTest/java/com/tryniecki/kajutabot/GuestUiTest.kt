@@ -15,6 +15,8 @@ import com.tryniecki.kajutabot.ui.player.MiniPlayer
 import com.tryniecki.kajutabot.ui.player.NowPlayingSlide
 import com.tryniecki.kajutabot.ui.player.SearchScreen
 import com.tryniecki.kajutabot.ui.player.SearchUiState
+import com.tryniecki.kajutabot.ui.player.SharedEnqueueStatus
+import com.tryniecki.kajutabot.ui.player.SharedTrackScreen
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
@@ -168,6 +170,28 @@ class GuestUiTest {
 
         compose.onNodeWithText("first query").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals("first query", clicked) }
+    }
+
+    @Test
+    fun sharedPlaylistShowsEveryAddedTrack() {
+        compose.setContent {
+            MaterialTheme {
+                SharedTrackScreen(
+                    status = SharedEnqueueStatus.Added(listOf(
+                        playing.copy(title = "First track"),
+                        playing.copy(contentId = "second", title = "Second track"),
+                    )),
+                    unconfirmed = false,
+                    onClose = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("First track").assertIsDisplayed()
+        compose.onNodeWithText("Second track").assertIsDisplayed()
+        compose.onNodeWithText(compose.activity.getString(R.string.shared_tracks_added_count, 2)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.player_queue_position, 1)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.player_queue_position, 2)).assertIsDisplayed()
     }
 
 }
