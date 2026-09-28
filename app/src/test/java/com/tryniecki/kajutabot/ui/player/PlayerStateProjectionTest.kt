@@ -11,7 +11,7 @@ import org.junit.Test
 
 /**
  * Regression tests for the narrow state projections: each slice must carry
- * exactly its own fields, so typing in AddTrack search can't change the
+ * exactly its own fields, so typing in Search search can't change the
  * player-screen or mini-player slices (and vice versa).
  */
 class PlayerStateProjectionTest {
@@ -83,11 +83,11 @@ class PlayerStateProjectionTest {
         val before = PlayerUiState(
             queue = snapshot(version = 10L),
             searchQuery = "niyola",
-        ).toAddTrackUiState()
+        ).toSearchUiState()
         val after = PlayerUiState(
             queue = snapshot(version = 11L),
             searchQuery = "niyola",
-        ).toAddTrackUiState()
+        ).toSearchUiState()
         assertEquals(before, after)
     }
 
@@ -95,7 +95,7 @@ class PlayerStateProjectionTest {
     fun `search history is carried only by add track slice`() {
         val state = PlayerUiState(searchHistory = listOf("one", "two"))
 
-        assertEquals(listOf("one", "two"), state.toAddTrackUiState().searchHistory)
+        assertEquals(listOf("one", "two"), state.toSearchUiState().searchHistory)
         assertEquals(
             PlayerUiState().toPlayerScreenState(),
             state.toPlayerScreenState(),

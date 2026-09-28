@@ -76,14 +76,14 @@ class SearchResultFormattingTest {
 
     @Test
     fun `does not show empty state while query has not been searched`() {
-        val ui = AddTrackUiState(searchQuery = "demo")
+        val ui = SearchUiState(searchQuery = "demo")
 
         assertFalse(shouldShowSearchEmptyState(ui, "demo", isUrlInput = false))
     }
 
     @Test
     fun `shows empty state only after current query completed with no results`() {
-        val ui = AddTrackUiState(
+        val ui = SearchUiState(
             searchQuery = "demo",
             searchResults = emptyList(),
             lastCompletedSearchQuery = "demo",
@@ -96,7 +96,7 @@ class SearchResultFormattingTest {
 
     @Test
     fun `does not show empty state while search is in progress`() {
-        val ui = AddTrackUiState(
+        val ui = SearchUiState(
             searchQuery = "demo",
             searchResults = emptyList(),
             lastCompletedSearchQuery = "demo",

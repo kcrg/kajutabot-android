@@ -102,7 +102,7 @@ data class PlayerUiState(
     val error: UiText? = null,
     val info: UiText? = null,
     val controlMessage: UiMessage? = null,
-    val addTrackCompleted: Boolean = false,
+    val searchEnqueueCompleted: Boolean = false,
 ) {
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
@@ -150,7 +150,7 @@ data class PlayerEntryState(
     val guildAccessError: UiText? = null,
 )
 
-data class AddTrackUiState(
+data class SearchUiState(
     val searchQuery: String = "",
     val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
     val searchResults: List<SearchItemResponse> = emptyList(),
@@ -160,7 +160,18 @@ data class AddTrackUiState(
     val isMutating: Boolean = false,
     val error: UiText? = null,
     val info: UiText? = null,
-    val addTrackCompleted: Boolean = false,
+    val searchEnqueueCompleted: Boolean = false,
+)
+
+sealed interface SharedEnqueueStatus {
+    data object Loading : SharedEnqueueStatus
+    data class Added(val track: PlaybackTrackResponse) : SharedEnqueueStatus
+    data class Failed(val message: UiText) : SharedEnqueueStatus
+}
+
+data class SharedEnqueueUiState(
+    val requestId: Long? = null,
+    val status: SharedEnqueueStatus? = null,
 )
 
 data class MiniPlayerState(
@@ -200,7 +211,7 @@ fun PlayerUiState.toPlayerEntryState(): PlayerEntryState = PlayerEntryState(
     guildAccessError = guildAccessError,
 )
 
-fun PlayerUiState.toAddTrackUiState(): AddTrackUiState = AddTrackUiState(
+fun PlayerUiState.toSearchUiState(): SearchUiState = SearchUiState(
     searchQuery = searchQuery,
     searchSource = searchSource,
     searchResults = searchResults,
@@ -210,7 +221,7 @@ fun PlayerUiState.toAddTrackUiState(): AddTrackUiState = AddTrackUiState(
     isMutating = isMutating,
     error = error,
     info = info,
-    addTrackCompleted = addTrackCompleted,
+    searchEnqueueCompleted = searchEnqueueCompleted,
 )
 
 fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
@@ -232,6 +243,8 @@ class PlayerViewModel(
 
     private val _ui = MutableStateFlow(PlayerUiState())
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
+    private val _sharedEnqueue = MutableStateFlow(SharedEnqueueUiState())
+    val sharedEnqueueState: StateFlow<SharedEnqueueUiState> = _sharedEnqueue.asStateFlow()
     private val realtimeGuildId = _ui.map { it.selectedGuildId }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.selectedGuildId)
@@ -250,7 +263,7 @@ class PlayerViewModel(
 
     /**
      * Narrow projections so collectors only recompose on their own slice:
-     * typing in AddTrack search must not recompose the hidden Player screen,
+     * typing on the Search screen must not recompose the hidden Player screen,
      * the shell or the MiniPlayer.
      */
 
@@ -264,10 +277,10 @@ class PlayerViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toPlayerScreenState())
 
-    val addTrackState: StateFlow<AddTrackUiState> = _ui
-        .map { it.toAddTrackUiState() }
+    val searchState: StateFlow<SearchUiState> = _ui
+        .map { it.toSearchUiState() }
         .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toAddTrackUiState())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.toSearchUiState())
 
     val miniPlayerState: StateFlow<MiniPlayerState?> = _ui
         .map { it.toMiniPlayerState() }
@@ -365,11 +378,11 @@ class PlayerViewModel(
         }
     }
 
-    fun acknowledgeAddTrackCompleted() {
-        _ui.update { it.copy(addTrackCompleted = false) }
+    fun acknowledgeSearchEnqueueCompleted() {
+        _ui.update { it.copy(searchEnqueueCompleted = false) }
     }
 
-    fun clearAddTrack() {
+    fun clearSearch() {
         searchJob?.cancel()
         _ui.update {
             it.copy(
@@ -379,7 +392,7 @@ class PlayerViewModel(
                 isSearching = false,
                 error = null,
                 info = null,
-                addTrackCompleted = false,
+                searchEnqueueCompleted = false,
             )
         }
     }
@@ -574,10 +587,12 @@ class PlayerViewModel(
     private fun applyQueueSnapshot(
         snapshot: QueueSnapshotResponse,
     ): Boolean {
+        // Enqueue-only result metadata is not part of the shared playback state.
+        val playbackSnapshot = if (snapshot.addedTracks == null) snapshot else snapshot.copy(addedTracks = null)
         var applied = false
         _ui.update { current ->
-            if (shouldApplyQueueSnapshot(current.queue, snapshot, current.selectedGuildId)) {
-                if (current.queue == snapshot) {
+            if (shouldApplyQueueSnapshot(current.queue, playbackSnapshot, current.selectedGuildId)) {
+                if (current.queue == playbackSnapshot) {
                     applied = true
                     return@update current.copy(
                         isLoadingQueue = false,
@@ -587,7 +602,7 @@ class PlayerViewModel(
                 }
                 applied = true
                 current.copy(
-                    queue = snapshot,
+                    queue = playbackSnapshot,
                     isLoadingQueue = false,
                     queueLoadState = QueueLoadState.READY,
                     queueLoadError = null,
@@ -683,6 +698,49 @@ class PlayerViewModel(
         enqueueInputs(listOf(item.input))
     }
 
+    fun enqueueSharedUrl(requestId: Long, url: String) {
+        if (_sharedEnqueue.value.requestId == requestId) return
+        _sharedEnqueue.value = SharedEnqueueUiState(requestId, SharedEnqueueStatus.Loading)
+        viewModelScope.launch {
+            val state = _ui.value
+            val guildId = state.selectedGuildId
+            val channelId = state.selectedVoiceChannelId
+            if (guildId == null || channelId == null) {
+                _sharedEnqueue.update { current ->
+                    if (current.requestId == requestId) {
+                        current.copy(status = SharedEnqueueStatus.Failed(uiText(R.string.player_select_target_to_add)))
+                    } else current
+                }
+                return@launch
+            }
+
+            try {
+                val response = repository.enqueue(
+                    expectedIdentity = sessionIdentity,
+                    guildId = guildId,
+                    request = EnqueueRequest(channelId, listOf(url), state.queue?.version),
+                )
+                applyQueueSnapshot(response)
+                val addedTrack = requireNotNull(response.addedTracks?.firstOrNull()) {
+                    "Successful enqueue response contains no addedTracks"
+                }
+                _sharedEnqueue.update { current ->
+                    if (current.requestId == requestId) {
+                        current.copy(status = SharedEnqueueStatus.Added(addedTrack))
+                    } else current
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                _sharedEnqueue.update { current ->
+                    if (current.requestId == requestId) {
+                        current.copy(status = SharedEnqueueStatus.Failed(userMessageForError(e)))
+                    } else current
+                }
+            }
+        }
+    }
+
     fun enqueueInputs(inputs: List<String>) {
         val guildId = _ui.value.selectedGuildId
         val channelId = _ui.value.selectedVoiceChannelId
@@ -704,10 +762,10 @@ class PlayerViewModel(
                     request = EnqueueRequest(channelId, inputs, version),
                 )
                 applyQueueSnapshot(response)
-                // Query/results stay intact so the AddTrack exit transition renders stable
-                // content; the shell clears them after the AddTrack route closes.
+                // Query/results stay intact so the Search exit transition renders stable
+                // content; the shell clears them after the Search route closes.
                 _ui.update { it.copy(isMutating = false) }
-                _ui.update { it.copy(addTrackCompleted = true) }
+                _ui.update { it.copy(searchEnqueueCompleted = true) }
             } catch (e: Exception) {
                 handleMutationError(e)
             }
@@ -733,6 +791,22 @@ class PlayerViewModel(
         val trackUrl = state.effectiveNowPlaying?.track?.url?.takeIf { it.isNotBlank() } ?: return
         val guildId = state.selectedGuildId ?: return
         val channelId = state.queue?.voiceChannelId ?: state.selectedVoiceChannelId ?: return
+        mutate(controlAction = PlayerControlAction.REQUEUE) { version ->
+            repository.enqueue(
+                expectedIdentity = sessionIdentity,
+                guildId = guildId,
+                request = EnqueueRequest(channelId, listOf(trackUrl), version),
+            )
+        }
+    }
+
+    fun requeueEntry(entryId: String) {
+        val state = _ui.value
+        val queue = state.queue ?: return
+        val trackUrl = queue.pendingEntries.firstOrNull { it.entryId == entryId }
+            ?.track?.url?.takeIf { it.isNotBlank() } ?: return
+        val guildId = state.selectedGuildId ?: return
+        val channelId = queue.voiceChannelId ?: state.selectedVoiceChannelId ?: return
         mutate(controlAction = PlayerControlAction.REQUEUE) { version ->
             repository.enqueue(
                 expectedIdentity = sessionIdentity,
@@ -768,8 +842,12 @@ class PlayerViewModel(
                 if (response.radio.isEnabled) uiText(R.string.player_radio_on) else uiText(R.string.player_radio_off)
             },
         ) { _ ->
-            val queue = _ui.value.queue ?: return@mutate null
-            val guildId = _ui.value.selectedGuildId ?: return@mutate null
+            val guildId = _ui.value.selectedGuildId
+            val queue = _ui.value.queue
+            if (guildId == null || queue == null) {
+                _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }
+                return@mutate null
+            }
             when (val action = decideRadioToggle(queue, _ui.value.selectedVoiceChannelId)) {
                 RadioToggleAction.MissingVoiceChannel -> {
                     _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }

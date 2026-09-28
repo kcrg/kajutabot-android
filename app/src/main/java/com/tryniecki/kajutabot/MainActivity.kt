@@ -43,7 +43,9 @@ class MainActivity : ComponentActivity() {
         )[AppViewModel::class.java]
         splashScreen.setKeepOnScreenCondition { !appViewModel.ui.value.isThemeInitialized }
 
-        handleIntent(intent)
+        // A restored Activity already consumed its launch intent. Replaying ACTION_SEND
+        // would enqueue the same shared track a second time.
+        if (savedInstanceState == null) handleIntent(intent)
 
         setContent {
             val appUi by appViewModel.ui.collectAsStateWithLifecycle()

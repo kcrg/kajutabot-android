@@ -12,7 +12,8 @@ sealed interface AppRoute : NavKey {
     @Serializable data object More : AppRoute
     @Serializable data object Libraries : AppRoute
     @Serializable data object Contact : AppRoute
-    @Serializable data object AddTrack : AppRoute
+    @Serializable data object Search : AppRoute
+    @Serializable data class SharedTrack(val requestId: Long, val url: String) : AppRoute
     @Serializable data object DiscordSelection : AppRoute
 }
 

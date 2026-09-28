@@ -76,15 +76,15 @@ import java.text.NumberFormat
 import java.util.Locale
 
 /**
- * Full-screen modal "add track" page shown above the player.
+ * Full-screen search page shown above the player.
  * Reuses [PlayerViewModel] smart input: URLs enqueue directly, text searches via
  * `GET /search`. Search-result artwork comes exclusively from the backend-provided
  * `SearchItemResponse.track.artworkUrl`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddTrackScreen(
-    ui: AddTrackUiState,
+fun SearchScreen(
+    ui: SearchUiState,
     onClose: () -> Unit,
     onQueryChange: (String) -> Unit,
     onSearchSourceChange: (SearchSourceOption) -> Unit,
@@ -122,7 +122,7 @@ fun AddTrackScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.add_track_title)) },
+                    title = { Text(stringResource(R.string.search_title)) },
                     navigationIcon = {
                         IconButton(onClick = onClose) {
                             Icon(
@@ -186,8 +186,8 @@ fun AddTrackScreen(
                                 ExpressiveLoadingIndicator(modifier = Modifier.size(24.dp))
                             }
                         },
-                        placeholder = { Text(stringResource(R.string.add_track_hint)) },
-                        label = { Text(stringResource(R.string.add_track_title)) },
+                        placeholder = { Text(stringResource(R.string.search_hint)) },
+                        label = { Text(stringResource(R.string.search_title)) },
                         keyboardOptions = KeyboardOptions(
                             imeAction = if (isUrlInput) ImeAction.Go else ImeAction.Search,
                         ),
@@ -352,11 +352,11 @@ fun AddTrackScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            stringResource(R.string.add_track_no_results_title),
+                            stringResource(R.string.search_no_results_title),
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
-                            stringResource(R.string.add_track_no_results_body),
+                            stringResource(R.string.search_no_results_body),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -421,7 +421,7 @@ private fun SearchSourceDropdown(
 }
 
 internal fun shouldShowSearchEmptyState(
-    ui: AddTrackUiState,
+    ui: SearchUiState,
     trimmedQuery: String,
     isUrlInput: Boolean,
 ): Boolean = !ui.isSearching &&

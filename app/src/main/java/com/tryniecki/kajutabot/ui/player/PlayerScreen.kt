@@ -9,6 +9,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedButton
@@ -106,6 +110,8 @@ import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
+import com.tryniecki.kajutabot.ui.components.SwipeActionCard
+import com.tryniecki.kajutabot.ui.components.SwipeActionHints
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
@@ -149,7 +155,7 @@ private enum class PlayerSurfaceState {
 fun PlayerRoute(
     viewModel: PlayerViewModel,
     favoritesViewModel: FavoritesViewModel,
-    onAddTrackOpen: () -> Unit,
+    onSearchOpen: () -> Unit,
     onDiscordSelectionOpen: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -162,6 +168,7 @@ fun PlayerRoute(
         onDiscordSelectionOpen = onDiscordSelectionOpen,
         onSkip = viewModel::skip,
         onRequeueNowPlaying = viewModel::requeueNowPlaying,
+        onRequeueEntry = viewModel::requeueEntry,
         onStop = viewModel::stop,
         onRepeatToggle = { viewModel.setRepeat(ui.queue?.isRepeatEnabled != true) },
         onRadioToggle = viewModel::toggleRadio,
@@ -172,7 +179,7 @@ fun PlayerRoute(
         onToggleFavorite = favoritesViewModel::toggle,
         favoritesBusy = favoritesUi.isFavoriteMutating || favoritesUi.isLoading,
         onDismissMessage = viewModel::dismissMessage,
-        onAddTrackOpen = onAddTrackOpen,
+        onSearchOpen = onSearchOpen,
         onRetryQueue = {
             ui.selectedGuildId?.let(viewModel::refreshQueue)
         },
@@ -182,12 +189,12 @@ fun PlayerRoute(
 }
 
 @Composable
-fun AddTrackRoute(
+fun SearchRoute(
     viewModel: PlayerViewModel,
     favoritesViewModel: FavoritesViewModel,
     onClose: () -> Unit,
 ) {
-    val ui by viewModel.addTrackState.collectAsStateWithLifecycle()
+    val ui by viewModel.searchState.collectAsStateWithLifecycle()
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
 
     var savedQuery by rememberSaveable { mutableStateOf(ui.searchQuery) }
@@ -198,22 +205,22 @@ fun AddTrackRoute(
     // Rehydrate ViewModel search input after process recreation. The route's
     // rememberSaveable state survives because Navigation 3 owns a saveable-state holder.
     LaunchedEffect(Unit) {
-        if (viewModel.addTrackState.value.searchQuery != savedQuery) {
+        if (viewModel.searchState.value.searchQuery != savedQuery) {
             viewModel.setSearchQuery(savedQuery)
         }
-        if (viewModel.addTrackState.value.searchSource != savedSource) {
+        if (viewModel.searchState.value.searchSource != savedSource) {
             viewModel.setSearchSource(savedSource)
         }
     }
 
-    LaunchedEffect(ui.addTrackCompleted) {
-        if (ui.addTrackCompleted) {
-            viewModel.acknowledgeAddTrackCompleted()
+    LaunchedEffect(ui.searchEnqueueCompleted) {
+        if (ui.searchEnqueueCompleted) {
+            viewModel.acknowledgeSearchEnqueueCompleted()
             onClose()
         }
     }
 
-    AddTrackScreen(
+    SearchScreen(
         ui = ui.copy(searchQuery = savedQuery, searchSource = savedSource),
         onClose = onClose,
         onQueryChange = { query ->
@@ -244,6 +251,7 @@ fun PlayerScreen(
     onDiscordSelectionOpen: () -> Unit,
     onSkip: () -> Unit,
     onRequeueNowPlaying: () -> Unit = {},
+    onRequeueEntry: (String) -> Unit = {},
     onStop: () -> Unit,
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,
@@ -254,7 +262,7 @@ fun PlayerScreen(
     onToggleFavorite: (PlaybackTrackResponse) -> Unit,
     favoritesBusy: Boolean,
     onDismissMessage: () -> Unit,
-    onAddTrackOpen: () -> Unit,
+    onSearchOpen: () -> Unit,
     onRetryQueue: () -> Unit = {},
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -284,7 +292,7 @@ fun PlayerScreen(
     var messageHeightPx by remember { mutableIntStateOf(0) }
     var nowPlayingHeightPx by remember { mutableIntStateOf(0) }
     var queueHeaderHeightPx by remember { mutableIntStateOf(0) }
-    val dragHandleBounds = remember { mutableMapOf<String, Rect>() }
+    val dragItemBounds = remember { mutableMapOf<String, Rect>() }
     var previewOrder by remember(ui.queue?.guildId) {
         mutableStateOf<List<QueueEntryResponse>?>(null)
     }
@@ -303,6 +311,7 @@ fun PlayerScreen(
     val density = LocalDensity.current
     val scrollEdgePx = with(density) { 72.dp.toPx() }
     val maxScrollPerFramePx = with(density) { 18.dp.toPx() }
+    val favoriteTouchAreaPx = with(density) { 56.dp.toPx() }
     fun updateDragTarget() {
         val closest = listState.layoutInfo.visibleItemsInfo
             .filter { it.key in pendingEntryIds }
@@ -363,10 +372,10 @@ fun PlayerScreen(
                                 )
                             }
                         }
-                        FloatingActionButton(onClick = onAddTrackOpen) {
+                        FloatingActionButton(onClick = onSearchOpen) {
                             Icon(
                                 painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
-                                contentDescription = stringResource(R.string.action_add_track),
+                                contentDescription = stringResource(R.string.search_title),
                             )
                         }
                     }
@@ -396,8 +405,9 @@ fun PlayerScreen(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val sourceInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
                             val id = info.key as? String
-                            id != null && id in pendingEntryIds &&
-                                dragHandleBounds[id]?.contains(down.position) == true
+                            val bounds = id?.let(dragItemBounds::get)
+                            id != null && id in pendingEntryIds && bounds?.contains(down.position) == true &&
+                                down.position.x < bounds.right - favoriteTouchAreaPx
                         } ?: return@awaitEachGesture
                         val sourceId = sourceInfo.key as String
                         val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
@@ -530,32 +540,54 @@ fun PlayerScreen(
             }
 
             item {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth().onSizeChanged { queueHeaderHeightPx = it.height },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Column {
-                        Text(
-                            stringResource(R.string.player_queue_title),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        ui.queue?.takeIf { it.pendingEntriesCount > 0 }?.let { queue ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
                             Text(
-                                "${queue.pendingEntriesCount} · ${formatQueueDuration(queue.pendingDurationMilliseconds)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                stringResource(R.string.player_queue_title),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
                             )
+                            ui.queue?.takeIf { it.pendingEntriesCount > 0 }?.let { queue ->
+                                Text(
+                                    "${queue.pendingEntriesCount} · ${formatQueueDuration(queue.pendingDurationMilliseconds)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        if (pending.isNotEmpty()) {
+                            IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
+                                Icon(
+                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_x_outline),
+                                    contentDescription = stringResource(R.string.player_clear_queue),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
                     }
-                    if (!ui.queue?.pendingEntries.isNullOrEmpty()) {
-                        IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
-                            Icon(
-                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_x_outline),
-                                contentDescription = stringResource(R.string.player_clear_queue),
-                                tint = MaterialTheme.colorScheme.error,
-                            )
+                    if (pending.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            SwipeActionHints()
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_grip_vertical_outline),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Text(
+                                    stringResource(R.string.player_drag_reorder_hint),
+                                    modifier = Modifier.padding(start = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
                         }
                     }
                 }
@@ -583,7 +615,7 @@ fun PlayerScreen(
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        EmptyQueueCard(onAddTrackOpen = onAddTrackOpen)
+                        EmptyQueueCard(onSearchOpen = onSearchOpen)
                     }
                 }
             } else {
@@ -591,10 +623,14 @@ fun PlayerScreen(
                     val entryIndex = pendingIndexById[entry.entryId] ?: -1
                     val dragged = draggingEntryId == entry.entryId
                     val target = dragTargetIndex == entryIndex
-                    val dragDescription = stringResource(R.string.player_drag_track_a11y, entry.track.title)
                     val moveUpDescription = stringResource(R.string.action_move_up)
                     val moveDownDescription = stringResource(R.string.action_move_down)
-                    Card(
+                    SwipeActionCard(
+                        addLabel = stringResource(R.string.player_requeue_now_playing),
+                        removeLabel = stringResource(R.string.action_remove_from_queue),
+                        enabled = !ui.isMutating && draggingEntryId == null,
+                        onAdd = { onRequeueEntry(entry.entryId) },
+                        onRemove = { onRemoveEntry(entry.entryId) },
                         modifier = Modifier
                             .alpha(if (dragged) 0f else 1f)
                             .animateItem(
@@ -602,102 +638,70 @@ fun PlayerScreen(
                                 fadeOutSpec = motion.fastEffectsSpec(),
                                 placementSpec = motion.fastSpatialSpec(),
                             ),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (target && !dragged) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceContainer,
-                        ),
-                    ) {
-                        ListItem(
-                            verticalAlignment = Alignment.CenterVertically,
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            leadingContent = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .offset(x = -8.dp)
-                                            .testTag("queue-drag-${entry.entryId}")
-                                            .semantics {
-                                                contentDescription = dragDescription
-                                                val index = entryIndex
-                                                customActions = listOf(
-                                                    CustomAccessibilityAction(moveUpDescription) {
-                                                        if (index > 0 && !ui.isMutating && ui.queue != null) {
-                                                            onSwapEntries(entry.entryId, pending[index - 1].entryId, ui.queue.version)
-                                                        } else false
-                                                    },
-                                                    CustomAccessibilityAction(moveDownDescription) {
-                                                        if (index in 0 until pending.lastIndex && !ui.isMutating && ui.queue != null) {
-                                                            onSwapEntries(entry.entryId, pending[index + 1].entryId, ui.queue.version)
-                                                        } else false
-                                                    },
-                                                )
-                                            }
-                                            .onGloballyPositioned { coordinates ->
-                                                val origin = listCoordinates?.boundsInRoot()?.topLeft ?: return@onGloballyPositioned
-                                                val bounds = coordinates.boundsInRoot()
-                                                dragHandleBounds[entry.entryId] = Rect(
-                                                    bounds.left - origin.x,
-                                                    bounds.top - origin.y,
-                                                    bounds.right - origin.x,
-                                                    bounds.bottom - origin.y,
-                                                )
-                                            },
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_grip_vertical_outline),
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(20.dp),
-                                            )
-                                            Text(
-                                                text = "${entryIndex + 1}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary,
-                                            )
-                                        }
-                                    }
-                                    TrackArtwork(
-                                        imageUrl = entry.track.artworkUrl,
-                                        modifier = Modifier.size(56.dp),
+                    ) { foregroundModifier ->
+                        Card(
+                            modifier = foregroundModifier.fillMaxWidth()
+                                .testTag("queue-drag-${entry.entryId}")
+                                .onGloballyPositioned { coordinates ->
+                                    val origin = listCoordinates?.boundsInRoot()?.topLeft ?: return@onGloballyPositioned
+                                    val bounds = coordinates.boundsInRoot()
+                                    dragItemBounds[entry.entryId] = Rect(
+                                        bounds.left - origin.x,
+                                        bounds.top - origin.y,
+                                        bounds.right - origin.x,
+                                        bounds.bottom - origin.y,
                                     )
-                                }
-                            },
-                            supportingContent = {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (target && !dragged) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceContainer,
+                            ),
+                        ) {
+                            Box {
+                                ListItem(
                                     verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(formatDuration(entry.track.durationMilliseconds))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+                                    leadingContent = {
+                                        TrackArtwork(
+                                            imageUrl = entry.track.artworkUrl,
+                                            modifier = Modifier.size(64.dp),
+                                        )
+                                    },
+                                    supportingContent = {
+                                        Text(formatDuration(entry.track.durationMilliseconds))
+                                    },
+                                    trailingContent = {
                                         FavoriteTrackButton(
                                             track = entry.track,
                                             checked = isFavorite(entry.track),
                                             enabled = !favoritesBusy,
                                             onToggle = onToggleFavorite,
                                         )
-                                        IconButton(
-                                            onClick = { onRemoveEntry(entry.entryId) },
-                                            enabled = !ui.isMutating,
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline),
-                                                contentDescription = stringResource(R.string.action_remove_from_queue),
-                                                tint = MaterialTheme.colorScheme.error,
+                                    },
+                                ) {
+                                    Text(
+                                        entry.track.title,
+                                        modifier = Modifier.semantics {
+                                            customActions = listOf(
+                                                CustomAccessibilityAction(moveUpDescription) {
+                                                    if (entryIndex > 0 && !ui.isMutating && ui.queue != null) {
+                                                        onSwapEntries(entry.entryId, pending[entryIndex - 1].entryId, ui.queue.version)
+                                                    } else false
+                                                },
+                                                CustomAccessibilityAction(moveDownDescription) {
+                                                    if (entryIndex in 0 until pending.lastIndex && !ui.isMutating && ui.queue != null) {
+                                                        onSwapEntries(entry.entryId, pending[entryIndex + 1].entryId, ui.queue.version)
+                                                    } else false
+                                                },
                                             )
-                                        }
-                                    }
+                                        },
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
-                            },
-                        ) {
-                            Text(
-                                entry.track.title,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                                QueuePositionIndicator(entryIndex + 1, Modifier.align(Alignment.TopEnd))
+                            }
                         }
                     }
                 }
@@ -715,22 +719,30 @@ fun PlayerScreen(
                         .shadow(8.dp, RoundedCornerShape(12.dp)),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 ) {
-                    ListItem(
-                        modifier = Modifier.fillMaxSize(),
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        leadingContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_grip_vertical_outline),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                    Box {
+                        ListItem(
+                            modifier = Modifier.fillMaxSize(),
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+                            leadingContent = {
+                                TrackArtwork(draggedEntry.track.artworkUrl, modifier = Modifier.size(64.dp))
+                            },
+                            supportingContent = { Text(formatDuration(draggedEntry.track.durationMilliseconds)) },
+                            trailingContent = {
+                                FavoriteTrackButton(
+                                    track = draggedEntry.track,
+                                    checked = isFavorite(draggedEntry.track),
+                                    enabled = false,
+                                    onToggle = onToggleFavorite,
                                 )
-                                TrackArtwork(draggedEntry.track.artworkUrl, modifier = Modifier.size(56.dp))
-                            }
-                        },
-                        supportingContent = { Text(formatDuration(draggedEntry.track.durationMilliseconds)) },
-                    ) {
-                        Text(draggedEntry.track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            },
+                        ) {
+                            Text(draggedEntry.track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        QueuePositionIndicator(
+                            pendingIndexById.getValue(draggedEntry.entryId) + 1,
+                            Modifier.align(Alignment.TopEnd),
+                        )
                     }
                 }
             }
@@ -766,6 +778,20 @@ fun PlayerScreen(
 }
 
 @Composable
+private fun QueuePositionIndicator(position: Int, modifier: Modifier = Modifier) {
+    val description = stringResource(R.string.player_queue_position, position)
+    Text(
+        text = position.toString(),
+        modifier = modifier
+            .padding(top = 4.dp, end = 4.dp)
+            .semantics { contentDescription = description },
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
 private fun NowPlayingCard(
     queue: QueueSnapshotResponse?,
     presentedNowPlaying: NowPlayingPresentation?,
@@ -785,6 +811,8 @@ private fun NowPlayingCard(
 ) {
     val repeatEnabled = queue?.isRepeatEnabled == true
     val radioEnabled = queue?.radio?.isEnabled == true
+    val activeTrack = queue?.nowPlaying
+    val hasActivePlayback = activeTrack != null
     val motion = MaterialTheme.motionScheme
     val currentSlide = nowPlayingSlide(
         presentation = presentedNowPlaying,
@@ -887,20 +915,18 @@ private fun NowPlayingCard(
                 }
             }
 
-            if (presentedNowPlaying != null) {
-                OutlinedButton(
-                    onClick = onRequeueNowPlaying,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = queue != null && activeControlAction != PlayerControlAction.REQUEUE,
-                ) {
-                    Icon(
-                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.player_requeue_now_playing))
-                }
+            OutlinedButton(
+                onClick = onRequeueNowPlaying,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = hasActivePlayback && activeControlAction != PlayerControlAction.REQUEUE,
+            ) {
+                Icon(
+                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.player_requeue_now_playing))
             }
 
             Row(
@@ -908,19 +934,23 @@ private fun NowPlayingCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (queue?.nowPlaying != null) OutlinedIconButton(
+                OutlinedIconButton(
                     onClick = onStop,
-                    enabled = !playbackControlsBlocked,
+                    enabled = hasActivePlayback && !playbackControlsBlocked,
                 ) {
                     Icon(
                         painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_stop_outline),
                         contentDescription = stringResource(R.string.action_stop),
-                        tint = MaterialTheme.colorScheme.error,
+                        tint = if (hasActivePlayback && !playbackControlsBlocked) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            LocalContentColor.current
+                        },
                     )
                 }
                 FilledIconButton(
                     onClick = onSkip,
-                    enabled = !playbackControlsBlocked && presentedNowPlaying != null,
+                    enabled = hasActivePlayback && !playbackControlsBlocked,
                     modifier = Modifier.size(56.dp),
                 ) {
                     Icon(
@@ -934,7 +964,7 @@ private fun NowPlayingCard(
                     iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_repeat_outline,
                     checkedContentDescription = stringResource(R.string.player_repeat_disable),
                     uncheckedContentDescription = stringResource(R.string.player_repeat_enable),
-                    enabled = !playbackControlsBlocked && queue != null,
+                    enabled = hasActivePlayback && !playbackControlsBlocked,
                 )
                 TonalToggleIconButton(
                     checked = radioEnabled,
@@ -942,14 +972,23 @@ private fun NowPlayingCard(
                     iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline,
                     checkedContentDescription = stringResource(R.string.player_radio_disable),
                     uncheckedContentDescription = stringResource(R.string.player_radio_enable),
-                    enabled = !playbackControlsBlocked && queue != null,
+                    enabled = true,
                 )
-                presentedNowPlaying?.track?.let { track ->
+                if (activeTrack != null) {
                     FavoriteTrackButton(
-                        track = track,
-                        checked = isFavorite(track),
+                        track = activeTrack,
+                        checked = isFavorite(activeTrack),
                         enabled = !favoritesBusy,
                         onToggle = onToggleFavorite,
+                    )
+                } else {
+                    TonalToggleIconButton(
+                        checked = false,
+                        onCheckedChange = {},
+                        iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_heart_outline,
+                        checkedContentDescription = stringResource(R.string.action_remove_favorite),
+                        uncheckedContentDescription = stringResource(R.string.action_add_favorite),
+                        enabled = false,
                     )
                 }
             }
@@ -962,7 +1001,6 @@ private fun SmoothArtworkGlow(
     slide: NowPlayingSlide,
     modifier: Modifier = Modifier,
 ) {
-    val motion = MaterialTheme.motionScheme
     val fallbackAccent = lerp(
         MaterialTheme.colorScheme.primary,
         Color.White,
@@ -971,22 +1009,23 @@ private fun SmoothArtworkGlow(
 
     AnimatedContent(
         targetState = slide,
-        contentKey = { it.identity },
+        contentKey = { it.identity to it.artworkAccentColor },
         transitionSpec = {
-            fadeThrough(
-                enterSpec = motion.slowEffectsSpec(),
-                exitSpec = motion.slowEffectsSpec(),
+            fadeIn(
+                animationSpec = tween(durationMillis = 480, delayMillis = 400, easing = FastOutSlowInEasing),
+            ) togetherWith fadeOut(
+                animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
             )
         },
         modifier = modifier,
         label = "nowPlayingGlow",
     ) { current ->
-        if (!current.hasTrack) return@AnimatedContent
-
-        AccentArtworkGlow(
-            accent = current.artworkAccentColor.toArtworkAccentColor() ?: fallbackAccent,
-            modifier = Modifier.fillMaxSize(),
-        )
+        if (current.hasTrack) {
+            AccentArtworkGlow(
+                accent = current.artworkAccentColor.toArtworkAccentColor() ?: fallbackAccent,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
@@ -1050,7 +1089,7 @@ private fun AccentArtworkGlow(
                     edgeTreatment = BlurredEdgeTreatment.Unbounded,
                 )
                 .background(
-                    color = accent.copy(alpha = 0.15f),
+                    color = accent.copy(alpha = 0.24f),
                     shape = RoundedCornerShape(14.dp),
                 ),
         )
@@ -1058,7 +1097,7 @@ private fun AccentArtworkGlow(
 }
 
 @Composable
-private fun EmptyQueueCard(onAddTrackOpen: () -> Unit, modifier: Modifier = Modifier) {
+private fun EmptyQueueCard(onSearchOpen: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
@@ -1084,7 +1123,7 @@ private fun EmptyQueueCard(onAddTrackOpen: () -> Unit, modifier: Modifier = Modi
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button(onClick = onAddTrackOpen) {
+            Button(onClick = onSearchOpen) {
                 Text(stringResource(R.string.action_add_track))
             }
         }
@@ -1120,6 +1159,7 @@ private fun NowPlayingSkeletonCard() {
                 Modifier.fillMaxWidth().height(6.dp),
                 RoundedCornerShape(999.dp),
             )
+            SkeletonBlock(pulse, Modifier.fillMaxWidth().height(40.dp), RoundedCornerShape(999.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
@@ -1127,6 +1167,7 @@ private fun NowPlayingSkeletonCard() {
             ) {
                 SkeletonBlock(pulse, Modifier.size(40.dp), RoundedCornerShape(999.dp))
                 SkeletonBlock(pulse, Modifier.size(56.dp), RoundedCornerShape(999.dp))
+                SkeletonBlock(pulse, Modifier.size(40.dp), RoundedCornerShape(999.dp))
                 SkeletonBlock(pulse, Modifier.size(40.dp), RoundedCornerShape(999.dp))
                 SkeletonBlock(pulse, Modifier.size(40.dp), RoundedCornerShape(999.dp))
             }

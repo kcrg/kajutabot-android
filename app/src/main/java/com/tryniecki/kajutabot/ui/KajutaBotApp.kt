@@ -95,7 +95,8 @@ import com.tryniecki.kajutabot.ui.player.MiniPlayerState
 import com.tryniecki.kajutabot.ui.player.PlayerRoute
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.RealtimeOwner
-import com.tryniecki.kajutabot.ui.player.AddTrackRoute
+import com.tryniecki.kajutabot.ui.player.SearchRoute
+import com.tryniecki.kajutabot.ui.player.SharedTrackRoute
 import com.tryniecki.kajutabot.ui.player.DiscordSelectionRoute
 import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
 import com.tryniecki.kajutabot.ui.text.UiText
@@ -352,9 +353,10 @@ private fun AuthenticatedContent(
         AppDestination.MORE -> moreBackStack
     }
     val currentRoute = activeBackStack.lastOrNull() as? AppRoute ?: AppRoute.Player
-    val isAddTrackOpen = currentRoute == AppRoute.AddTrack
+    val isSearchOpen = currentRoute == AppRoute.Search
+    val isSharedTrackOpen = currentRoute is AppRoute.SharedTrack
     val isDiscordSelectionOpen = currentRoute == AppRoute.DiscordSelection
-    val isFullScreenDetailOpen = isAddTrackOpen || isDiscordSelectionOpen
+    val isFullScreenDetailOpen = isSearchOpen || isSharedTrackOpen || isDiscordSelectionOpen
 
     fun popActiveBackStack() {
         if (activeBackStack.size > 1) {
@@ -383,7 +385,7 @@ private fun AuthenticatedContent(
         factory = FavoritesViewModel.factory(container),
     )
     // Narrow slices: the shell only needs the mini-player state, the error
-    // line and the polling keys — typing in AddTrack search must not
+    // line and the polling keys — typing on the Search screen must not
     // recompose the shell or the MiniPlayer.
     val miniPlayerState by playerViewModel.miniPlayerState.collectAsStateWithLifecycle()
     val remotePlaybackActive by playerViewModel.remotePlaybackActive.collectAsStateWithLifecycle()
@@ -421,12 +423,9 @@ private fun AuthenticatedContent(
 
     LaunchedEffect(appUi.pendingSharedUrl) {
         val url = appUi.pendingSharedUrl ?: return@LaunchedEffect
-        playerViewModel.setSearchQuery(url)
         currentDestination = AppDestination.PLAYER
-        if (playerBackStack.lastOrNull() != AppRoute.AddTrack) {
-            while (playerBackStack.size > 1) playerBackStack.removeLastOrNull()
-            playerBackStack.add(AppRoute.AddTrack)
-        }
+        while (playerBackStack.size > 1) playerBackStack.removeLastOrNull()
+        playerBackStack.add(AppRoute.SharedTrack(System.nanoTime(), url))
         appViewModel.clearPendingSharedUrl()
     }
 
@@ -466,9 +465,9 @@ private fun AuthenticatedContent(
                 PlayerRoute(
                     viewModel = playerViewModel,
                     favoritesViewModel = favoritesViewModel,
-                    onAddTrackOpen = {
-                        if (playerBackStack.lastOrNull() != AppRoute.AddTrack) {
-                            playerBackStack.add(AppRoute.AddTrack)
+                    onSearchOpen = {
+                        if (playerBackStack.lastOrNull() != AppRoute.Search) {
+                            playerBackStack.add(AppRoute.Search)
                         }
                     },
                     onDiscordSelectionOpen = {
@@ -509,15 +508,23 @@ private fun AuthenticatedContent(
             entry<AppRoute.Contact>(metadata = navigationMotionMetadata(AppDestination.MORE)) {
                 ContactScreen(onBack = { popActiveBackStack() })
             }
-            entry<AppRoute.AddTrack>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
+            entry<AppRoute.Search>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
                 // Disposal follows the actual Navigation 3 exit transition,
                 // including system and predictive Back.
                 DisposableEffect(Unit) {
-                    onDispose { playerViewModel.clearAddTrack() }
+                    onDispose { playerViewModel.clearSearch() }
                 }
-                AddTrackRoute(
+                SearchRoute(
                     viewModel = playerViewModel,
                     favoritesViewModel = favoritesViewModel,
+                    onClose = { popActiveBackStack() },
+                )
+            }
+            entry<AppRoute.SharedTrack>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) { route ->
+                SharedTrackRoute(
+                    viewModel = playerViewModel,
+                    requestId = route.requestId,
+                    url = route.url,
                     onClose = { popActiveBackStack() },
                 )
             }
@@ -561,7 +568,7 @@ private fun AuthenticatedContent(
             modifier = Modifier.fillMaxSize(),
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
-                // Full-screen AddTrack / Discord selection: no tabs reachable underneath.
+                // Full-screen detail routes: no tabs reachable underneath.
                 if (!isFullScreenDetailOpen) {
                     Column {
                         AnimatedVisibility(

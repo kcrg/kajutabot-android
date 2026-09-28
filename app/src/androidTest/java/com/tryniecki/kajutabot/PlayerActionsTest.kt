@@ -72,7 +72,7 @@ class PlayerActionsTest {
                     onSkip = {}, onStop = { stops++ }, onRepeatToggle = {}, onRadioToggle = {},
                     onRemoveEntry = {}, onSwapEntries = { _, _, _ -> true }, onClearQueue = { clears++ },
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
-                    onDismissMessage = {}, onAddTrackOpen = {},
+                    onDismissMessage = {}, onSearchOpen = {},
                 )
             }
         }
@@ -102,7 +102,7 @@ class PlayerActionsTest {
                         moved = Triple(first, second, version)
                         true
                     }, onClearQueue = {}, isFavorite = { false }, onToggleFavorite = {},
-                    favoritesBusy = false, onDismissMessage = {}, onAddTrackOpen = {},
+                    favoritesBusy = false, onDismissMessage = {}, onSearchOpen = {},
                 )
             }
         }

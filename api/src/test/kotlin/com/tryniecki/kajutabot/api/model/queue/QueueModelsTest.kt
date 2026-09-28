@@ -19,6 +19,17 @@ class QueueModelsTest {
         assertEquals(0L, response.playbackPositionMilliseconds)
         assertEquals("/api/v1/artwork/x", response.nowPlaying?.artworkUrl)
         assertEquals(null, response.nowPlayingStartedAt)
+        assertEquals(null, response.addedTracks)
+    }
+
+    @Test
+    fun `enqueue response reads added track independently of playback and pending entries`() {
+        val response = Json.decodeFromString<QueueSnapshotResponse>(
+            """{"guildId":"g","voiceChannelId":"c","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[{"entryId":"entry-1","position":1,"track":{"contentId":"pending","contentType":"YouTube","title":"Pending track","url":"https://example.com/pending","durationMilliseconds":120000,"artworkUrl":null,"playCount":0}}],"pendingEntriesCount":1,"pendingDurationMilliseconds":120000,"version":4,"addedTracks":[{"contentId":"shared","contentType":"YouTube","title":"Shared track","url":"https://example.com/shared","durationMilliseconds":130000,"artworkUrl":"/api/v1/app/artwork/YouTube/shared","playCount":0,"artworkAccentColor":null}]}""",
+        )
+        assertEquals("Pending track", response.pendingEntries.single().track.title)
+        assertEquals("Shared track", response.addedTracks?.single()?.title)
+        assertEquals("/api/v1/app/artwork/YouTube/shared", response.addedTracks?.single()?.artworkUrl)
     }
 
     @Test

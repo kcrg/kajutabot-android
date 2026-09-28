@@ -6,13 +6,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
-import androidx.compose.foundation.gestures.AnchoredDraggableState
-import androidx.compose.foundation.gestures.DraggableAnchors
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.anchoredDraggable
-import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,14 +14,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -41,7 +32,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,28 +39,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
+import com.tryniecki.kajutabot.ui.components.SwipeActionCard
+import com.tryniecki.kajutabot.ui.components.SwipeActionHints
 import com.tryniecki.kajutabot.ui.text.asString
 import com.tryniecki.kajutabot.ui.text.resolve
 import com.tryniecki.kajutabot.ui.text.UiText
@@ -81,9 +65,6 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
-import kotlin.math.roundToInt
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.filter
 
 
 @Composable
@@ -240,93 +221,20 @@ fun FavoritesScreen(
                 items(ui.favorites, key = { it.contentUrl }) { fav ->
                     val addLabel = stringResource(R.string.action_add_to_queue)
                     val removeLabel = stringResource(R.string.action_remove_favorite)
-                    val revealWidth = with(LocalDensity.current) { (48.dp + 32.dp).toPx() }
-                    val swipeState = remember(revealWidth) {
-                        AnchoredDraggableState(
-                            initialValue = SwipeToDismissBoxValue.Settled,
-                            anchors = DraggableAnchors {
-                                SwipeToDismissBoxValue.EndToStart at -revealWidth
-                                SwipeToDismissBoxValue.Settled at 0f
-                                SwipeToDismissBoxValue.StartToEnd at revealWidth
-                            },
-                        )
-                    }
-                    val flingBehavior = AnchoredDraggableDefaults.flingBehavior(
-                        state = swipeState,
-                        positionalThreshold = { revealWidth / 2f },
-                    )
-                    val isMutating = rememberUpdatedState(ui.isMutating)
-                    val playSingle = rememberUpdatedState(onPlaySingle)
-                    val deleteFavorite = rememberUpdatedState(onDelete)
-                    LaunchedEffect(swipeState, fav.contentUrl) {
-                        snapshotFlow { swipeState.settledValue }
-                            .filter { it != SwipeToDismissBoxValue.Settled }
-                            .collect { direction ->
-                                if (!isMutating.value) when (direction) {
-                                    SwipeToDismissBoxValue.StartToEnd -> playSingle.value(fav.contentUrl)
-                                    SwipeToDismissBoxValue.EndToStart -> deleteFavorite.value(fav.contentUrl)
-                                    SwipeToDismissBoxValue.Settled -> Unit
-                                }
-                                swipeState.animateTo(SwipeToDismissBoxValue.Settled)
-                            }
-                    }
-                    Box(
+                    SwipeActionCard(
+                        addLabel = addLabel,
+                        removeLabel = removeLabel,
+                        enabled = !ui.isMutating,
+                        onAdd = { onPlaySingle(fav.contentUrl) },
+                        onRemove = { onDelete(fav.contentUrl) },
                         modifier = Modifier.animateItem(
                             fadeInSpec = motion.fastEffectsSpec(),
                             fadeOutSpec = motion.fastEffectsSpec(),
                             placementSpec = motion.fastSpatialSpec(),
-                        ).clip(MaterialTheme.shapes.medium).anchoredDraggable(
-                            state = swipeState,
-                            orientation = Orientation.Horizontal,
-                            enabled = !ui.isMutating && swipeState.settledValue == SwipeToDismissBoxValue.Settled,
-                            flingBehavior = flingBehavior,
                         ),
-                    ) {
-                        val removing = swipeState.requireOffset() < 0f
-                        Row(
-                            modifier = Modifier.matchParentSize()
-                                .background(
-                                    if (removing) MaterialTheme.colorScheme.errorContainer
-                                    else MaterialTheme.colorScheme.secondaryContainer,
-                                )
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = if (removing) Arrangement.End else Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                modifier = Modifier.size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (removing) MaterialTheme.colorScheme.error
-                                        else MaterialTheme.colorScheme.secondary,
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    painter = painterResource(
-                                        if (removing) com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline
-                                        else com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline,
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(24.dp),
-                                    tint = if (removing) MaterialTheme.colorScheme.onError
-                                        else MaterialTheme.colorScheme.onSecondary,
-                                )
-                            }
-                        }
+                    ) { foregroundModifier ->
                         Card(
-                            modifier = Modifier.fillMaxWidth()
-                                .offset { IntOffset(swipeState.requireOffset().roundToInt(), 0) }
-                                .semantics {
-                                    customActions = listOf(
-                                        CustomAccessibilityAction(addLabel) {
-                                            if (ui.isMutating) false else { onPlaySingle(fav.contentUrl); true }
-                                        },
-                                        CustomAccessibilityAction(removeLabel) {
-                                            if (ui.isMutating) false else { onDelete(fav.contentUrl); true }
-                                        },
-                                    )
-                                },
+                            modifier = foregroundModifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
                             ),
@@ -381,32 +289,7 @@ private fun FavoritesHeader(ui: FavoritesUiState, onRefresh: () -> Unit) {
             }
         }
         if (ui.favorites.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        stringResource(R.string.favorites_swipe_queue_hint),
-                        modifier = Modifier.padding(start = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline),
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        stringResource(R.string.favorites_swipe_remove_hint),
-                        modifier = Modifier.padding(start = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-            }
+            SwipeActionHints()
         }
     }
 }

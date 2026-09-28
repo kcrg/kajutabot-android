@@ -13,8 +13,8 @@ import com.tryniecki.kajutabot.ui.player.PlayerScreen
 import com.tryniecki.kajutabot.ui.player.PlayerScreenState
 import com.tryniecki.kajutabot.ui.player.MiniPlayer
 import com.tryniecki.kajutabot.ui.player.NowPlayingSlide
-import com.tryniecki.kajutabot.ui.player.AddTrackScreen
-import com.tryniecki.kajutabot.ui.player.AddTrackUiState
+import com.tryniecki.kajutabot.ui.player.SearchScreen
+import com.tryniecki.kajutabot.ui.player.SearchUiState
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
@@ -72,7 +72,7 @@ class GuestUiTest {
                     onSkip = {}, onStop = {}, onRepeatToggle = {}, onRadioToggle = {},
                     onRemoveEntry = {}, onSwapEntries = { _, _, _ -> true }, onClearQueue = {},
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
-                    onDismissMessage = {}, onAddTrackOpen = {},
+                    onDismissMessage = {}, onSearchOpen = {},
                 )
             }
         }
@@ -89,7 +89,7 @@ class GuestUiTest {
                     onSkip = {}, onStop = {}, onRepeatToggle = {}, onRadioToggle = {},
                     onRemoveEntry = {}, onSwapEntries = { _, _, _ -> true }, onClearQueue = {},
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
-                    onDismissMessage = {}, onAddTrackOpen = {},
+                    onDismissMessage = {}, onSearchOpen = {},
                 )
             }
         }
@@ -101,7 +101,7 @@ class GuestUiTest {
         compose.setContent {
             MaterialTheme {
                 MiniPlayer(
-                    slide = NowPlayingSlide("demo", true, "Demo", null, null, 60_000, null),
+                    slide = NowPlayingSlide("demo", true, "Demo", null, null, 60_000, null, false),
                     track = playing,
                     isMutating = false,
                     isQueueReordering = false,
@@ -118,11 +118,11 @@ class GuestUiTest {
     }
 
     @Test
-    fun addTrackSearchResultShowsFavoriteAction() {
+    fun searchSearchResultShowsFavoriteAction() {
         compose.setContent {
             MaterialTheme {
-                AddTrackScreen(
-                    ui = AddTrackUiState(searchQuery = "Demo", searchResults = listOf(
+                SearchScreen(
+                    ui = SearchUiState(searchQuery = "Demo", searchResults = listOf(
                         SearchItemResponse(
                             input = "Demo",
                             track = com.tryniecki.kajutabot.api.model.common.SearchTrackResponse(
@@ -145,13 +145,13 @@ class GuestUiTest {
     }
 
     @Test
-    fun addTrackShowsAndUsesSearchHistoryWhenQueryIsEmpty() {
+    fun searchShowsAndUsesSearchHistoryWhenQueryIsEmpty() {
         var clicked: String? = null
 
         compose.setContent {
             MaterialTheme {
-                AddTrackScreen(
-                    ui = AddTrackUiState(searchHistory = listOf("first query", "second query")),
+                SearchScreen(
+                    ui = SearchUiState(searchHistory = listOf("first query", "second query")),
                     onClose = {},
                     onQueryChange = {},
                     onSearchSourceChange = {},

@@ -27,6 +27,7 @@ data class QueueSnapshotResponse(
     val playbackPositionMilliseconds: Long? = null,
     val isRepeatEnabled: Boolean = false,
     val skipOutcome: SkipOutcome? = null,
+    val addedTracks: List<PlaybackTrackResponse>? = null,
 )
 
 @Serializable
