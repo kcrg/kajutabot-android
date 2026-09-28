@@ -55,6 +55,7 @@ import com.tryniecki.kajutabot.ui.components.TrackListCardContent
 import com.tryniecki.kajutabot.ui.components.ActionFeedbackIcon
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
+import com.tryniecki.kajutabot.ui.components.visibleSwipeItems
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -93,6 +94,11 @@ fun FavoritesScreen(
         DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)
     }
     val showFloatingAction = rememberScrollAwareFabVisible(listState)
+    val visibleItems = visibleSwipeItems(
+        items = ui.favorites,
+        retainedItems = ui.retainedDeletedFavorites.values,
+        identity = { favoriteIdentity(it.contentUrl) },
+    )
 
     Scaffold(
         floatingActionButton = {
@@ -150,7 +156,7 @@ fun FavoritesScreen(
             }
         },
     ) { innerPadding ->
-        if (!ui.isLoading && ui.favorites.isEmpty()) {
+        if (!ui.isLoading && visibleItems.isEmpty()) {
             Column(
                 modifier = Modifier.fillMaxSize().padding(
                     start = 12.dp,
@@ -159,7 +165,7 @@ fun FavoritesScreen(
                     bottom = innerPadding.calculateBottomPadding() + 24.dp,
                 ),
             ) {
-                FavoritesHeader(ui, onRefresh)
+                FavoritesHeader(ui, onRefresh, hasVisibleItems = false)
                 if (ui.error != null) {
                     FavoritesErrorCard(ui.error, onDismiss)
                 }
@@ -183,14 +189,14 @@ fun FavoritesScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                FavoritesHeader(ui, onRefresh)
+                FavoritesHeader(ui, onRefresh, hasVisibleItems = visibleItems.isNotEmpty())
             }
             if (ui.error != null) {
                 item {
                     FavoritesErrorCard(ui.error, onDismiss)
                 }
             }
-            if (ui.isLoading && ui.favorites.isEmpty()) {
+            if (ui.isLoading && visibleItems.isEmpty()) {
                 items(4, key = { "favorite-skeleton-$it" }) {
                     FavoriteSkeletonCard(
                         modifier = Modifier.animateItem(
@@ -201,13 +207,14 @@ fun FavoritesScreen(
                     )
                 }
             } else {
-                items(ui.favorites, key = { it.contentUrl }) { fav ->
+                items(visibleItems, key = { it.contentUrl }) { fav ->
                     val addLabel = stringResource(R.string.action_add_to_queue)
                     val removeLabel = stringResource(R.string.action_remove_favorite)
                     SwipeActionCard(
                         addLabel = addLabel,
                         removeLabel = removeLabel,
-                        enabled = ui.favoriteStatuses[favoriteIdentity(fav.contentUrl)] == null,
+                        enabled = ui.favoriteStatuses[favoriteIdentity(fav.contentUrl)] != SwipeActionStatus.PENDING &&
+                            favoriteIdentity(fav.contentUrl) !in ui.retainedDeletedFavorites,
                         addStatus = ui.queueStatuses[fav.contentUrl] ?: SwipeActionStatus.IDLE,
                         removeStatus = ui.favoriteStatuses[favoriteIdentity(fav.contentUrl)] ?: SwipeActionStatus.IDLE,
                         onAdd = { onPlaySingle(fav.contentUrl) },
@@ -258,7 +265,7 @@ fun FavoritesScreen(
 }
 
 @Composable
-private fun FavoritesHeader(ui: FavoritesUiState, onRefresh: () -> Unit) {
+private fun FavoritesHeader(ui: FavoritesUiState, onRefresh: () -> Unit, hasVisibleItems: Boolean) {
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -270,7 +277,7 @@ private fun FavoritesHeader(ui: FavoritesUiState, onRefresh: () -> Unit) {
                 Text(stringResource(R.string.action_refresh))
             }
         }
-        if (ui.favorites.isNotEmpty()) {
+        if (hasVisibleItems) {
             SwipeActionHints()
         }
     }

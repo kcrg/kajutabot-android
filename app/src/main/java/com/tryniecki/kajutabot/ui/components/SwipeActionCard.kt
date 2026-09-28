@@ -48,6 +48,8 @@ import kotlinx.coroutines.delay
 
 enum class SwipeActionStatus { IDLE, PENDING, SUCCESS, FAILURE }
 
+const val SWIPE_RESULT_HOLD_MS = 900L
+
 /** Shared, bounded swipe actions for Favorites and pending queue cards. */
 @Composable
 fun SwipeActionCard(
@@ -96,7 +98,7 @@ fun SwipeActionCard(
     LaunchedEffect(removeTriggered) {
         if (!removeTriggered) return@LaunchedEffect
         snapshotFlow { currentRemoveStatus.value }.first { it.isTerminal() }
-        delay(900)
+        delay(SWIPE_RESULT_HOLD_MS)
         swipeState.animateTo(SwipeToDismissBoxValue.Settled)
         swipeState.snapTo(SwipeToDismissBoxValue.Settled)
         removeTriggered = false
@@ -105,7 +107,7 @@ fun SwipeActionCard(
     LaunchedEffect(addTriggered) {
         if (!addTriggered) return@LaunchedEffect
         snapshotFlow { currentAddStatus.value }.first { it.isTerminal() }
-        delay(900)
+        delay(SWIPE_RESULT_HOLD_MS)
         swipeState.animateTo(SwipeToDismissBoxValue.Settled)
         swipeState.snapTo(SwipeToDismissBoxValue.Settled)
         addTriggered = false

@@ -13,6 +13,7 @@ import com.tryniecki.kajutabot.api.client.KajutaBotApiErrors
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
+import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
@@ -22,6 +23,8 @@ import com.tryniecki.kajutabot.ui.userMessageForError
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.uiText
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
+import com.tryniecki.kajutabot.ui.components.SWIPE_RESULT_HOLD_MS
+import com.tryniecki.kajutabot.ui.components.RetainedSwipeItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -108,6 +111,7 @@ data class PlayerUiState(
     val isEnqueuing: Boolean = false,
     val mutatingEntryIds: Set<String> = emptySet(),
     val removeStatuses: Map<String, SwipeActionStatus> = emptyMap(),
+    val retainedRemovalEntries: Map<String, RetainedSwipeItem<QueueEntryResponse>> = emptyMap(),
     val requeueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val isQueueReordering: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
@@ -142,6 +146,7 @@ data class PlayerScreenState(
     val isMutating: Boolean = false,
     val mutatingEntryIds: Set<String> = emptySet(),
     val removeStatuses: Map<String, SwipeActionStatus> = emptyMap(),
+    val retainedRemovalEntries: Map<String, RetainedSwipeItem<QueueEntryResponse>> = emptyMap(),
     val requeueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val isQueueReordering: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
@@ -217,6 +222,7 @@ fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     isMutating = isMutating,
     mutatingEntryIds = mutatingEntryIds,
     removeStatuses = removeStatuses,
+    retainedRemovalEntries = retainedRemovalEntries,
     requeueStatuses = requeueStatuses,
     isQueueReordering = isQueueReordering,
     activeControlAction = activeControlAction,
@@ -917,9 +923,14 @@ class PlayerViewModel(
     fun removeEntry(entryId: String) {
         if (entryId in _ui.value.mutatingEntryIds) return
         val guildId = _ui.value.selectedGuildId ?: return
+        val queue = _ui.value.queue?.takeIf { it.guildId == guildId } ?: return
+        val position = queue.pendingEntries.indexOfFirst { it.entryId == entryId }
+        if (position < 0) return
+        val retainedEntry = RetainedSwipeItem(queue.pendingEntries[position], position, guildId)
         _ui.update { it.copy(
             mutatingEntryIds = it.mutatingEntryIds + entryId,
             removeStatuses = it.removeStatuses + (entryId to SwipeActionStatus.PENDING),
+            retainedRemovalEntries = it.retainedRemovalEntries + (entryId to retainedEntry),
             error = null,
         ) }
         viewModelScope.launch {
@@ -941,7 +952,9 @@ class PlayerViewModel(
                     removeStatuses = it.removeStatuses + (entryId to SwipeActionStatus.FAILURE),
                 ) }
             }
-            delay(1_200)
+            delay(SWIPE_RESULT_HOLD_MS)
+            _ui.update { it.copy(retainedRemovalEntries = it.retainedRemovalEntries - entryId) }
+            delay(300)
             _ui.update { it.copy(removeStatuses = it.removeStatuses - entryId) }
         }
     }

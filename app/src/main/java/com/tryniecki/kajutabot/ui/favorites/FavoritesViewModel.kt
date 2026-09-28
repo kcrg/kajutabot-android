@@ -13,6 +13,8 @@ import com.tryniecki.kajutabot.data.preferences.favoritesPreferenceOwnerKey
 import com.tryniecki.kajutabot.data.repository.FavoritesRepository
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
+import com.tryniecki.kajutabot.ui.components.SWIPE_RESULT_HOLD_MS
+import com.tryniecki.kajutabot.ui.components.RetainedSwipeItem
 import com.tryniecki.kajutabot.ui.userMessageForError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +29,8 @@ import kotlinx.coroutines.sync.withLock
 
 data class FavoritesUiState(
     val favorites: List<FavoriteResponse> = emptyList(),
+    val favoriteIdentities: Set<String> = emptySet(),
+    val retainedDeletedFavorites: Map<String, RetainedSwipeItem<FavoriteResponse>> = emptyMap(),
     val isLoading: Boolean = false,
     val isMutating: Boolean = false,
     val isFavoriteMutating: Boolean = false,
@@ -36,7 +40,14 @@ data class FavoritesUiState(
     val queueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val favoriteStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val queueAllStatus: SwipeActionStatus = SwipeActionStatus.IDLE,
-)
+) {
+    fun isFavorite(track: PlaybackTrackResponse): Boolean =
+        track.favoriteIdentities().any(favoriteIdentities::contains)
+
+    fun statusFor(track: PlaybackTrackResponse): SwipeActionStatus =
+        track.favoriteIdentities().firstNotNullOfOrNull { favoriteStatuses[it] }
+            ?: SwipeActionStatus.IDLE
+}
 
 class FavoritesViewModel(
     private val repository: FavoritesRepository,
@@ -50,9 +61,9 @@ class FavoritesViewModel(
 
     private var refreshGeneration = 0L
     private var mutationRevision = 0L
-    private var favoriteIdentities: Set<String> = emptySet()
     private val shuffleWriteMutex = Mutex()
     private val favoriteFeedbackJobs = mutableMapOf<String, Job>()
+    private val favoriteFeedbackGenerations = mutableMapOf<String, Long>()
     private val queueFeedbackJobs = mutableMapOf<String, Job>()
     private var queueAllFeedbackJob: Job? = null
 
@@ -74,10 +85,10 @@ class FavoritesViewModel(
                 val items = repository.getFavorites(sessionIdentity)
                 if (generation == refreshGeneration) {
                     if (revision == mutationRevision) {
-                        favoriteIdentities = items.asSequence()
+                        val identities = items.asSequence()
                             .map { favoriteIdentity(it.contentUrl) }
                             .toSet()
-                        _ui.update { it.copy(favorites = items, isLoading = false) }
+                        _ui.update { it.copy(favorites = items, favoriteIdentities = identities, isLoading = false) }
                     } else {
                         _ui.update { it.copy(isLoading = false) }
                     }
@@ -108,12 +119,9 @@ class FavoritesViewModel(
         }
     }
 
-    fun isFavorite(track: PlaybackTrackResponse): Boolean =
-        track.favoriteIdentities().any(favoriteIdentities::contains)
+    fun isFavorite(track: PlaybackTrackResponse): Boolean = _ui.value.isFavorite(track)
 
-    fun statusFor(track: PlaybackTrackResponse): SwipeActionStatus =
-        track.favoriteIdentities().firstNotNullOfOrNull { _ui.value.favoriteStatuses[it] }
-            ?: SwipeActionStatus.IDLE
+    fun statusFor(track: PlaybackTrackResponse): SwipeActionStatus = _ui.value.statusFor(track)
 
     fun toggle(track: PlaybackTrackResponse) = toggleFavorite(track)
 
@@ -121,10 +129,9 @@ class FavoritesViewModel(
 
     private fun toggleFavorite(track: PlaybackTrackResponse) {
         if (_ui.value.isLoading || statusFor(track) == SwipeActionStatus.PENDING) return
-        if (statusFor(track) == SwipeActionStatus.SUCCESS && !isFavorite(track)) return
         val identities = track.favoriteIdentities()
         val existing = _ui.value.favorites.firstOrNull { favoriteIdentity(it.contentUrl) in identities }
-        if (existing != null) {
+        if (isFavorite(track) && existing != null) {
             delete(existing.contentUrl)
         } else {
             add(track)
@@ -134,12 +141,14 @@ class FavoritesViewModel(
     private fun add(track: PlaybackTrackResponse) {
         val key = favoriteIdentity(track.url)
         if (_ui.value.favoriteStatuses[key] == SwipeActionStatus.PENDING) return
+        val generation = nextFavoriteFeedbackGeneration(key)
         favoriteFeedbackJobs.remove(key)?.cancel()
         viewModelScope.launch {
             _ui.update { it.copy(
                 isMutating = true,
                 isFavoriteMutating = true,
                 favoriteStatuses = it.favoriteStatuses + (key to SwipeActionStatus.PENDING),
+                retainedDeletedFavorites = it.retainedDeletedFavorites - key,
             ) }
             try {
                 val added = repository.addFavorite(
@@ -149,7 +158,6 @@ class FavoritesViewModel(
                 )
                 mutationRevision++
                 val identity = favoriteIdentity(added.contentUrl)
-                favoriteIdentities = favoriteIdentities + identity
                 _ui.update { current ->
                     val statuses = current.favoriteStatuses + (key to SwipeActionStatus.SUCCESS)
                     val otherPending = statuses.any { (identity, status) ->
@@ -159,6 +167,8 @@ class FavoritesViewModel(
                         favorites = listOf(added) + current.favorites.filterNot {
                             favoriteIdentity(it.contentUrl) == identity
                         },
+                        favoriteIdentities = current.favoriteIdentities + identity,
+                        retainedDeletedFavorites = current.retainedDeletedFavorites - identity,
                         isMutating = otherPending,
                         isFavoriteMutating = otherPending,
                         isLoading = false,
@@ -172,13 +182,17 @@ class FavoritesViewModel(
                     current.copy(isMutating = otherPending, isFavoriteMutating = otherPending, favoriteStatuses = statuses)
                 }
             }
-            clearFavoriteFeedbackLater(key)
+            clearFavoriteFeedbackLater(key, generation)
         }
     }
 
     fun delete(contentUrl: String) {
         val key = favoriteIdentity(contentUrl)
         if (_ui.value.favoriteStatuses[key] == SwipeActionStatus.PENDING) return
+        val position = _ui.value.favorites.indexOfFirst { favoriteIdentity(it.contentUrl) == key }
+        if (position < 0) return
+        val favorite = _ui.value.favorites[position]
+        val generation = nextFavoriteFeedbackGeneration(key)
         favoriteFeedbackJobs.remove(key)?.cancel()
         viewModelScope.launch {
             _ui.update { it.copy(
@@ -189,22 +203,27 @@ class FavoritesViewModel(
             try {
                 repository.deleteFavorite(sessionIdentity, contentUrl)
                 mutationRevision++
-                favoriteIdentities = favoriteIdentities - key
                 _ui.update { current ->
                     val statuses = current.favoriteStatuses + (key to SwipeActionStatus.SUCCESS)
                     val otherPending = statuses.any { (identity, status) ->
                         identity != key && status == SwipeActionStatus.PENDING
                     }
                     current.copy(
+                        favorites = current.favorites.filterNot { favoriteIdentity(it.contentUrl) == key },
                         isMutating = otherPending,
                         isFavoriteMutating = otherPending,
                         isLoading = false,
+                        favoriteIdentities = current.favoriteIdentities - key,
+                        retainedDeletedFavorites = current.retainedDeletedFavorites +
+                            (key to RetainedSwipeItem(favorite, position)),
                         favoriteStatuses = statuses,
                     )
                 }
-                delay(900)
+                delay(SWIPE_RESULT_HOLD_MS)
                 _ui.update { current ->
-                    current.copy(favorites = current.favorites.filterNot { favoriteIdentity(it.contentUrl) == key })
+                    if (favoriteFeedbackGenerations[key] == generation) {
+                        current.copy(retainedDeletedFavorites = current.retainedDeletedFavorites - key)
+                    } else current
                 }
             } catch (e: Exception) {
                 _ui.update { current ->
@@ -213,15 +232,21 @@ class FavoritesViewModel(
                     current.copy(isMutating = otherPending, isFavoriteMutating = otherPending, favoriteStatuses = statuses)
                 }
             }
-            clearFavoriteFeedbackLater(key)
+            clearFavoriteFeedbackLater(key, generation)
         }
     }
 
-    private fun clearFavoriteFeedbackLater(key: String) {
+    private fun nextFavoriteFeedbackGeneration(key: String): Long =
+        (favoriteFeedbackGenerations[key] ?: 0L).inc().also { favoriteFeedbackGenerations[key] = it }
+
+    private fun clearFavoriteFeedbackLater(key: String, generation: Long) {
+        if (favoriteFeedbackGenerations[key] != generation) return
         favoriteFeedbackJobs[key] = viewModelScope.launch {
             delay(1_200)
+            if (favoriteFeedbackGenerations[key] != generation) return@launch
             _ui.update { it.copy(favoriteStatuses = it.favoriteStatuses - key) }
             favoriteFeedbackJobs.remove(key)
+            favoriteFeedbackGenerations.remove(key)
         }
     }
 

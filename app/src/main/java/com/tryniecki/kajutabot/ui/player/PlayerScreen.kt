@@ -120,6 +120,7 @@ import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.SwipeActionCard
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
+import com.tryniecki.kajutabot.ui.components.visibleSwipeItems
 import com.tryniecki.kajutabot.ui.components.SwipeActionHints
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
@@ -185,8 +186,8 @@ fun PlayerRoute(
         onRemoveEntry = viewModel::removeEntry,
         onSwapEntries = viewModel::swapEntries,
         onClearQueue = viewModel::clearQueue,
-        isFavorite = favoritesViewModel::isFavorite,
-        favoriteStatus = favoritesViewModel::statusFor,
+        isFavorite = favoritesUi::isFavorite,
+        favoriteStatus = favoritesUi::statusFor,
         onToggleFavorite = favoritesViewModel::toggle,
         favoritesBusy = favoritesUi.isLoading,
         onDismissMessage = viewModel::dismissMessage,
@@ -248,8 +249,8 @@ fun SearchRoute(
             viewModel.searchFromHistory(query)
         },
         onResultClick = viewModel::enqueueSearchResult,
-        isFavorite = favoritesViewModel::isFavorite,
-        favoriteStatus = favoritesViewModel::statusFor,
+        isFavorite = favoritesUi::isFavorite,
+        favoriteStatus = favoritesUi::statusFor,
         onToggleFavorite = favoritesViewModel::toggle,
         favoritesBusy = favoritesUi.isLoading,
         onDismissMessage = viewModel::dismissMessage,
@@ -312,7 +313,12 @@ fun PlayerScreen(
     LaunchedEffect(ui.isMutating, ui.error) {
         if (!ui.isMutating || ui.error != null) previewOrder = null
     }
-    val pending = previewOrder ?: ui.queue?.pendingEntries.orEmpty()
+    val pending = previewOrder ?: visibleSwipeItems(
+        items = ui.queue?.pendingEntries.orEmpty(),
+        retainedItems = ui.retainedRemovalEntries.values,
+        scopeId = ui.queue?.guildId,
+        identity = { it.entryId },
+    )
     val pendingIndexById = remember(pending) {
         buildMap(pending.size) {
             pending.forEachIndexed { index, entry ->
@@ -440,8 +446,8 @@ fun PlayerScreen(
                     listCoordinates = it
                     viewportHeightPx = it.size.height
                 }
-                .pointerInput(pendingIndexById, ui.queue?.version, ui.isMutating) {
-                    if (ui.isMutating || pending.size < 2) return@pointerInput
+                .pointerInput(pendingIndexById, ui.queue?.version, ui.isMutating, ui.retainedRemovalEntries) {
+                    if (ui.isMutating || ui.retainedRemovalEntries.isNotEmpty() || pending.size < 2) return@pointerInput
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val sourceInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
@@ -599,13 +605,10 @@ fun PlayerScreen(
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.SemiBold,
                                 )
-                                ui.queue?.takeIf { it.pendingEntriesCount > 0 }?.let { queue ->
-                                    Text(
-                                        "${queue.pendingEntriesCount} · ${formatQueueDuration(queue.pendingDurationMilliseconds)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                val queueSummary = ui.queue?.takeIf { it.pendingEntriesCount > 0 }?.let { queue ->
+                                    "${queue.pendingEntriesCount} · ${formatQueueDuration(queue.pendingDurationMilliseconds)}"
                                 }
+                                QueueSummaryOdometer(queueSummary)
                             }
                             if (pending.isNotEmpty()) {
                                 IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
@@ -673,7 +676,8 @@ fun PlayerScreen(
                     SwipeActionCard(
                         addLabel = stringResource(R.string.player_requeue_now_playing),
                         removeLabel = stringResource(R.string.action_remove_from_queue),
-                        enabled = !ui.isMutating && entry.entryId !in ui.mutatingEntryIds && draggingEntryId == null,
+                        enabled = !ui.isMutating && entry.entryId !in ui.retainedRemovalEntries &&
+                            entry.entryId !in ui.mutatingEntryIds && draggingEntryId == null,
                         addStatus = ui.requeueStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
                         removeStatus = ui.removeStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
                         onAdd = { onRequeueEntry(entry.entryId) },
@@ -710,12 +714,14 @@ fun PlayerScreen(
                                 titleModifier = Modifier.semantics {
                                     customActions = listOf(
                                         CustomAccessibilityAction(moveUpDescription) {
-                                            if (entryIndex > 0 && !ui.isMutating && ui.queue != null) {
+                                            if (entryIndex > 0 && !ui.isMutating &&
+                                                ui.retainedRemovalEntries.isEmpty() && ui.queue != null) {
                                                 onSwapEntries(entry.entryId, pending[entryIndex - 1].entryId, ui.queue.version)
                                             } else false
                                         },
                                         CustomAccessibilityAction(moveDownDescription) {
-                                            if (entryIndex in 0 until pending.lastIndex && !ui.isMutating && ui.queue != null) {
+                                            if (entryIndex in 0 until pending.lastIndex && !ui.isMutating &&
+                                                ui.retainedRemovalEntries.isEmpty() && ui.queue != null) {
                                                 onSwapEntries(entry.entryId, pending[entryIndex + 1].entryId, ui.queue.version)
                                             } else false
                                         },
