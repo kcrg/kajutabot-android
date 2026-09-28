@@ -16,7 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -30,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.components.BrandMark
+import com.tryniecki.kajutabot.ui.components.DelayedPendingSpinner
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
 
@@ -94,10 +94,7 @@ fun LoginScreen(
                         .heightIn(min = 52.dp),
                 ) {
                     if (isSigningIn && !isGuestSigningIn) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                        )
+                        DelayedPendingSpinner(visible = true, color = MaterialTheme.colorScheme.onPrimary, size = 20.dp)
                         Spacer(Modifier.size(8.dp))
                         Text(stringResource(R.string.login_signing_in))
                     } else {
@@ -113,7 +110,7 @@ fun LoginScreen(
                         .heightIn(min = 52.dp),
                 ) {
                     if (isGuestSigningIn) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        DelayedPendingSpinner(visible = true, color = MaterialTheme.colorScheme.primary, size = 20.dp)
                         Spacer(Modifier.size(8.dp))
                         Text(stringResource(R.string.login_signing_in))
                     } else {

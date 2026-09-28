@@ -229,4 +229,8 @@
     <string name="swipe_add_pending">Adding to queue</string>
     <string name="swipe_add_success">Added to queue</string>
     <string name="swipe_add_failure">Could not add to queue</string>
+    <string name="swipe_remove_pending">Removing</string>
+    <string name="swipe_remove_success">Removed</string>
+    <string name="swipe_remove_failure">Could not remove</string>
+    <string name="action_failed">Action failed</string>
 </resources>

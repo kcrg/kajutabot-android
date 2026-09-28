@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -145,14 +144,7 @@ fun MoreRootScreen(
                                 onClick = appViewModel::logout,
                                 enabled = !isLoggingOut,
                             ) {
-                                if (isLoggingOut) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        strokeWidth = 2.dp,
-                                    )
-                                } else {
-                                    Text(stringResource(R.string.action_logout))
-                                }
+                                Text(stringResource(R.string.action_logout))
                             }
                         }
 

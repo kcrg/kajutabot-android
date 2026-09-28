@@ -7,12 +7,14 @@ import androidx.compose.ui.res.stringResource
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.components.TonalToggleIconButton
+import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 
 @Composable
 fun FavoriteTrackButton(
     track: PlaybackTrackResponse,
     checked: Boolean,
     enabled: Boolean,
+    status: SwipeActionStatus = SwipeActionStatus.IDLE,
     onToggle: (PlaybackTrackResponse) -> Unit,
 ) {
     TonalToggleIconButton(
@@ -22,6 +24,7 @@ fun FavoriteTrackButton(
         checkedContentDescription = stringResource(R.string.action_remove_favorite),
         uncheckedContentDescription = stringResource(R.string.action_add_favorite),
         enabled = enabled,
+        failure = status == SwipeActionStatus.FAILURE,
         colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
             checkedContainerColor = MaterialTheme.colorScheme.primary,
             checkedContentColor = MaterialTheme.colorScheme.onPrimary,

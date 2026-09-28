@@ -228,4 +228,8 @@
     <string name="swipe_add_pending">Dodawanie do kolejki</string>
     <string name="swipe_add_success">Dodano do kolejki</string>
     <string name="swipe_add_failure">Nie udało się dodać do kolejki</string>
+    <string name="swipe_remove_pending">Usuwanie</string>
+    <string name="swipe_remove_success">Usunięto</string>
+    <string name="swipe_remove_failure">Nie udało się usunąć</string>
+    <string name="action_failed">Nie udało się wykonać akcji</string>
 </resources>

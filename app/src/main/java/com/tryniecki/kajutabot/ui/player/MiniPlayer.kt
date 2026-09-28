@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
 import com.tryniecki.kajutabot.ui.theme.KbMotion
@@ -74,6 +75,7 @@ fun MiniPlayer(
     isQueueReordering: Boolean,
     activeControlAction: PlayerControlAction?,
     isFavorite: Boolean,
+    favoriteStatus: SwipeActionStatus = SwipeActionStatus.IDLE,
     favoritesBusy: Boolean,
     onToggleFavorite: (PlaybackTrackResponse) -> Unit,
     onOpenPlayer: () -> Unit,
@@ -183,6 +185,7 @@ fun MiniPlayer(
                 FavoriteTrackButton(
                     track = track,
                     checked = isFavorite,
+                    status = favoriteStatus,
                     enabled = !favoritesBusy,
                     onToggle = onToggleFavorite,
                 )
@@ -191,10 +194,7 @@ fun MiniPlayer(
                     enabled = !playbackControlsBlocked,
                 ) {
                     Icon(
-                        painter = painterResource(
-                            com.composables.icons.tabler.outline.R.drawable
-                                .tabler_ic_player_skip_forward_outline,
-                        ),
+                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_skip_forward_outline),
                         contentDescription = stringResource(R.string.action_skip_track),
                         tint = MaterialTheme.colorScheme.primary,
                     )

@@ -30,13 +30,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -44,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,9 +53,9 @@ import com.tryniecki.kajutabot.ui.components.SwipeActionCard
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.ui.components.SwipeActionHints
 import com.tryniecki.kajutabot.ui.text.asString
-import com.tryniecki.kajutabot.ui.text.resolve
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.components.ActionFeedbackIcon
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import java.time.OffsetDateTime
@@ -71,16 +67,8 @@ import java.time.format.FormatStyle
 @Composable
 fun FavoritesRoute(viewModel: FavoritesViewModel) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(viewModel) {
-        viewModel.messageEvents.collect { message ->
-            snackbarHostState.showSnackbar(message.resolve(context))
-        }
-    }
     FavoritesScreen(
         ui = ui,
-        snackbarHostState = snackbarHostState,
         onRefresh = viewModel::refresh,
         onDelete = viewModel::delete,
         onQueueAll = viewModel::queueAll,
@@ -93,7 +81,6 @@ fun FavoritesRoute(viewModel: FavoritesViewModel) {
 @Composable
 fun FavoritesScreen(
     ui: FavoritesUiState,
-    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onRefresh: () -> Unit,
     onDelete: (String) -> Unit,
     onQueueAll: () -> Unit,
@@ -111,7 +98,6 @@ fun FavoritesScreen(
     val showFloatingAction = rememberScrollAwareFabVisible(listState)
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             AnimatedVisibility(
                 visible = showFloatingAction,
@@ -151,13 +137,15 @@ fun FavoritesScreen(
                         ExtendedFloatingActionButton(
                             text = { Text(stringResource(R.string.favorites_add_all_count, ui.favorites.size)) },
                             icon = {
-                                Icon(
-                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
+                                ActionFeedbackIcon(
+                                    status = ui.queueAllStatus,
+                                    idleIconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline,
                                     contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 )
                             },
                             onClick = {
-                                if (!ui.isQueueMutating && !ui.isMutating) onQueueAll()
+                                if (!ui.isQueueMutating) onQueueAll()
                             },
                         )
                     }
@@ -222,8 +210,9 @@ fun FavoritesScreen(
                     SwipeActionCard(
                         addLabel = addLabel,
                         removeLabel = removeLabel,
-                        enabled = !ui.isMutating,
+                        enabled = ui.favoriteStatuses[favoriteIdentity(fav.contentUrl)] == null,
                         addStatus = ui.queueStatuses[fav.contentUrl] ?: SwipeActionStatus.IDLE,
+                        removeStatus = ui.favoriteStatuses[favoriteIdentity(fav.contentUrl)] ?: SwipeActionStatus.IDLE,
                         onAdd = { onPlaySingle(fav.contentUrl) },
                         onRemove = { onDelete(fav.contentUrl) },
                         modifier = Modifier.animateItem(
@@ -283,7 +272,7 @@ private fun FavoritesHeader(ui: FavoritesUiState, onRefresh: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(stringResource(R.string.nav_favorites), style = MaterialTheme.typography.titleLarge)
-            TextButton(onClick = onRefresh, enabled = !ui.isLoading && !ui.isMutating) {
+            TextButton(onClick = onRefresh, enabled = !ui.isLoading) {
                 Text(stringResource(R.string.action_refresh))
             }
         }

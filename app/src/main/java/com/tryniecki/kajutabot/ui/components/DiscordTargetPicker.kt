@@ -87,9 +87,11 @@ fun DiscordTargetPicker(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
-            if (isLoadingVoiceChannels) {
-                ExpressiveLoadingIndicator(modifier = Modifier.size(24.dp))
-            }
+            DelayedPendingSpinner(
+                visible = isLoadingVoiceChannels,
+                color = MaterialTheme.colorScheme.primary,
+                size = 24.dp,
+            )
         }
         Spacer(Modifier.size(8.dp))
 

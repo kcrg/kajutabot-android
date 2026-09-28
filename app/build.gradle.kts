@@ -46,6 +46,7 @@ android {
     buildTypes {
         release {
             proguardFiles("proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
             optimization {
                 enable = true
             }

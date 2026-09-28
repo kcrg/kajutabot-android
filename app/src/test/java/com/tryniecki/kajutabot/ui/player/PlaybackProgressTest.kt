@@ -109,6 +109,37 @@ class PlaybackProgressTest {
     }
 
     @Test
+    fun `skip response with pending track keeps old slide until next track arrives`() {
+        val current = snapshot()
+        val skipped = current.copy(
+            nowPlaying = null,
+            playbackInstanceId = null,
+            playbackPositionMilliseconds = null,
+            pendingEntriesCount = 1,
+            version = 11,
+            queueVersion = 11,
+        )
+        val previous = current.nowPlayingPresentationOrNull()
+        assertTrue(shouldHoldNowPlayingForTransition(skipped, previous))
+        assertEquals("play-1", nowPlayingSlide(previous, hasQueue = true).identity)
+        val next = skipped.copy(nowPlaying = track("vid-2"), playbackInstanceId = "play-2", version = 12)
+        assertFalse(shouldHoldNowPlayingForTransition(next, previous))
+        assertEquals("play-2", nowPlayingSlide(next).identity)
+    }
+
+    @Test
+    fun `repeat and radio transitions keep track but final idle does not`() {
+        val current = snapshot()
+        val gap = current.copy(nowPlaying = null, pendingEntriesCount = 0)
+        val previous = current.nowPlayingPresentationOrNull()
+        assertTrue(shouldHoldNowPlayingForTransition(gap.copy(isRepeatEnabled = true), previous))
+        assertTrue(shouldHoldNowPlayingForTransition(gap.copy(radio = RadioStateResponse(isEnabled = true)), previous))
+        assertFalse(shouldHoldNowPlayingForTransition(gap, previous))
+        assertFalse(shouldHoldNowPlayingForTransition(gap.copy(voiceChannelId = null, pendingEntriesCount = 1), previous))
+        assertFalse(shouldHoldNowPlayingForTransition(gap.copy(pendingEntriesCount = 1), null))
+    }
+
+    @Test
     fun `older snapshot version does not overwrite`() {
         assertFalse(shouldApplyQueueSnapshot(snapshot(version = 10), snapshot(version = 9), "g1"))
         assertFalse(shouldApplyQueueSnapshot(

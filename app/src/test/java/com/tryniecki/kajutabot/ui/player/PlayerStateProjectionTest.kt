@@ -27,6 +27,21 @@ class PlayerStateProjectionTest {
     }
 
     @Test
+    fun `transitional empty queue snapshot retains presentation in player and mini player`() {
+        val previous = snapshot().nowPlayingPresentationOrNull()
+        val state = PlayerUiState(
+            queue = snapshot(version = 11, nowPlaying = null).copy(pendingEntriesCount = 1),
+            transitionNowPlaying = previous,
+            transitionStartedAtNanos = 11,
+            queueObservedAtElapsedRealtimeMs = 12_345L,
+        )
+        assertEquals(previous, state.effectiveNowPlaying)
+        assertEquals(previous, state.toPlayerScreenState().presentedNowPlaying)
+        assertEquals(nowPlayingSlide(previous, hasQueue = true).identity, state.toMiniPlayerState()?.slide?.identity)
+        assertEquals(12_345L, state.toMiniPlayerState()?.slide?.positionObservedAtElapsedRealtimeMs)
+    }
+
+    @Test
     fun `queue reorder keeps playback controls available`() {
         assertFalse(shouldBlockPlaybackControls(true, null, true))
         assertFalse(shouldBlockPlaybackControls(true, null, false))

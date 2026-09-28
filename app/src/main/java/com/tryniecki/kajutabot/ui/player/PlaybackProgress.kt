@@ -91,6 +91,13 @@ fun QueueSnapshotResponse.nowPlayingPresentationOrNull(): NowPlayingPresentation
         NowPlayingPresentation(track, playbackInstanceId, playbackPositionMilliseconds, nowPlayingStartedAt != null)
     }
 
+/** A skip can commit before the runner selects the next pending or repeated track. */
+fun shouldHoldNowPlayingForTransition(
+    snapshot: QueueSnapshotResponse,
+    previous: NowPlayingPresentation?,
+): Boolean = previous != null && snapshot.nowPlaying == null && snapshot.voiceChannelId != null &&
+    (snapshot.pendingEntriesCount > 0 || snapshot.isRepeatEnabled || snapshot.radio.isEnabled)
+
 fun nowPlayingSlide(
     presentation: NowPlayingPresentation?,
     hasQueue: Boolean,

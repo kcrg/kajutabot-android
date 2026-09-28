@@ -26,7 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
-import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
+import com.tryniecki.kajutabot.ui.components.DelayedPendingSpinner
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
 
@@ -43,7 +43,11 @@ fun AccessCheckingScreen(isGuest: Boolean = false) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                ExpressiveLoadingIndicator(modifier = Modifier.size(48.dp))
+                DelayedPendingSpinner(
+                    visible = true,
+                    color = MaterialTheme.colorScheme.primary,
+                    size = 48.dp,
+                )
                 Text(
                     text = stringResource(if (isGuest) R.string.access_checking_guest else R.string.access_checking_discord),
                     style = MaterialTheme.typography.bodyMedium,

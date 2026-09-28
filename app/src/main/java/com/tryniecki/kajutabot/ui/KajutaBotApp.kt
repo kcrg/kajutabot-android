@@ -1,6 +1,5 @@
 package com.tryniecki.kajutabot.ui
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionLayout
@@ -26,8 +25,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -75,7 +72,7 @@ import com.tryniecki.kajutabot.ui.app.AuthenticatedGate
 import com.tryniecki.kajutabot.ui.app.resolveAuthenticatedGate
 import com.tryniecki.kajutabot.ui.auth.LoginScreen
 import com.tryniecki.kajutabot.ui.components.BrandMark
-import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
+import com.tryniecki.kajutabot.ui.components.DelayedPendingSpinner
 import com.tryniecki.kajutabot.ui.favorites.FavoritesRoute
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.more.ContactScreen
@@ -175,7 +172,11 @@ private fun RestoringScreen() {
         ) {
             BrandMark(size = 72.dp)
             Spacer(Modifier.height(20.dp))
-            ExpressiveLoadingIndicator(modifier = Modifier.size(36.dp))
+            DelayedPendingSpinner(
+                visible = true,
+                color = MaterialTheme.colorScheme.primary,
+                size = 36.dp,
+            )
             Spacer(Modifier.height(12.dp))
             Text(
                 stringResource(R.string.auth_restoring_session),
@@ -392,27 +393,10 @@ private fun AuthenticatedContent(
     val mediaServiceActive by container.mediaServiceActive.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
-    val playerError by playerViewModel.playerError.collectAsStateWithLifecycle()
-    val controlMessage by playerViewModel.controlMessage.collectAsStateWithLifecycle()
     val appUi by appViewModel.ui.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
     val motion = MaterialTheme.motionScheme
     val density = LocalDensity.current
     val hierarchySlideDistancePx = with(density) { KbMotion.HIERARCHY_SLIDE_DISTANCE.roundToPx() }
-
-    val favoritesErrorMessage = favoritesUi.error?.asString()
-    LaunchedEffect(favoritesErrorMessage, currentDestination) {
-        if (currentDestination != AppDestination.FAVORITES && favoritesErrorMessage != null) {
-            Toast.makeText(context, favoritesErrorMessage, Toast.LENGTH_SHORT).show()
-            favoritesViewModel.dismissMessage()
-        }
-    }
-
-    LaunchedEffect(controlMessage?.id) {
-        val message = controlMessage ?: return@LaunchedEffect
-        Toast.makeText(context, message.text.resolve(context), Toast.LENGTH_SHORT).show()
-        playerViewModel.acknowledgeControlMessage(message.id)
-    }
 
     LaunchedEffect(appViewModel) {
         appViewModel.sharedUrlEvents.collect { event ->
@@ -435,15 +419,6 @@ private fun AuthenticatedContent(
         destination = currentDestination,
         hasNowPlaying = miniPlayerState != null,
     )
-
-    // Surface player errors on tabs without their own error card.
-    // The Player tab keeps its inline card; other tabs get a transient snackbar.
-    val playerErrorMessage = playerError?.asString()
-    LaunchedEffect(playerErrorMessage, currentDestination) {
-        if (playerErrorMessage != null && currentDestination != AppDestination.PLAYER) {
-            snackbarHostState.showSnackbar(playerErrorMessage)
-        }
-    }
 
     PlayerRealtimeEffect(playerViewModel)
     LaunchedEffect(remotePlaybackActive, mediaServiceActive) {
@@ -559,7 +534,6 @@ private fun AuthenticatedContent(
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
                 // Full-screen detail routes: no tabs reachable underneath.
                 if (!isFullScreenDetailOpen) {
@@ -586,7 +560,8 @@ private fun AuthenticatedContent(
                                     isQueueReordering = state.isQueueReordering,
                                     activeControlAction = state.activeControlAction,
                                     isFavorite = favoritesViewModel.isFavorite(state.track),
-                                    favoritesBusy = favoritesUi.isFavoriteMutating || favoritesUi.isLoading,
+                                    favoriteStatus = favoritesViewModel.statusFor(state.track),
+                                    favoritesBusy = favoritesUi.isLoading,
                                     onToggleFavorite = favoritesViewModel::toggleSilently,
                                     onOpenPlayer = { selectTopLevel(AppDestination.PLAYER) },
                                     onSkip = playerViewModel::skip,

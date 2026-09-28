@@ -1,7 +1,6 @@
 package com.tryniecki.kajutabot.ui.favorites
 
-import com.tryniecki.kajutabot.R
-import com.tryniecki.kajutabot.ui.text.uiText
+import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.api.client.KajutaBotApiClientFactory
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
@@ -80,9 +79,7 @@ class GuestFavoritesViewModelTest {
             viewModel.setShuffle(true)
             viewModel.setShuffle(false)
             viewModel.setShuffle(true)
-            assertEquals(uiText(R.string.favorites_shuffle_on), viewModel.messageEvents.first())
-            assertEquals(uiText(R.string.favorites_shuffle_off), viewModel.messageEvents.first())
-            assertEquals(uiText(R.string.favorites_shuffle_on), viewModel.messageEvents.first())
+            assertTrue(viewModel.ui.value.shuffle)
             assertTrue(withTimeout(5_000) { preferences.favoritesShuffle("guest").first { it } })
 
             server.enqueue(MockResponse().setBody(favoriteJson))
@@ -97,8 +94,8 @@ class GuestFavoritesViewModelTest {
             server.enqueue(MockResponse().setBody(queueResponseJson()))
             server.enqueue(MockResponse().setBody(queueResponseJson()))
             viewModel.queueAll()
-            assertEquals(uiText(R.string.favorites_queued_all), withTimeout(5_000) {
-                viewModel.messageEvents.first { it == uiText(R.string.favorites_queued_all) }
+            assertEquals(SwipeActionStatus.SUCCESS, withTimeout(5_000) {
+                viewModel.ui.first { it.queueAllStatus == SwipeActionStatus.SUCCESS }.queueAllStatus
             })
             assertEquals("/api/v1/app/guilds/demo-guild/queue", server.takeRequest().path)
             val queue = server.takeRequest()

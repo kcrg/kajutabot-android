@@ -3,6 +3,7 @@ package com.tryniecki.kajutabot.ui.player
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
+import com.tryniecki.kajutabot.ui.components.rememberDelayedPending
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.text.asString
 
@@ -108,7 +110,11 @@ fun SharedTrackScreen(
                     )
                 }
                 loading -> {
-                    ExpressiveLoadingIndicator(modifier = Modifier.size(48.dp))
+                    if (rememberDelayedPending(loading)) {
+                        ExpressiveLoadingIndicator(modifier = Modifier.size(48.dp))
+                    } else {
+                        Spacer(Modifier.size(48.dp))
+                    }
                     Text(
                         stringResource(R.string.shared_track_loading),
                         modifier = Modifier.padding(top = 20.dp),

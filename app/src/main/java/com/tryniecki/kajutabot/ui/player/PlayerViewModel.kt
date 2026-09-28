@@ -14,13 +14,11 @@ import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
-import com.tryniecki.kajutabot.api.model.queue.SkipOutcome
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.data.preferences.UserPreferencesRepository
 import com.tryniecki.kajutabot.data.repository.PlayerRepository
 import com.tryniecki.kajutabot.ui.userMessageForError
-import com.tryniecki.kajutabot.ui.text.UiMessage
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.uiText
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
@@ -85,6 +83,8 @@ data class PlayerUiState(
     val selectedVoiceChannelId: String? = null,
     val queue: QueueSnapshotResponse? = null,
     val queueObservedAtElapsedRealtimeMs: Long? = null,
+    val transitionNowPlaying: NowPlayingPresentation? = null,
+    val transitionStartedAtNanos: Long? = null,
     val searchQuery: String = "",
     val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
     val searchResults: List<SearchItemResponse> = emptyList(),
@@ -101,19 +101,19 @@ data class PlayerUiState(
     val isMutating: Boolean = false,
     val isEnqueuing: Boolean = false,
     val mutatingEntryIds: Set<String> = emptySet(),
+    val removeStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val requeueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val isQueueReordering: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
     val error: UiText? = null,
     val info: UiText? = null,
-    val controlMessage: UiMessage? = null,
     val searchEnqueueCompleted: Boolean = false,
 ) {
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
     val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
     val effectiveNowPlaying: NowPlayingPresentation?
-        get() = queue?.nowPlayingPresentationOrNull()
+        get() = queue?.nowPlayingPresentationOrNull() ?: transitionNowPlaying
 }
 
 /**
@@ -134,6 +134,7 @@ data class PlayerScreenState(
     val queueLoadError: UiText? = null,
     val isMutating: Boolean = false,
     val mutatingEntryIds: Set<String> = emptySet(),
+    val removeStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val requeueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val isQueueReordering: Boolean = false,
     val activeControlAction: PlayerControlAction? = null,
@@ -204,6 +205,7 @@ fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     queueLoadError = queueLoadError,
     isMutating = isMutating,
     mutatingEntryIds = mutatingEntryIds,
+    removeStatuses = removeStatuses,
     requeueStatuses = requeueStatuses,
     isQueueReordering = isQueueReordering,
     activeControlAction = activeControlAction,
@@ -316,10 +318,6 @@ class PlayerViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.error ?: _ui.value.queueLoadError)
 
-    val controlMessage: StateFlow<UiMessage?> = _ui
-        .map { it.controlMessage }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.controlMessage)
 
     private var searchJob: Job? = null
 
@@ -330,7 +328,6 @@ class PlayerViewModel(
 
     private val pendingControlActions = mutableSetOf<PlayerControlAction>()
 
-    private var messageSequence = 0L
 
     init {
         viewModelScope.launch {
@@ -387,12 +384,6 @@ class PlayerViewModel(
         _ui.update { it.copy(error = null, info = null) }
     }
 
-    fun acknowledgeControlMessage(id: Long) {
-        _ui.update { current ->
-            if (current.controlMessage?.id == id) current.copy(controlMessage = null) else current
-        }
-    }
-
     fun acknowledgeSearchEnqueueCompleted() {
         _ui.update { it.copy(searchEnqueueCompleted = false) }
     }
@@ -442,6 +433,8 @@ class PlayerViewModel(
                         selectedVoiceChannelId = selChannel,
                         queue = if (it.selectedGuildId == selGuild) it.queue else null,
                         queueObservedAtElapsedRealtimeMs = if (it.selectedGuildId == selGuild) it.queueObservedAtElapsedRealtimeMs else null,
+                        transitionNowPlaying = if (it.selectedGuildId == selGuild) it.transitionNowPlaying else null,
+                        transitionStartedAtNanos = if (it.selectedGuildId == selGuild) it.transitionStartedAtNanos else null,
                         isLoadingGuilds = false,
                         isLoadingQueue = selGuild != null && !keepsCurrentQueue,
                         queueLoadState = when {
@@ -489,6 +482,8 @@ class PlayerViewModel(
                 voiceChannels = emptyList(),
                 queue = null,
                 queueObservedAtElapsedRealtimeMs = null,
+                transitionNowPlaying = null,
+                transitionStartedAtNanos = null,
                 isLoadingQueue = true,
                 queueLoadState = QueueLoadState.LOADING,
                 queueLoadError = null,
@@ -608,7 +603,9 @@ class PlayerViewModel(
         // Enqueue-only result metadata is not part of the shared playback state.
         val playbackSnapshot = if (snapshot.addedTracks == null) snapshot else snapshot.copy(addedTracks = null)
         val observedAtElapsedRealtimeMs = SystemClock.elapsedRealtime()
+        val transitionToken = SystemClock.elapsedRealtimeNanos()
         var applied = false
+        var startedTransitionToken: Long? = null
         _ui.update { current ->
             if (shouldApplyQueueSnapshot(current.queue, playbackSnapshot, current.selectedGuildId)) {
                 if (current.queue == playbackSnapshot) {
@@ -619,16 +616,52 @@ class PlayerViewModel(
                         queueLoadError = null,
                     )
                 }
+                val holdPrevious = shouldHoldNowPlayingForTransition(playbackSnapshot, current.effectiveNowPlaying)
+                startedTransitionToken = if (holdPrevious && current.transitionStartedAtNanos == null) {
+                    transitionToken
+                } else null
                 applied = true
                 current.copy(
                     queue = playbackSnapshot,
-                    queueObservedAtElapsedRealtimeMs = observedAtElapsedRealtimeMs,
+                    queueObservedAtElapsedRealtimeMs = if (holdPrevious) {
+                        current.queueObservedAtElapsedRealtimeMs
+                    } else {
+                        observedAtElapsedRealtimeMs
+                    },
+                    transitionNowPlaying = if (holdPrevious) current.effectiveNowPlaying else null,
+                    transitionStartedAtNanos = if (holdPrevious) {
+                        current.transitionStartedAtNanos ?: transitionToken
+                    } else {
+                        null
+                    },
                     isLoadingQueue = false,
                     queueLoadState = QueueLoadState.READY,
                     queueLoadError = null,
                 )
             } else {
                 current
+            }
+        }
+        val startedToken = startedTransitionToken
+        val guildId = _ui.value.selectedGuildId
+        if (applied && startedToken != null && guildId != null) {
+            viewModelScope.launch {
+                delay(8_000)
+                if (_ui.value.selectedGuildId != guildId || _ui.value.transitionStartedAtNanos != startedToken) {
+                    return@launch
+                }
+                try {
+                    applyQueueSnapshot(fetchQueueSnapshot(guildId))
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // A failed recovery must not leave the old track visible indefinitely.
+                }
+                _ui.update { current ->
+                    if (current.selectedGuildId == guildId && current.transitionStartedAtNanos == startedToken) {
+                        current.copy(transitionNowPlaying = null, transitionStartedAtNanos = null)
+                    } else current
+                }
             }
         }
         return applied
@@ -764,11 +797,7 @@ class PlayerViewModel(
         val guildId = _ui.value.selectedGuildId
         val channelId = _ui.value.selectedVoiceChannelId
         if (guildId == null || channelId == null) {
-            _ui.update {
-                it.copy(
-                    error = uiText(R.string.player_select_target_to_add),
-                )
-            }
+            _ui.update { it.copy(error = uiText(R.string.player_select_target_to_add)) }
             return
         }
         _ui.update { it.copy(isEnqueuing = true, error = null, info = null) }
@@ -792,14 +821,7 @@ class PlayerViewModel(
     }
 
     fun skip() {
-        mutate(
-            controlAction = PlayerControlAction.SKIP,
-            successMessage = { response ->
-                if (response.skipOutcome == SkipOutcome.RestartedRepeatedTrack) {
-                    uiText(R.string.player_repeat_skip_restart)
-                } else null
-            },
-        ) {
+        mutate(controlAction = PlayerControlAction.SKIP) {
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             repository.skip(sessionIdentity, guildId)
         }
@@ -849,24 +871,14 @@ class PlayerViewModel(
     }
 
     fun setRepeat(enabled: Boolean) {
-        mutate(
-            controlAction = PlayerControlAction.REPEAT,
-            successMessage = { response ->
-                if (response.isRepeatEnabled) uiText(R.string.player_repeat_on) else uiText(R.string.player_repeat_off)
-            },
-        ) {
+        mutate(controlAction = PlayerControlAction.REPEAT) {
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             repository.setRepeat(sessionIdentity, guildId, enabled)
         }
     }
 
     fun toggleRadio() {
-        mutate(
-            controlAction = PlayerControlAction.RADIO,
-            successMessage = { response ->
-                if (response.radio.isEnabled) uiText(R.string.player_radio_on) else uiText(R.string.player_radio_off)
-            },
-        ) {
+        mutate(controlAction = PlayerControlAction.RADIO) {
             val guildId = _ui.value.selectedGuildId
             val queue = _ui.value.queue
             if (guildId == null || queue == null) {
@@ -889,7 +901,11 @@ class PlayerViewModel(
     fun removeEntry(entryId: String) {
         if (entryId in _ui.value.mutatingEntryIds) return
         val guildId = _ui.value.selectedGuildId ?: return
-        _ui.update { it.copy(mutatingEntryIds = it.mutatingEntryIds + entryId, error = null) }
+        _ui.update { it.copy(
+            mutatingEntryIds = it.mutatingEntryIds + entryId,
+            removeStatuses = it.removeStatuses + (entryId to SwipeActionStatus.PENDING),
+            error = null,
+        ) }
         viewModelScope.launch {
             try {
                 val response = repository.removeQueueEntry(
@@ -898,11 +914,19 @@ class PlayerViewModel(
                     entryId = entryId,
                 )
                 applyQueueSnapshot(response)
-                _ui.update { it.copy(mutatingEntryIds = it.mutatingEntryIds - entryId) }
+                _ui.update { it.copy(
+                    mutatingEntryIds = it.mutatingEntryIds - entryId,
+                    removeStatuses = it.removeStatuses + (entryId to SwipeActionStatus.SUCCESS),
+                ) }
             } catch (e: Exception) {
                 handleMutationError(e)
-                _ui.update { it.copy(mutatingEntryIds = it.mutatingEntryIds - entryId) }
+                _ui.update { it.copy(
+                    mutatingEntryIds = it.mutatingEntryIds - entryId,
+                    removeStatuses = it.removeStatuses + (entryId to SwipeActionStatus.FAILURE),
+                ) }
             }
+            delay(1_200)
+            _ui.update { it.copy(removeStatuses = it.removeStatuses - entryId) }
         }
     }
 
@@ -940,7 +964,6 @@ class PlayerViewModel(
 
     private fun mutate(
         controlAction: PlayerControlAction? = null,
-        successMessage: ((QueueSnapshotResponse) -> UiText?)? = null,
         call: suspend () -> QueueSnapshotResponse?,
     ) {
         if (controlAction != null) {
@@ -952,7 +975,7 @@ class PlayerViewModel(
 
         viewModelScope.launch {
             try {
-                performMutation(controlAction, successMessage, call)
+                performMutation(controlAction, call)
             } finally {
                 if (controlAction != null) {
                     synchronized(pendingControlActions) {
@@ -965,7 +988,6 @@ class PlayerViewModel(
 
     private suspend fun performMutation(
         controlAction: PlayerControlAction?,
-        successMessage: ((QueueSnapshotResponse) -> UiText?)?,
         call: suspend () -> QueueSnapshotResponse?,
     ) {
         _ui.update {
@@ -981,13 +1003,10 @@ class PlayerViewModel(
                 return
             }
             applyQueueSnapshot(response)
-            val message = successMessage?.invoke(response)
-            val uiMessage = message?.let { UiMessage(++messageSequence, it) }
             _ui.update { current ->
                 current.copy(
                     isMutating = false,
                     activeControlAction = null,
-                    controlMessage = uiMessage,
                 )
             }
         } catch (e: Exception) {

@@ -70,10 +70,12 @@ import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.common.SearchTrackResponse
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
 import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
+import com.tryniecki.kajutabot.ui.components.rememberDelayedPending
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.components.resolveArtworkUrl
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
+import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.ui.text.asString
 import java.text.NumberFormat
 import java.util.Locale
@@ -95,6 +97,7 @@ fun SearchScreen(
     onHistoryClick: (String) -> Unit,
     onResultClick: (SearchItemResponse) -> Unit,
     isFavorite: (PlaybackTrackResponse) -> Boolean,
+    favoriteStatus: (PlaybackTrackResponse) -> SwipeActionStatus = { SwipeActionStatus.IDLE },
     onToggleFavorite: (PlaybackTrackResponse) -> Unit,
     favoritesBusy: Boolean,
     onDismissMessage: () -> Unit,
@@ -185,7 +188,7 @@ fun SearchScreen(
                             )
                         },
                         trailingIcon = {
-                            if (ui.isSearching) {
+                            if (rememberDelayedPending(ui.isSearching)) {
                                 ExpressiveLoadingIndicator(modifier = Modifier.size(24.dp))
                             }
                         },
@@ -270,7 +273,11 @@ fun SearchScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Center,
                         ) {
-                            ExpressiveLoadingIndicator(modifier = Modifier.size(40.dp))
+                            if (rememberDelayedPending(ui.isMutating)) {
+                                ExpressiveLoadingIndicator(modifier = Modifier.size(40.dp))
+                            } else {
+                                Spacer(Modifier.size(40.dp))
+                            }
                         }
                     }
                 }
@@ -329,6 +336,7 @@ fun SearchScreen(
                                     FavoriteTrackButton(
                                         track = favoriteTrack,
                                         checked = isFavorite(favoriteTrack),
+                                        status = favoriteStatus(favoriteTrack),
                                         enabled = !favoritesBusy,
                                         onToggle = onToggleFavorite,
                                     )

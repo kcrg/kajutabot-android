@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.runtime.Composable
@@ -55,6 +54,7 @@ fun SwipeActionCard(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     addStatus: SwipeActionStatus = SwipeActionStatus.IDLE,
+    removeStatus: SwipeActionStatus = SwipeActionStatus.IDLE,
     onAdd: () -> Unit,
     onRemove: () -> Unit,
     content: @Composable (Modifier) -> Unit,
@@ -78,11 +78,23 @@ fun SwipeActionCard(
     val currentAdd = rememberUpdatedState(onAdd)
     val currentRemove = rememberUpdatedState(onRemove)
     var addTriggered by remember { mutableStateOf(false) }
+    var removeTriggered by remember { mutableStateOf(false) }
     val operationDescription = when {
         addTriggered && addStatus == SwipeActionStatus.SUCCESS -> stringResource(R.string.swipe_add_success)
         addTriggered && addStatus == SwipeActionStatus.FAILURE -> stringResource(R.string.swipe_add_failure)
         addTriggered -> stringResource(R.string.swipe_add_pending)
+        removeTriggered && removeStatus == SwipeActionStatus.SUCCESS -> stringResource(R.string.swipe_remove_success)
+        removeTriggered && removeStatus == SwipeActionStatus.FAILURE -> stringResource(R.string.swipe_remove_failure)
+        removeTriggered -> stringResource(R.string.swipe_remove_pending)
         else -> null
+    }
+
+    LaunchedEffect(removeStatus, removeTriggered) {
+        if (removeTriggered && (removeStatus == SwipeActionStatus.SUCCESS || removeStatus == SwipeActionStatus.FAILURE)) {
+            delay(900)
+            swipeState.animateTo(SwipeToDismissBoxValue.Settled)
+            removeTriggered = false
+        }
     }
 
     LaunchedEffect(addStatus, addTriggered) {
@@ -102,10 +114,13 @@ fun SwipeActionCard(
                         addTriggered = true
                         currentAdd.value()
                     }
-                    SwipeToDismissBoxValue.EndToStart -> currentRemove.value()
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        removeTriggered = true
+                        currentRemove.value()
+                    }
                     SwipeToDismissBoxValue.Settled -> Unit
                 }
-                if (direction != SwipeToDismissBoxValue.StartToEnd || !currentEnabled.value) {
+                if (!currentEnabled.value) {
                     swipeState.animateTo(SwipeToDismissBoxValue.Settled)
                 }
             }
@@ -117,51 +132,48 @@ fun SwipeActionCard(
         }.clip(MaterialTheme.shapes.medium).anchoredDraggable(
             state = swipeState,
             orientation = Orientation.Horizontal,
-            enabled = enabled && !addTriggered && swipeState.settledValue == SwipeToDismissBoxValue.Settled,
+            enabled = enabled && !addTriggered && !removeTriggered &&
+                swipeState.settledValue == SwipeToDismissBoxValue.Settled,
             flingBehavior = flingBehavior,
         ),
     ) {
         val removing by remember(swipeState) {
             derivedStateOf { swipeState.requireOffset() < 0f }
         }
-        val failedAdd = addTriggered && addStatus == SwipeActionStatus.FAILURE
+        val failedAdd = (addTriggered && addStatus == SwipeActionStatus.FAILURE) ||
+            (removeTriggered && removeStatus == SwipeActionStatus.FAILURE)
         Row(
             modifier = Modifier.matchParentSize()
                 .background(
-                    if (removing || failedAdd) MaterialTheme.colorScheme.errorContainer
+                    if (removing || removeTriggered || failedAdd) MaterialTheme.colorScheme.errorContainer
                     else MaterialTheme.colorScheme.secondaryContainer,
                 )
                 .padding(horizontal = 16.dp),
-            horizontalArrangement = if (removing) Arrangement.End else Arrangement.Start,
+            horizontalArrangement = if (removing || removeTriggered) Arrangement.End else Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier.size(48.dp)
                     .clip(CircleShape)
                     .background(
-                        if (removing || failedAdd) MaterialTheme.colorScheme.error
+                        if (removing || removeTriggered || failedAdd) MaterialTheme.colorScheme.error
                         else MaterialTheme.colorScheme.secondary,
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                if (!removing && addTriggered && (addStatus == SwipeActionStatus.IDLE || addStatus == SwipeActionStatus.PENDING)) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onSecondary)
-                } else {
-                    Icon(
-                        painter = painterResource(
-                            when {
-                                removing -> com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline
-                                addTriggered && addStatus == SwipeActionStatus.SUCCESS -> com.composables.icons.tabler.outline.R.drawable.tabler_ic_check_outline
-                                addTriggered && addStatus == SwipeActionStatus.FAILURE -> com.composables.icons.tabler.outline.R.drawable.tabler_ic_x_outline
-                                else -> com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline
-                            },
-                        ),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = if (removing || failedAdd) MaterialTheme.colorScheme.onError
-                            else MaterialTheme.colorScheme.onSecondary,
-                    )
-                }
+                ActionFeedbackIcon(
+                    status = if (removing || removeTriggered) {
+                        if (removeTriggered && removeStatus == SwipeActionStatus.IDLE) SwipeActionStatus.PENDING
+                        else removeStatus
+                    }
+                        else if (addTriggered && addStatus == SwipeActionStatus.IDLE) SwipeActionStatus.PENDING
+                        else if (addTriggered) addStatus else SwipeActionStatus.IDLE,
+                    idleIconRes = if (removing || removeTriggered) com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline
+                        else com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline,
+                    contentDescription = null,
+                    tint = if (removing || removeTriggered || failedAdd) MaterialTheme.colorScheme.onError
+                        else MaterialTheme.colorScheme.onSecondary,
+                )
             }
         }
         content(

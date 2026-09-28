@@ -182,8 +182,9 @@ fun PlayerRoute(
         onSwapEntries = viewModel::swapEntries,
         onClearQueue = viewModel::clearQueue,
         isFavorite = favoritesViewModel::isFavorite,
+        favoriteStatus = favoritesViewModel::statusFor,
         onToggleFavorite = favoritesViewModel::toggle,
-        favoritesBusy = favoritesUi.isFavoriteMutating || favoritesUi.isLoading,
+        favoritesBusy = favoritesUi.isLoading,
         onDismissMessage = viewModel::dismissMessage,
         onSearchOpen = onSearchOpen,
         onRetryQueue = {
@@ -244,8 +245,9 @@ fun SearchRoute(
         },
         onResultClick = viewModel::enqueueSearchResult,
         isFavorite = favoritesViewModel::isFavorite,
+        favoriteStatus = favoritesViewModel::statusFor,
         onToggleFavorite = favoritesViewModel::toggle,
-        favoritesBusy = favoritesUi.isFavoriteMutating || favoritesUi.isLoading,
+        favoritesBusy = favoritesUi.isLoading,
         onDismissMessage = viewModel::dismissMessage,
     )
 }
@@ -265,6 +267,7 @@ fun PlayerScreen(
     onSwapEntries: (String, String, Long) -> Boolean,
     onClearQueue: () -> Unit,
     isFavorite: (PlaybackTrackResponse) -> Boolean,
+    favoriteStatus: (PlaybackTrackResponse) -> SwipeActionStatus = { SwipeActionStatus.IDLE },
     onToggleFavorite: (PlaybackTrackResponse) -> Unit,
     favoritesBusy: Boolean,
     onDismissMessage: () -> Unit,
@@ -535,6 +538,7 @@ fun PlayerScreen(
                             onRequeueNowPlaying = onRequeueNowPlaying,
                             onStop = { confirmStop = true },
                             isFavorite = isFavorite,
+                            favoriteStatus = favoriteStatus,
                             onToggleFavorite = onToggleFavorite,
                             favoritesBusy = favoritesBusy,
                             onRepeatToggle = onRepeatToggle,
@@ -637,6 +641,7 @@ fun PlayerScreen(
                         removeLabel = stringResource(R.string.action_remove_from_queue),
                         enabled = !ui.isMutating && entry.entryId !in ui.mutatingEntryIds && draggingEntryId == null,
                         addStatus = ui.requeueStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
+                        removeStatus = ui.removeStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
                         onAdd = { onRequeueEntry(entry.entryId) },
                         onRemove = { onRemoveEntry(entry.entryId) },
                         modifier = Modifier
@@ -683,6 +688,7 @@ fun PlayerScreen(
                                         FavoriteTrackButton(
                                             track = entry.track,
                                             checked = isFavorite(entry.track),
+                                            status = favoriteStatus(entry.track),
                                             enabled = !favoritesBusy,
                                             onToggle = onToggleFavorite,
                                         )
@@ -740,6 +746,7 @@ fun PlayerScreen(
                                 FavoriteTrackButton(
                                     track = draggedEntry.track,
                                     checked = isFavorite(draggedEntry.track),
+                                    status = favoriteStatus(draggedEntry.track),
                                     enabled = false,
                                     onToggle = onToggleFavorite,
                                 )
@@ -811,6 +818,7 @@ private fun NowPlayingCard(
     onRequeueNowPlaying: () -> Unit,
     onStop: () -> Unit,
     isFavorite: (PlaybackTrackResponse) -> Boolean,
+    favoriteStatus: (PlaybackTrackResponse) -> SwipeActionStatus,
     onToggleFavorite: (PlaybackTrackResponse) -> Unit,
     favoritesBusy: Boolean,
     onRepeatToggle: () -> Unit,
@@ -820,7 +828,7 @@ private fun NowPlayingCard(
 ) {
     val repeatEnabled = queue?.isRepeatEnabled == true
     val radioEnabled = queue?.radio?.isEnabled == true
-    val activeTrack = queue?.nowPlaying
+    val activeTrack = presentedNowPlaying?.track
     val hasActivePlayback = activeTrack != null
     val motion = MaterialTheme.motionScheme
     val currentSlide = nowPlayingSlide(
@@ -989,6 +997,7 @@ private fun NowPlayingCard(
                     FavoriteTrackButton(
                         track = activeTrack,
                         checked = isFavorite(activeTrack),
+                        status = favoriteStatus(activeTrack),
                         enabled = !favoritesBusy,
                         onToggle = onToggleFavorite,
                     )

@@ -4,7 +4,10 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
+import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
+import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
 import com.tryniecki.kajutabot.ui.player.NowPlayingPresentation
+import com.tryniecki.kajutabot.ui.player.PlayerUiState
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -30,6 +33,35 @@ class RemoteQueuePlayerTest {
         assertEquals(1, player.currentTimeline.windowCount)
         assertEquals(originalTimelineUid, player.currentTimeline.getWindow(0, Timeline.Window()).uid)
         assertNotEquals(originalMediaId, player.currentMediaItem?.mediaId)
+        assertEquals("Second", player.mediaMetadata.title)
+        player.release()
+    }
+
+    @Test
+    fun `skip gap keeps media item and next track updates it without empty timeline`() {
+        val player = RemoteQueuePlayer {}
+        val previous = NowPlayingPresentation(track("first", "First"), "play-1", 10_000, true)
+        player.update(previous)
+        val originalTimelineUid = player.currentTimeline.getWindow(0, Timeline.Window()).uid
+        val gap = QueueSnapshotResponse(
+            guildId = "g1",
+            voiceChannelId = "c1",
+            nowPlaying = null,
+            nowPlayingFromRadio = false,
+            radio = RadioStateResponse(isEnabled = false),
+            pendingEntries = emptyList(),
+            pendingEntriesCount = 1,
+            pendingDurationMilliseconds = 180_000,
+            version = 11,
+            queueVersion = 11,
+        )
+        player.update(PlayerUiState(queue = gap, transitionNowPlaying = previous).effectiveNowPlaying)
+        assertEquals(1, player.currentTimeline.windowCount)
+        assertEquals("First", player.mediaMetadata.title)
+
+        player.update(NowPlayingPresentation(track("second", "Second"), "play-2", 0, true))
+        assertEquals(1, player.currentTimeline.windowCount)
+        assertEquals(originalTimelineUid, player.currentTimeline.getWindow(0, Timeline.Window()).uid)
         assertEquals("Second", player.mediaMetadata.title)
         player.release()
     }

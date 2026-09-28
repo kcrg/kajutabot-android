@@ -267,7 +267,7 @@ class RemotePlaybackService : MediaSessionService() {
         fun mediaButtons(context: Context, player: PlayerViewModel, favorites: FavoritesViewModel): List<CommandButton> {
             val state = player.ui.value
             val queue = state.queue ?: return emptyList()
-            val track = queue.nowPlaying ?: return emptyList()
+            val track = state.effectiveNowPlaying?.track ?: return emptyList()
             val isFavorite = favorites.isFavorite(track)
             return listOf(
                 CommandButton.Builder(CommandButton.ICON_NEXT)
