@@ -36,6 +36,7 @@ class PlaybackProgressTest {
         pendingEntriesCount = 0,
         pendingDurationMilliseconds = 0,
         version = version,
+        queueVersion = version,
         nowPlayingStartedAt = if (positionMs == null) null else "2026-09-27T12:00:00Z",
         playbackInstanceId = instanceId,
         playbackPositionMilliseconds = positionMs,
@@ -77,6 +78,14 @@ class PlaybackProgressTest {
     }
 
     @Test
+    fun `accent and queue token updates keep glow track identity`() {
+        val before = nowPlayingSlide(snapshot(nowPlaying = track().copy(artworkAccentColor = "#ff0000")))
+        val after = nowPlayingSlide(snapshot(version = 11, nowPlaying = track().copy(artworkAccentColor = "#00ff00")).copy(queueVersion = 99))
+        assertEquals(before.identity, after.identity)
+        assertFalse(before.artworkAccentColor == after.artworkAccentColor)
+    }
+
+    @Test
     fun `preparing playback can have no start time or reported position`() {
         val slide = nowPlayingSlide(snapshot(instanceId = "play-1", positionMs = null))
         assertTrue(slide.hasTrack)
@@ -86,6 +95,10 @@ class PlaybackProgressTest {
     @Test
     fun `older snapshot version does not overwrite`() {
         assertFalse(shouldApplyQueueSnapshot(snapshot(version = 10), snapshot(version = 9), "g1"))
+        assertFalse(shouldApplyQueueSnapshot(
+            snapshot(version = 10).copy(queueVersion = 1),
+            snapshot(version = 9).copy(queueVersion = 100), "g1",
+        ))
     }
 
     @Test

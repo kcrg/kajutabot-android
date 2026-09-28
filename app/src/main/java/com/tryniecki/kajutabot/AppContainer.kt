@@ -15,6 +15,7 @@ import com.tryniecki.kajutabot.auth.SessionStore
 import com.tryniecki.kajutabot.data.preferences.UserPreferencesRepository
 import com.tryniecki.kajutabot.data.repository.FavoritesRepository
 import com.tryniecki.kajutabot.data.repository.PlayerRepository
+import com.tryniecki.kajutabot.data.repository.QueueMutationCoordinator
 import com.tryniecki.kajutabot.data.repository.SessionRepository
 import com.tryniecki.kajutabot.ui.app.SessionViewModelOwner
 import com.tryniecki.kajutabot.ui.app.SessionViewModelScope
@@ -56,7 +57,10 @@ class AppContainer(context: Context) {
         }
     }
 
-    fun clearApiCache() = synchronized(tokenApis) { tokenApis.clear() }
+    fun clearApiCache() {
+        synchronized(tokenApis) { tokenApis.clear() }
+        queueMutationCoordinator.clear()
+    }
 
     val sessionManager = SessionManager(
         authApi = authApi,
@@ -70,8 +74,9 @@ class AppContainer(context: Context) {
     val preferencesRepository = UserPreferencesRepository(appContext)
     val platformThemeController = PlatformThemeController(appContext)
     val sessionRepository = SessionRepository(sessionManager)
-    val playerRepository = PlayerRepository(sessionManager, appConfig.apiBaseUrl)
-    val favoritesRepository = FavoritesRepository(sessionManager)
+    val queueMutationCoordinator = QueueMutationCoordinator()
+    val playerRepository = PlayerRepository(sessionManager, appConfig.apiBaseUrl, queueMutationCoordinator)
+    val favoritesRepository = FavoritesRepository(sessionManager, queueMutationCoordinator)
 
     private val _mediaServiceActive = MutableStateFlow(false)
     val mediaServiceActive = _mediaServiceActive.asStateFlow()

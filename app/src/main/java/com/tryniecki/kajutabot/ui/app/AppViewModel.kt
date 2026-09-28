@@ -28,7 +28,6 @@ data class AppUiState(
     val isGuestSigningIn: Boolean = false,
     val isLoggingOut: Boolean = false,
     val loginUrl: String? = null,
-    val pendingSharedUrl: String? = null,
     val accountError: UiText? = null,
     val themeMode: ThemeMode = ThemeMode.NATIVE,
     val isThemeInitialized: Boolean = false,
@@ -47,6 +46,8 @@ class AppViewModel(
 
     private val _ui = MutableStateFlow(AppUiState())
     val ui: StateFlow<AppUiState> = _ui.asStateFlow()
+    private val sharedUrls = ShareEventInbox()
+    val sharedUrlEvents = sharedUrls.events
 
     fun ownerForSession(identity: Long): SessionViewModelOwner = sessionOwnerProvider(identity)
 
@@ -77,7 +78,6 @@ class AppViewModel(
     private fun resetSessionUi() {
         _ui.update {
             it.copy(
-                pendingSharedUrl = null,
                 accountError = null,
                 loginUrl = null,
             )
@@ -85,12 +85,7 @@ class AppViewModel(
     }
 
     fun onSharedUrl(url: String?) {
-        if (url.isNullOrBlank()) return
-        _ui.update { it.copy(pendingSharedUrl = url) }
-    }
-
-    fun clearPendingSharedUrl() {
-        _ui.update { it.copy(pendingSharedUrl = null) }
+        sharedUrls.offer(url)
     }
 
     fun acknowledgeLoginUrl(url: String) {

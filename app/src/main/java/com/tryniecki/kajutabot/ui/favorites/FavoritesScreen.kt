@@ -54,6 +54,7 @@ import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.SwipeActionCard
+import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.ui.components.SwipeActionHints
 import com.tryniecki.kajutabot.ui.text.asString
 import com.tryniecki.kajutabot.ui.text.resolve
@@ -72,12 +73,9 @@ fun FavoritesRoute(viewModel: FavoritesViewModel) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
-    val message = ui.transientMessage
-    LaunchedEffect(message?.id) {
-        if (message != null) {
-            snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(message.text.resolve(context))
-            viewModel.acknowledgeTransientMessage(message.id)
+    LaunchedEffect(viewModel) {
+        viewModel.messageEvents.collect { message ->
+            snackbarHostState.showSnackbar(message.resolve(context))
         }
     }
     FavoritesScreen(
@@ -159,7 +157,7 @@ fun FavoritesScreen(
                                 )
                             },
                             onClick = {
-                                if (!ui.isMutating) onQueueAll()
+                                if (!ui.isQueueMutating && !ui.isMutating) onQueueAll()
                             },
                         )
                     }
@@ -225,6 +223,7 @@ fun FavoritesScreen(
                         addLabel = addLabel,
                         removeLabel = removeLabel,
                         enabled = !ui.isMutating,
+                        addStatus = ui.queueStatuses[fav.contentUrl] ?: SwipeActionStatus.IDLE,
                         onAdd = { onPlaySingle(fav.contentUrl) },
                         onRemove = { onDelete(fav.contentUrl) },
                         modifier = Modifier.animateItem(

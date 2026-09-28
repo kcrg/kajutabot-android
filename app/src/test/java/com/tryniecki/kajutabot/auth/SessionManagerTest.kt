@@ -738,6 +738,7 @@ class SessionManagerTest {
         pendingEntriesCount = 0,
         pendingDurationMilliseconds = 0,
         version = 1,
+        queueVersion = 1,
     )
 
     private fun unsupportedApi(): KajutaBotApi = object : KajutaBotApi {
@@ -746,15 +747,15 @@ class SessionManagerTest {
         override suspend fun getVoiceChannels(guildId: String): List<DiscordVoiceChannelResponse> = throw UnsupportedOperationException()
         override suspend fun getQueue(guildId: String): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun enqueue(guildId: String, request: EnqueueRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
-        override suspend fun removeQueueEntry(guildId: String, entryId: String, expectedVersion: Long?): QueueSnapshotResponse = throw UnsupportedOperationException()
+        override suspend fun removeQueueEntry(guildId: String, entryId: String, expectedQueueVersion: Long?): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun moveQueueEntry(guildId: String, entryId: String, request: MoveQueueEntryRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun swapQueueEntries(guildId: String, request: SwapQueueEntriesRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
-        override suspend fun clearPendingQueue(guildId: String, expectedVersion: Long?): QueueSnapshotResponse = throw UnsupportedOperationException()
+        override suspend fun clearPendingQueue(guildId: String, expectedQueueVersion: Long?): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun skip(guildId: String, request: SkipQueueRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun setRepeat(guildId: String, request: SetQueueRepeatRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun stop(guildId: String, request: QueueMutationRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun enableRadio(guildId: String, request: EnableRadioRequest): QueueSnapshotResponse = throw UnsupportedOperationException()
-        override suspend fun disableRadio(guildId: String, expectedVersion: Long?): QueueSnapshotResponse = throw UnsupportedOperationException()
+        override suspend fun disableRadio(guildId: String, expectedQueueVersion: Long?): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun search(query: String, source: String, maxResults: Int): SearchResponse = throw UnsupportedOperationException()
         override suspend fun getFavorites(): List<FavoriteResponse> = throw UnsupportedOperationException()
         override suspend fun addFavorite(request: AddFavoriteRequest): FavoriteResponse = throw UnsupportedOperationException()

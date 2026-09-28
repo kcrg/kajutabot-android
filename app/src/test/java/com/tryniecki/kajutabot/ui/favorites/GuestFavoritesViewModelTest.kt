@@ -78,6 +78,11 @@ class GuestFavoritesViewModelTest {
             withTimeout(5_000) { viewModel.ui.first { !it.isLoading } }
             assertEquals("/api/v1/app/users/me/favorites", server.takeRequest().path)
             viewModel.setShuffle(true)
+            viewModel.setShuffle(false)
+            viewModel.setShuffle(true)
+            assertEquals(uiText(R.string.favorites_shuffle_on), viewModel.messageEvents.first())
+            assertEquals(uiText(R.string.favorites_shuffle_off), viewModel.messageEvents.first())
+            assertEquals(uiText(R.string.favorites_shuffle_on), viewModel.messageEvents.first())
             assertTrue(withTimeout(5_000) { preferences.favoritesShuffle("guest").first { it } })
 
             server.enqueue(MockResponse().setBody(favoriteJson))
@@ -90,10 +95,12 @@ class GuestFavoritesViewModelTest {
             assertTrue(viewModel.isFavorite(track))
 
             server.enqueue(MockResponse().setBody(queueResponseJson()))
+            server.enqueue(MockResponse().setBody(queueResponseJson()))
             viewModel.queueAll()
-            withTimeout(5_000) {
-                viewModel.ui.first { it.transientMessage?.text == uiText(R.string.favorites_queued_all) }
-            }
+            assertEquals(uiText(R.string.favorites_queued_all), withTimeout(5_000) {
+                viewModel.messageEvents.first { it == uiText(R.string.favorites_queued_all) }
+            })
+            assertEquals("/api/v1/app/guilds/demo-guild/queue", server.takeRequest().path)
             val queue = server.takeRequest()
             assertEquals("/api/v1/app/users/me/favorites/queue", queue.path)
             assertTrue(queue.body.readUtf8().contains("\"shuffle\":true"))
@@ -147,6 +154,7 @@ class GuestFavoritesViewModelTest {
             withTimeout(5_000) { viewModel.ui.first { !it.isLoading } }
             server.takeRequest()
             viewModel.setShuffle(true)
+            assertTrue(withTimeout(5_000) { preferences.favoritesShuffle("guest").first { it } })
 
             now = Instant.parse("2026-09-20T00:59:45Z")
             assertEquals("new-jwt", manager.accessTokenForSession(identity))
@@ -161,5 +169,5 @@ class GuestFavoritesViewModelTest {
         }
     }
 
-    private fun queueResponseJson() = """{"guildId":"demo-guild","voiceChannelId":"voice","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingEntriesCount":0,"pendingDurationMilliseconds":0,"version":1}"""
+    private fun queueResponseJson() = """{"guildId":"demo-guild","voiceChannelId":"voice","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingEntriesCount":0,"pendingDurationMilliseconds":0,"version":1,"queueVersion":1}"""
 }

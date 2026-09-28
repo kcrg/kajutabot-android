@@ -29,10 +29,10 @@ object KajutaBotApiErrors {
 
     fun errorCodeOf(throwable: Throwable?): String? = problemDetailsOf(throwable)?.errorCode
 
-    fun currentVersionOf(throwable: Throwable?): Long? {
+    fun currentQueueVersionOf(throwable: Throwable?): Long? {
         // Note: errorBody can be consumed only once per HttpException instance.
-        // If you need both errorCode and currentVersion, call problemDetailsOf() once.
-        return problemDetailsOf(throwable)?.currentVersion
+        // If you need both errorCode and currentQueueVersion, call problemDetailsOf() once.
+        return problemDetailsOf(throwable)?.currentQueueVersion
     }
 
     fun httpStatusOf(throwable: Throwable?): Int? =

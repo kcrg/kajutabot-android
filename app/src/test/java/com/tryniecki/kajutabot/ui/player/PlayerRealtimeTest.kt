@@ -27,6 +27,7 @@ class PlayerRealtimeTest {
         pendingEntriesCount = 0,
         pendingDurationMilliseconds = 0,
         version = version,
+        queueVersion = version,
     )
 
     private inner class FakeConnection(

@@ -12,8 +12,8 @@ import com.tryniecki.kajutabot.api.model.favorites.FavoriteResponse
 import com.tryniecki.kajutabot.data.preferences.UserPreferencesRepository
 import com.tryniecki.kajutabot.data.preferences.favoritesPreferenceOwnerKey
 import com.tryniecki.kajutabot.data.repository.FavoritesRepository
-import com.tryniecki.kajutabot.ui.text.UiMessage
 import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.ui.text.uiText
 import com.tryniecki.kajutabot.ui.userMessageForError
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +21,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class FavoritesUiState(
     val favorites: List<FavoriteResponse> = emptyList(),
@@ -31,7 +36,7 @@ data class FavoritesUiState(
     val isQueueMutating: Boolean = false,
     val shuffle: Boolean = false,
     val error: UiText? = null,
-    val transientMessage: UiMessage? = null,
+    val queueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
 )
 
 class FavoritesViewModel(
@@ -43,11 +48,14 @@ class FavoritesViewModel(
 
     private val _ui = MutableStateFlow(FavoritesUiState(isLoading = true))
     val ui: StateFlow<FavoritesUiState> = _ui.asStateFlow()
+    private val messages = Channel<UiText>(Channel.UNLIMITED)
+    val messageEvents = messages.receiveAsFlow()
 
     private var refreshGeneration = 0L
     private var mutationRevision = 0L
     private var favoriteIdentities: Set<String> = emptySet()
-    private var messageSequence = 0L
+    private val shuffleWriteMutex = Mutex()
+    private fun emitMessage(message: UiText) { messages.trySend(message) }
 
     init {
         viewModelScope.launch {
@@ -90,20 +98,13 @@ class FavoritesViewModel(
         _ui.update { it.copy(error = null) }
     }
 
-    fun acknowledgeTransientMessage(id: Long) {
-        _ui.update { current ->
-            if (current.transientMessage?.id == id) current.copy(transientMessage = null) else current
-        }
-    }
-
     fun setShuffle(enabled: Boolean) {
-        val message = UiMessage(
-            id = ++messageSequence,
-            text = uiText(if (enabled) R.string.favorites_shuffle_on else R.string.favorites_shuffle_off),
-        )
-        _ui.update { it.copy(shuffle = enabled, transientMessage = message) }
+        emitMessage(uiText(if (enabled) R.string.favorites_shuffle_on else R.string.favorites_shuffle_off))
+        _ui.update { it.copy(shuffle = enabled) }
         viewModelScope.launch {
-            preferencesRepository.setFavoritesShuffle(preferenceOwnerKey, enabled)
+            shuffleWriteMutex.withLock {
+                preferencesRepository.setFavoritesShuffle(preferenceOwnerKey, enabled)
+            }
         }
     }
 
@@ -137,23 +138,20 @@ class FavoritesViewModel(
                 )
                 mutationRevision++
                 val identity = favoriteIdentity(added.contentUrl)
-                val transientMessage = if (showFeedback) {
-                    UiMessage(++messageSequence, uiText(R.string.favorites_added))
-                } else null
+                if (showFeedback) emitMessage(uiText(R.string.favorites_added))
                 favoriteIdentities = favoriteIdentities + identity
                 _ui.update { current ->
                     current.copy(
                         favorites = listOf(added) + current.favorites.filterNot {
                             favoriteIdentity(it.contentUrl) == identity
                         },
-                        isMutating = current.isQueueMutating,
+                        isMutating = false,
                         isFavoriteMutating = false,
                         isLoading = false,
-                        transientMessage = transientMessage ?: current.transientMessage,
                     )
                 }
             } catch (e: Exception) {
-                _ui.update { it.copy(isMutating = it.isQueueMutating, isFavoriteMutating = false, error = userMessageForError(e)) }
+                _ui.update { it.copy(isMutating = false, isFavoriteMutating = false, error = userMessageForError(e)) }
             }
         }
     }
@@ -168,38 +166,33 @@ class FavoritesViewModel(
                 repository.deleteFavorite(sessionIdentity, contentUrl)
                 mutationRevision++
                 val identity = favoriteIdentity(contentUrl)
-                val transientMessage = if (toggleFeedback) {
-                    UiMessage(++messageSequence, uiText(R.string.favorites_removed))
-                } else {
-                    null
-                }
+                if (toggleFeedback) emitMessage(uiText(R.string.favorites_removed))
                 favoriteIdentities = favoriteIdentities - identity
                 _ui.update { current ->
                     current.copy(
                         favorites = current.favorites.filterNot { favoriteIdentity(it.contentUrl) == identity },
-                        isMutating = current.isQueueMutating,
+                        isMutating = false,
                         isFavoriteMutating = false,
                         isLoading = false,
-                        transientMessage = transientMessage ?: current.transientMessage,
                     )
                 }
             } catch (e: Exception) {
-                _ui.update { it.copy(isMutating = it.isQueueMutating, isFavoriteMutating = false, error = userMessageForError(e)) }
+                _ui.update { it.copy(isMutating = false, isFavoriteMutating = false, error = userMessageForError(e)) }
             }
         }
     }
 
     fun queueAll() {
-        if (_ui.value.isMutating) return
+        if (_ui.value.isQueueMutating) return
+        _ui.update { it.copy(isQueueMutating = true, error = null) }
         viewModelScope.launch {
             val selection = preferencesRepository.currentGuildSelection()
             val guildId = selection.guildId
             val channelId = selection.voiceChannelId
             if (guildId == null || channelId == null) {
-                _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_all)) }
+                _ui.update { it.copy(isQueueMutating = false, error = uiText(R.string.favorites_selection_required_all)) }
                 return@launch
             }
-            _ui.update { it.copy(isMutating = true, isQueueMutating = true, error = null) }
             try {
                 repository.queueFavorites(
                     expectedIdentity = sessionIdentity,
@@ -207,7 +200,8 @@ class FavoritesViewModel(
                     channelId = channelId,
                     shuffle = _ui.value.shuffle,
                 )
-                _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false, transientMessage = UiMessage(++messageSequence, uiText(R.string.favorites_queued_all))) }
+                _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false) }
+                emitMessage(uiText(R.string.favorites_queued_all))
             } catch (e: Exception) {
                 _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false, error = userMessageForError(e)) }
             }
@@ -215,16 +209,20 @@ class FavoritesViewModel(
     }
 
     fun playSingle(contentUrl: String) {
-        if (_ui.value.isMutating) return
+        if (_ui.value.queueStatuses[contentUrl] == SwipeActionStatus.PENDING) return
+        _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.PENDING)) }
         viewModelScope.launch {
             val selection = preferencesRepository.currentGuildSelection()
             val guildId = selection.guildId
             val channelId = selection.voiceChannelId
             if (guildId == null || channelId == null) {
                 _ui.update { it.copy(error = uiText(R.string.favorites_selection_required_play)) }
+                _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.FAILURE)) }
+                delay(1800)
+                _ui.update { it.copy(queueStatuses = it.queueStatuses - contentUrl) }
                 return@launch
             }
-            _ui.update { it.copy(isMutating = true, isQueueMutating = true, error = null) }
+            _ui.update { it.copy(error = null) }
             try {
                 repository.playSingle(
                     expectedIdentity = sessionIdentity,
@@ -232,10 +230,15 @@ class FavoritesViewModel(
                     channelId = channelId,
                     contentUrl = contentUrl,
                 )
-                _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false, transientMessage = UiMessage(++messageSequence, uiText(R.string.favorites_queued_one))) }
+                _ui.update { it.copy(isMutating = it.isFavoriteMutating) }
+                _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.SUCCESS)) }
+                emitMessage(uiText(R.string.favorites_queued_one))
             } catch (e: Exception) {
-                _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false, error = userMessageForError(e)) }
+                _ui.update { it.copy(isMutating = it.isFavoriteMutating, error = userMessageForError(e)) }
+                _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.FAILURE)) }
             }
+            delay(1800)
+            _ui.update { it.copy(queueStatuses = it.queueStatuses - contentUrl) }
         }
     }
 

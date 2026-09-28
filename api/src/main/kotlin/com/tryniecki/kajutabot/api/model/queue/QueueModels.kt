@@ -22,6 +22,7 @@ data class QueueSnapshotResponse(
     val pendingEntriesCount: Int,
     val pendingDurationMilliseconds: Long,
     val version: Long,
+    val queueVersion: Long,
     val nowPlayingStartedAt: String? = null,
     val playbackInstanceId: String? = null,
     val playbackPositionMilliseconds: Long? = null,
@@ -37,35 +38,35 @@ enum class SkipOutcome { Advanced, RestartedRepeatedTrack }
 data class EnqueueRequest(
     val voiceChannelId: String,
     val inputs: List<String>,
-    val expectedVersion: Long? = null,
+    val expectedQueueVersion: Long? = null,
 )
 
 @Serializable
 data class QueueMutationRequest(
-    val expectedVersion: Long? = null,
+    val expectedQueueVersion: Long? = null,
 )
 
 @Serializable
 data class MoveQueueEntryRequest(
     val newPosition: Int,
-    val expectedVersion: Long? = null,
+    val expectedQueueVersion: Long? = null,
 )
 
 @Serializable
 data class SwapQueueEntriesRequest(
     val firstEntryId: String,
     val secondEntryId: String,
-    val expectedVersion: Long? = null,
+    val expectedQueueVersion: Long? = null,
 )
 
 @Serializable
 data class SkipQueueRequest(
     val skipToPosition: Int? = null,
-    val expectedVersion: Long? = null,
+    val expectedQueueVersion: Long? = null,
 )
 
 @Serializable
 data class SetQueueRepeatRequest(
     val isEnabled: Boolean,
-    val expectedVersion: Long? = null,
+    val expectedQueueVersion: Long? = null,
 )

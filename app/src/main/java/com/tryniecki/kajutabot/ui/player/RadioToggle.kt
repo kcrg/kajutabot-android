@@ -12,7 +12,7 @@ import com.tryniecki.kajutabot.api.model.radio.EnableRadioRequest
  */
 sealed interface RadioToggleAction {
     data class Enable(val request: EnableRadioRequest) : RadioToggleAction
-    data class Disable(val expectedVersion: Long?) : RadioToggleAction
+    data class Disable(val expectedQueueVersion: Long) : RadioToggleAction
     data object MissingVoiceChannel : RadioToggleAction
 }
 
@@ -26,7 +26,7 @@ fun decideRadioToggle(
     voiceChannelId: String?,
 ): RadioToggleAction {
     if (queue.radio.isEnabled) {
-        return RadioToggleAction.Disable(queue.version)
+        return RadioToggleAction.Disable(queue.queueVersion)
     }
     val channelId = voiceChannelId ?: return RadioToggleAction.MissingVoiceChannel
     return RadioToggleAction.Enable(
@@ -36,7 +36,7 @@ fun decideRadioToggle(
                 ?: RadioToggleDefaults.MIN_DURATION_SECONDS,
             maximumDurationSeconds = queue.radio.maximumDurationSeconds
                 ?: RadioToggleDefaults.MAX_DURATION_SECONDS,
-            expectedQueueVersion = queue.version,
+            expectedQueueVersion = queue.queueVersion,
         ),
     )
 }

@@ -57,6 +57,7 @@ class PlayerActionsTest {
             pendingEntriesCount = 2,
             pendingDurationMilliseconds = 120_000,
             version = 7,
+            queueVersion = 7,
         ),
     )
 

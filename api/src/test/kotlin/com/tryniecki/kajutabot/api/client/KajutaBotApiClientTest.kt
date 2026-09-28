@@ -4,6 +4,13 @@ import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
 import com.tryniecki.kajutabot.api.model.auth.SessionType
 import com.tryniecki.kajutabot.api.model.error.KajutaBotProblemDetailsParser
 import com.tryniecki.kajutabot.api.model.queue.SwapQueueEntriesRequest
+import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
+import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
+import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
+import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
+import com.tryniecki.kajutabot.api.model.queue.MoveQueueEntryRequest
+import com.tryniecki.kajutabot.api.model.radio.EnableRadioRequest
+import com.tryniecki.kajutabot.api.model.favorites.QueueFavoritesRequest
 import kotlinx.serialization.json.Json
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -20,6 +27,33 @@ class KajutaBotApiClientTest {
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
+    }
+
+    @Test
+    fun `every queue mutation sends expectedQueueVersion and never expectedVersion`() {
+        val api = KajutaBotApiClientFactory.create(server.url("/").toString()) { "token" }
+        val response = """{"guildId":"g","voiceChannelId":"c","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingEntriesCount":0,"pendingDurationMilliseconds":0,"version":20,"queueVersion":11}"""
+        repeat(11) { server.enqueue(MockResponse().setBody(response)) }
+        kotlinx.coroutines.runBlocking {
+            api.enqueue("g", EnqueueRequest("c", listOf("https://example.test/x"), 10))
+            api.skip("g", SkipQueueRequest(expectedQueueVersion = 10))
+            api.stop("g", QueueMutationRequest(10))
+            api.setRepeat("g", SetQueueRepeatRequest(true, 10))
+            api.enableRadio("g", EnableRadioRequest("c", 60, 600, 10))
+            api.removeQueueEntry("g", "entry", 10)
+            api.clearPendingQueue("g", 10)
+            api.disableRadio("g", 10)
+            api.moveQueueEntry("g", "entry", MoveQueueEntryRequest(2, 10))
+            api.swapQueueEntries("g", SwapQueueEntriesRequest("a", "b", 10))
+            api.queueFavorites(QueueFavoritesRequest("g", "c", 10))
+        }
+        repeat(11) {
+            val request = server.takeRequest()
+            val sent = request.path.orEmpty() + request.body.readUtf8()
+            assertTrue(sent.contains("expectedQueueVersion"))
+            assertTrue(sent.contains("10"))
+            assertTrue(!sent.contains("expectedVersion"))
+        }
     }
 
     @Before
@@ -152,7 +186,7 @@ class KajutaBotApiClientTest {
                 "track":{"contentId":"C","contentType":"YouTube","title":"C",
                   "url":"https://example.test/C","durationMilliseconds":120000,
                   "thumbnailUrl":null,"playCount":0}}],
-              "pendingEntriesCount":1, "pendingDurationMilliseconds":120000, "version":124
+              "pendingEntriesCount":1, "pendingDurationMilliseconds":120000, "version":124, "queueVersion":123
             }
         """.trimIndent()))
         val api = KajutaBotApiClientFactory.create(server.url("/").toString()) { "token-123" }
@@ -171,7 +205,7 @@ class KajutaBotApiClientTest {
         val body = json.parseToJsonElement(request.body.readUtf8()).toString()
         assertTrue(body.contains("\"firstEntryId\":\"11111111-1111-1111-1111-111111111111\""))
         assertTrue(body.contains("\"secondEntryId\":\"33333333-3333-3333-3333-333333333333\""))
-        assertTrue(body.contains("\"expectedVersion\":123"))
+        assertTrue(body.contains("\"expectedQueueVersion\":123"))
         assertEquals(124L, snapshot.version)
         assertEquals(1, snapshot.pendingEntriesCount)
         assertEquals("C", snapshot.pendingEntries.single().track.title)
@@ -201,11 +235,21 @@ class KajutaBotApiClientTest {
     }
 
     @Test
-    fun `ProblemDetails parser reads errorCode and currentVersion`() {
-        val raw = """{"type":"https://x","title":"Conflict","status":409,"detail":"stale","errorCode":"queue_version_conflict","currentVersion":42}"""
+    fun `ProblemDetails parser reads errorCode and currentQueueVersion`() {
+        val raw = """{"type":"https://x","title":"Conflict","status":409,"detail":"stale","errorCode":"queue_version_conflict","currentQueueVersion":42}"""
         val parsed = KajutaBotProblemDetailsParser.parse(raw)
         assertEquals("queue_version_conflict", parsed?.errorCode)
-        assertEquals(42L, parsed?.currentVersion)
+        assertEquals(42L, parsed?.currentQueueVersion)
         assertEquals(409, parsed?.status)
+    }
+
+    @Test
+    fun `persistence conflict stays a separate 503 problem`() {
+        val parsed = KajutaBotProblemDetailsParser.parse(
+            """{"status":503,"errorCode":"queue_persistence_conflict"}""",
+        )
+        assertEquals(503, parsed?.status)
+        assertEquals("queue_persistence_conflict", parsed?.errorCode)
+        assertNull(parsed?.currentQueueVersion)
     }
 }

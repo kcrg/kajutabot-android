@@ -85,6 +85,10 @@ class MainActivity : ComponentActivity() {
         val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
         val url = extractUrl(sharedText) ?: return
         appViewModel.onSharedUrl(url)
+        // Consume the launch intent as well as the ViewModel event. Android can
+        // recreate this Activity while retaining its most recent Intent.
+        intent.removeExtra(Intent.EXTRA_TEXT)
+        intent.action = Intent.ACTION_MAIN
     }
 
     private fun handleViewIntent(uri: Uri?) {

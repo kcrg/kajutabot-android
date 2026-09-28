@@ -19,7 +19,8 @@ class PlayerStateProjectionTest {
     @Test
     fun `queue reorder keeps playback controls available`() {
         assertFalse(shouldBlockPlaybackControls(true, null, true))
-        assertTrue(shouldBlockPlaybackControls(true, null, false))
+        assertFalse(shouldBlockPlaybackControls(true, null, false))
+        assertFalse(shouldBlockPlaybackControls(false, null, false))
     }
 
     private fun track(title: String = "Track") = PlaybackTrackResponse(
@@ -46,6 +47,7 @@ class PlayerStateProjectionTest {
         pendingEntriesCount = 0,
         pendingDurationMilliseconds = 0,
         version = version,
+        queueVersion = version,
         nowPlayingStartedAt = "2026-09-18T12:00:00Z",
     )
 

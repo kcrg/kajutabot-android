@@ -45,10 +45,7 @@ object CoilSetup {
     ) = Interceptor { chain ->
         val original = chain.request()
         val url = original.url
-        if (apiOrigin == null ||
-            !url.sameOrigin(apiOrigin) ||
-            !url.encodedPath.startsWith(APP_ARTWORK_PATH_PREFIX)
-        ) {
+        if (!shouldAuthorizeArtwork(url, apiOrigin)) {
             return@Interceptor chain.proceed(original)
         }
 
@@ -69,6 +66,7 @@ object CoilSetup {
         chain.proceed(request)
     }
 
-    private fun HttpUrl.sameOrigin(other: HttpUrl): Boolean =
-        scheme == other.scheme && host == other.host && port == other.port
+    internal fun shouldAuthorizeArtwork(url: HttpUrl, apiOrigin: HttpUrl?): Boolean =
+        apiOrigin != null && url.scheme == apiOrigin.scheme && url.host == apiOrigin.host &&
+            url.port == apiOrigin.port && url.encodedPath.startsWith(APP_ARTWORK_PATH_PREFIX)
 }

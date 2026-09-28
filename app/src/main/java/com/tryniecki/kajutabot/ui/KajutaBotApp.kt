@@ -400,13 +400,6 @@ private fun AuthenticatedContent(
     val density = LocalDensity.current
     val hierarchySlideDistancePx = with(density) { KbMotion.HIERARCHY_SLIDE_DISTANCE.roundToPx() }
 
-    LaunchedEffect(favoritesUi.transientMessage?.id, currentDestination) {
-        if (currentDestination == AppDestination.FAVORITES) return@LaunchedEffect
-        val message = favoritesUi.transientMessage ?: return@LaunchedEffect
-        Toast.makeText(context, message.text.resolve(context), Toast.LENGTH_SHORT).show()
-        favoritesViewModel.acknowledgeTransientMessage(message.id)
-    }
-
     val favoritesErrorMessage = favoritesUi.error?.asString()
     LaunchedEffect(favoritesErrorMessage, currentDestination) {
         if (currentDestination != AppDestination.FAVORITES && favoritesErrorMessage != null) {
@@ -421,12 +414,12 @@ private fun AuthenticatedContent(
         playerViewModel.acknowledgeControlMessage(message.id)
     }
 
-    LaunchedEffect(appUi.pendingSharedUrl) {
-        val url = appUi.pendingSharedUrl ?: return@LaunchedEffect
-        currentDestination = AppDestination.PLAYER
-        while (playerBackStack.size > 1) playerBackStack.removeLastOrNull()
-        playerBackStack.add(AppRoute.SharedTrack(System.nanoTime(), url))
-        appViewModel.clearPendingSharedUrl()
+    LaunchedEffect(appViewModel) {
+        appViewModel.sharedUrlEvents.collect { event ->
+            currentDestination = AppDestination.PLAYER
+            while (playerBackStack.size > 1) playerBackStack.removeLastOrNull()
+            playerBackStack.add(AppRoute.SharedTrack(event.id, event.url))
+        }
     }
 
     // Retain the last content for the exit transition: visibility and state

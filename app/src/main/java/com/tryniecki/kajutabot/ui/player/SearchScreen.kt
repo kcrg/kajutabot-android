@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -25,6 +26,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -289,8 +292,10 @@ fun SearchScreen(
                                     enabled = !ui.isMutating,
                                     onClick = { onResultClick(item) },
                                 ),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                         ) {
                             ListItem(
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 verticalAlignment = Alignment.CenterVertically,
                                 leadingContent = {
                                     SearchResultArtwork(
@@ -491,9 +496,12 @@ private fun SearchResultArtwork(
 @Composable
 private fun SearchResultSkeleton(modifier: Modifier = Modifier) {
     val pulse = rememberSkeletonPulse()
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {

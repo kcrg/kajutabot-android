@@ -11,7 +11,7 @@ class RadioToggleTest {
         radioEnabled: Boolean,
         min: Int? = null,
         max: Int? = null,
-        version: Long = 7L,
+        version: Long = 17L,
     ) = QueueSnapshotResponse(
         guildId = "g1",
         voiceChannelId = "c1",
@@ -26,6 +26,7 @@ class RadioToggleTest {
         pendingEntriesCount = 0,
         pendingDurationMilliseconds = 0,
         version = version,
+        queueVersion = 7L,
     )
 
     @Test
@@ -54,7 +55,7 @@ class RadioToggleTest {
     fun `enabled radio builds disable with current version`() {
         val action = decideRadioToggle(snapshot(radioEnabled = true), "voice-1")
         assertTrue(action is RadioToggleAction.Disable)
-        assertEquals(7L, (action as RadioToggleAction.Disable).expectedVersion)
+        assertEquals(7L, (action as RadioToggleAction.Disable).expectedQueueVersion)
     }
 
     @Test

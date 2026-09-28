@@ -11,7 +11,7 @@ data class KajutaBotProblemDetails(
     val detail: String? = null,
     val instance: String? = null,
     val errorCode: String? = null,
-    val currentVersion: Long? = null,
+    val currentQueueVersion: Long? = null,
 )
 
 object KajutaBotProblemDetailsParser {

@@ -39,6 +39,7 @@ fun userMessageForError(e: Throwable?, parsedProblem: KajutaBotProblemDetails? =
         val problem = parsedProblem ?: runCatching { KajutaBotApiErrors.problemDetailsOf(e) }.getOrNull()
         return when (problem?.errorCode) {
             "queue_version_conflict" -> uiText(R.string.error_queue_conflict)
+            "queue_persistence_conflict" -> uiText(R.string.error_queue_persistence_conflict)
             "queue_full" -> uiText(R.string.error_queue_full)
             "content_unavailable" -> uiText(R.string.error_content_unavailable)
             "queue_bound_to_other_channel" -> uiText(R.string.error_queue_other_channel)

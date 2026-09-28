@@ -10,6 +10,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
@@ -62,10 +63,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
@@ -111,6 +114,7 @@ import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.components.GuildAvatar
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.SwipeActionCard
+import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.ui.components.SwipeActionHints
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
@@ -123,6 +127,7 @@ import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -286,7 +291,7 @@ fun PlayerScreen(
     var dragHeightPx by remember { mutableStateOf(0) }
     var dragPointerY by remember { mutableStateOf(0f) }
     var dragTargetIndex by remember { mutableStateOf(-1) }
-    var dragExpectedVersion by remember { mutableStateOf<Long?>(null) }
+    var dragSnapshotVersion by remember { mutableStateOf<Long?>(null) }
     var listCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var viewportHeightPx by remember { mutableIntStateOf(0) }
     var messageHeightPx by remember { mutableIntStateOf(0) }
@@ -324,7 +329,7 @@ fun PlayerScreen(
         draggingEntryId = null
         dragOffsetPx = 0f
         dragTargetIndex = -1
-        dragExpectedVersion = null
+        dragSnapshotVersion = null
     }
     val changeServerChannelDesc = stringResource(R.string.player_change_server_channel)
     Scaffold(
@@ -418,7 +423,7 @@ fun PlayerScreen(
                         dragOffsetPx = 0f
                         dragPointerY = longPress.position.y
                         dragTargetIndex = pendingIndexById[sourceId] ?: -1
-                        dragExpectedVersion = ui.queue?.version
+                        dragSnapshotVersion = ui.queue?.version
                         try {
                             val completed = drag(longPress.id) { change ->
                                 dragOffsetPx += change.position.y - change.previousPosition.y
@@ -428,7 +433,7 @@ fun PlayerScreen(
                             }
                             if (completed) {
                                 val targetId = pending.getOrNull(dragTargetIndex)?.entryId
-                                val version = dragExpectedVersion
+                                val version = dragSnapshotVersion
                                 if (targetId != null && version != null) {
                                     val swapped = swappedQueueEntries(pending, sourceId, targetId)
                                     if (swapped != null && onSwapEntries(sourceId, targetId, version)) {
@@ -628,7 +633,8 @@ fun PlayerScreen(
                     SwipeActionCard(
                         addLabel = stringResource(R.string.player_requeue_now_playing),
                         removeLabel = stringResource(R.string.action_remove_from_queue),
-                        enabled = !ui.isMutating && draggingEntryId == null,
+                        enabled = !ui.isMutating && entry.entryId !in ui.mutatingEntryIds && draggingEntryId == null,
+                        addStatus = ui.requeueStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
                         onAdd = { onRequeueEntry(entry.entryId) },
                         onRemove = { onRemoveEntry(entry.entryId) },
                         modifier = Modifier
@@ -1007,22 +1013,37 @@ private fun SmoothArtworkGlow(
         0.18f,
     )
 
+    val accents = remember { mutableStateMapOf<String, Color>() }
+    val accent = slide.artworkAccentColor.toArtworkAccentColor() ?: fallbackAccent
+    SideEffect {
+        if (slide.hasTrack) accents[slide.identity] = accent
+    }
+    LaunchedEffect(slide.identity) {
+        delay(700)
+        accents.keys.filter { it != slide.identity }.forEach(accents::remove)
+    }
+
     AnimatedContent(
-        targetState = slide,
-        contentKey = { it.identity to it.artworkAccentColor },
+        targetState = slide.identity to slide.hasTrack,
+        contentKey = { it.first },
         transitionSpec = {
             fadeIn(
-                animationSpec = tween(durationMillis = 480, delayMillis = 400, easing = FastOutSlowInEasing),
+                animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
             ) togetherWith fadeOut(
-                animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+                animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
             )
         },
         modifier = modifier,
         label = "nowPlayingGlow",
-    ) { current ->
-        if (current.hasTrack) {
+    ) { (identity, hasTrack) ->
+        if (hasTrack) {
+            val animatedAccent by animateColorAsState(
+                targetValue = accents[identity] ?: fallbackAccent,
+                animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+                label = "nowPlayingGlowAccent",
+            )
             AccentArtworkGlow(
-                accent = current.artworkAccentColor.toArtworkAccentColor() ?: fallbackAccent,
+                accent = animatedAccent,
                 modifier = Modifier.fillMaxSize(),
             )
         }

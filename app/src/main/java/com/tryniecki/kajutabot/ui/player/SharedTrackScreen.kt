@@ -117,17 +117,19 @@ fun SharedTrackScreen(
                     )
                 }
                 status is SharedEnqueueStatus.Added -> {
-                    TrackArtwork(
-                        imageUrl = status.track.artworkUrl,
-                        modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth().aspectRatio(16f / 9f),
-                        brokenIconSize = 48.dp,
-                    )
-                    Text(
-                        status.track.title,
-                        modifier = Modifier.padding(top = 20.dp),
-                        style = MaterialTheme.typography.titleLarge,
-                        textAlign = TextAlign.Center,
-                    )
+                    status.track?.let { track ->
+                        TrackArtwork(
+                            imageUrl = track.artworkUrl,
+                            modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth().aspectRatio(16f / 9f),
+                            brokenIconSize = 48.dp,
+                        )
+                        Text(
+                            track.title,
+                            modifier = Modifier.padding(top = 20.dp),
+                            style = MaterialTheme.typography.titleLarge,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                     Text(
                         stringResource(R.string.shared_track_added),
                         modifier = Modifier.padding(top = 8.dp),

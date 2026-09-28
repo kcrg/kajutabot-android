@@ -56,7 +56,7 @@ interface KajutaBotApi {
     suspend fun removeQueueEntry(
         @Path("guildId") guildId: String,
         @Path("entryId") entryId: String,
-        @Query("expectedVersion") expectedVersion: Long? = null,
+        @Query("expectedQueueVersion") expectedQueueVersion: Long? = null,
     ): QueueSnapshotResponse
 
     @PUT("guilds/{guildId}/queue/items/{entryId}/position")
@@ -75,7 +75,7 @@ interface KajutaBotApi {
     @DELETE("guilds/{guildId}/queue/items")
     suspend fun clearPendingQueue(
         @Path("guildId") guildId: String,
-        @Query("expectedVersion") expectedVersion: Long? = null,
+        @Query("expectedQueueVersion") expectedQueueVersion: Long? = null,
     ): QueueSnapshotResponse
 
     @POST("guilds/{guildId}/queue/skip")
@@ -105,7 +105,7 @@ interface KajutaBotApi {
     @DELETE("guilds/{guildId}/radio")
     suspend fun disableRadio(
         @Path("guildId") guildId: String,
-        @Query("expectedVersion") expectedVersion: Long? = null,
+        @Query("expectedQueueVersion") expectedQueueVersion: Long? = null,
     ): QueueSnapshotResponse
 
     @GET("search")

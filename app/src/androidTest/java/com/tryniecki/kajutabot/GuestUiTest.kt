@@ -40,7 +40,7 @@ class GuestUiTest {
             guildId = "demo-guild", voiceChannelId = "voice", nowPlaying = playing,
             nowPlayingFromRadio = false, radio = RadioStateResponse(false),
             pendingEntries = emptyList(), pendingEntriesCount = 0,
-            pendingDurationMilliseconds = 0, version = 1,
+            pendingDurationMilliseconds = 0, version = 1, queueVersion = 1,
         ),
     )
 

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 class FavoritesRepository(
     private val sessionManager: SessionManager,
+    private val coordinator: QueueMutationCoordinator = QueueMutationCoordinator(),
 ) {
     val sessionIdentity: StateFlow<Long?> = sessionManager.sessionIdentity
 
@@ -36,17 +37,24 @@ class FavoritesRepository(
         guildId: String,
         channelId: String,
         shuffle: Boolean,
-    ): QueueSnapshotResponse = sessionManager.withApiForSession(expectedIdentity) {
-        it.queueFavorites(QueueFavoritesRequest(guildId, channelId, shuffle = shuffle))
-    }
+    ): QueueSnapshotResponse = coordinator.run(
+        guildId,
+        fetch = { sessionManager.withApiForSession(expectedIdentity) { it.getQueue(guildId) } },
+        mutation = { token -> sessionManager.withApiForSession(expectedIdentity) {
+            it.queueFavorites(QueueFavoritesRequest(guildId, channelId, token, shuffle))
+        } },
+    )
 
     suspend fun playSingle(
         expectedIdentity: Long,
         guildId: String,
         channelId: String,
         contentUrl: String,
-    ): QueueSnapshotResponse = sessionManager.withApiForSession(expectedIdentity) { api ->
-        val queue = api.getQueue(guildId)
-        api.enqueue(guildId, EnqueueRequest(channelId, listOf(contentUrl), queue.version))
-    }
+    ): QueueSnapshotResponse = coordinator.run(
+        guildId,
+        fetch = { sessionManager.withApiForSession(expectedIdentity) { it.getQueue(guildId) } },
+        mutation = { token -> sessionManager.withApiForSession(expectedIdentity) {
+            it.enqueue(guildId, EnqueueRequest(channelId, listOf(contentUrl), token))
+        } },
+    )
 }

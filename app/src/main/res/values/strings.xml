@@ -188,8 +188,8 @@
     <string name="search_hint">Paste a link or search for a track</string>
     <string name="search_no_results_title">No results</string>
     <string name="search_no_results_body">Try another phrase or paste a direct link.</string>
-    <string name="shared_track_title">Shared track</string>
-    <string name="shared_track_loading">Adding the shared track…</string>
+    <string name="shared_track_title">Shared link</string>
+    <string name="shared_track_loading">Adding shared content…</string>
     <string name="shared_track_added">Added to the queue</string>
     <string name="shared_track_failed">Couldn’t add the shared track</string>
     <string name="shared_track_unconfirmed">Couldn’t confirm whether the track was added. Check the queue in the app.</string>
@@ -225,4 +225,8 @@
     <string name="player_queue_conflict_refreshed">The queue changed in the meantime. The state was refreshed.</string>
     <string name="search_source_youtube">YouTube</string>
     <string name="search_source_soundcloud">SoundCloud</string>
+    <string name="error_queue_persistence_conflict">Could not confirm the queue change. Check the current queue before trying again.</string>
+    <string name="swipe_add_pending">Adding to queue</string>
+    <string name="swipe_add_success">Added to queue</string>
+    <string name="swipe_add_failure">Could not add to queue</string>
 </resources>

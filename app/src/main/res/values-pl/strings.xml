@@ -187,8 +187,8 @@
     <string name="search_hint">Wklej link lub wyszukaj utwór</string>
     <string name="search_no_results_title">Brak wyników</string>
     <string name="search_no_results_body">Spróbuj innej frazy lub wklej bezpośredni link.</string>
-    <string name="shared_track_title">Udostępniony utwór</string>
-    <string name="shared_track_loading">Dodawanie udostępnionego utworu…</string>
+    <string name="shared_track_title">Udostępniony link</string>
+    <string name="shared_track_loading">Dodawanie do kolejki…</string>
     <string name="shared_track_added">Dodano do kolejki</string>
     <string name="shared_track_failed">Nie udało się dodać udostępnionego utworu</string>
     <string name="shared_track_unconfirmed">Nie udało się potwierdzić dodania utworu. Sprawdź kolejkę w aplikacji.</string>
@@ -224,4 +224,8 @@
     <string name="player_queue_conflict_refreshed">Kolejka zmieniła się w międzyczasie. Odświeżono stan.</string>
     <string name="search_source_youtube">YouTube</string>
     <string name="search_source_soundcloud">SoundCloud</string>
+    <string name="error_queue_persistence_conflict">Nie udało się potwierdzić zmiany kolejki. Sprawdź jej stan przed ponowną próbą.</string>
+    <string name="swipe_add_pending">Dodawanie do kolejki</string>
+    <string name="swipe_add_success">Dodano do kolejki</string>
+    <string name="swipe_add_failure">Nie udało się dodać do kolejki</string>
 </resources>

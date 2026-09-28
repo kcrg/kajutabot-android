@@ -103,7 +103,7 @@ class RemotePlaybackService : MediaSessionService() {
                 syncMediaButtons(session, playerState, favoritesState)
                 // Keep this MediaSession through an in-flight remote command. Once the
                 // backend response settles, an inactive session can be released.
-                if (!state.isMutating && state.queue != null &&
+                if (!state.isMutating && state.activeControlAction == null && state.queue != null &&
                     state.queue.nowPlaying == null && state.queue.voiceChannelId == null
                 ) {
                     stopSelf()
