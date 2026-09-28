@@ -48,6 +48,16 @@ class PlayerStateProjectionTest {
         assertFalse(shouldBlockPlaybackControls(false, null, false))
     }
 
+    @Test
+    fun `missing voice channel is marked only after selection loads`() {
+        val missing = PlayerUiState(selectedGuildId = "g1", isLoadingGuilds = false).toPlayerScreenState()
+        assertTrue(missing.needsVoiceChannelSelection)
+        assertFalse(missing.copy(isLoadingVoiceChannels = true).needsVoiceChannelSelection)
+        assertFalse(missing.copy(isLoadingGuilds = true).needsVoiceChannelSelection)
+        assertFalse(missing.copy(selectedVoiceChannelId = "c1").needsVoiceChannelSelection)
+        assertFalse(missing.copy(selectedGuildId = null).needsVoiceChannelSelection)
+    }
+
     private fun track(title: String = "Track") = PlaybackTrackResponse(
         contentId = "vid-1",
         contentType = "youtube",

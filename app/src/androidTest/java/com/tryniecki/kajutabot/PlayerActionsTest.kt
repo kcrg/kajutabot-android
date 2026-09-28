@@ -4,6 +4,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.up
 import androidx.compose.ui.test.advanceEventTime
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
+import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
@@ -88,6 +91,31 @@ class PlayerActionsTest {
         assertEquals(0, clears)
         compose.onNodeWithText(compose.activity.getString(R.string.action_clear)).performClick()
         assertEquals(1, clears)
+    }
+
+    @Test
+    fun selectedGuildWithoutVoiceChannelMarksTargetFabAndKeepsItClickable() {
+        var pickerOpens = 0
+        compose.setContent {
+            MaterialTheme {
+                PlayerScreen(
+                    ui = state().copy(
+                        selectedVoiceChannelId = null,
+                        guilds = listOf(DiscordGuildResponse("guild", "Guild", null, true)),
+                    ),
+                    onDiscordSelectionOpen = { pickerOpens++ },
+                    onSkip = {}, onStop = {}, onRepeatToggle = {}, onRadioToggle = {},
+                    onRemoveEntry = {}, onSwapEntries = { _, _, _ -> true }, onClearQueue = {},
+                    isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
+                    onDismissMessage = {}, onSearchOpen = {},
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.player_change_server_channel))
+            .assert(hasStateDescription(compose.activity.getString(R.string.player_voice_channel_required)))
+            .performClick()
+        compose.runOnIdle { assertEquals(1, pickerOpens) }
     }
 
     @Test

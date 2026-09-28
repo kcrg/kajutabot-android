@@ -41,6 +41,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -102,6 +103,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -338,6 +340,8 @@ fun PlayerScreen(
         dragSnapshotVersion = null
     }
     val changeServerChannelDesc = stringResource(R.string.player_change_server_channel)
+    val missingVoiceChannelDesc = stringResource(R.string.player_voice_channel_required)
+    val needsVoiceChannel = ui.needsVoiceChannelSelection
     Scaffold(
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -368,19 +372,44 @@ fun PlayerScreen(
                     ) {
                         SmallFloatingActionButton(
                             onClick = onDiscordSelectionOpen,
-                            modifier = Modifier.semantics { contentDescription = changeServerChannelDesc },
+                            modifier = Modifier.semantics {
+                                contentDescription = changeServerChannelDesc
+                                if (needsVoiceChannel) stateDescription = missingVoiceChannelDesc
+                            },
+                            containerColor = if (needsVoiceChannel) MaterialTheme.colorScheme.surfaceContainerHigh
+                                else MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = if (needsVoiceChannel) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onPrimaryContainer,
                         ) {
-                            if (ui.selectedGuild != null) {
-                                GuildAvatar(
-                                    iconUrl = ui.selectedGuild.iconUrl,
-                                    modifier = Modifier.size(32.dp),
-                                    iconSize = 18.dp,
-                                )
-                            } else {
-                                Icon(
-                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_discord_outline),
-                                    contentDescription = null,
-                                )
+                            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                                if (ui.selectedGuild != null) {
+                                    GuildAvatar(
+                                        iconUrl = ui.selectedGuild.iconUrl,
+                                        modifier = Modifier.size(32.dp).alpha(if (needsVoiceChannel) 0.55f else 1f),
+                                        iconSize = 18.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_discord_outline),
+                                        contentDescription = null,
+                                    )
+                                }
+                                if (needsVoiceChannel) {
+                                    Box(
+                                        modifier = Modifier.align(Alignment.TopEnd)
+                                            .padding(2.dp)
+                                            .size(18.dp)
+                                            .background(MaterialTheme.colorScheme.error, CircleShape),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_alert_triangle_outline),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = MaterialTheme.colorScheme.onError,
+                                        )
+                                    }
+                                }
                             }
                         }
                         FloatingActionButton(onClick = onSearchOpen) {
@@ -395,7 +424,7 @@ fun PlayerScreen(
         },
     ) { innerPadding ->
         val hasMessage = ui.error != null || ui.info != null
-        val queueBottomClearance = 144.dp
+        val queueBottomClearance = 128.dp
         val emptyQueueMinHeight = with(density) {
             val gaps = (if (hasMessage) 3 else 2) * 16.dp.toPx()
             (viewportHeightPx - nowPlayingHeightPx - queueHeaderHeightPx -
@@ -593,7 +622,7 @@ fun PlayerScreen(
                                 SwipeActionHints()
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_grip_vertical_outline),
+                                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_drag_drop_2_outline),
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
                                     )

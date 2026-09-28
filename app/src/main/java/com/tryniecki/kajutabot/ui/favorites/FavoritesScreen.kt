@@ -26,8 +26,6 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.ToggleFloatingActionButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -38,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -54,7 +51,7 @@ import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.ui.components.SwipeActionHints
 import com.tryniecki.kajutabot.ui.text.asString
 import com.tryniecki.kajutabot.ui.text.UiText
-import com.tryniecki.kajutabot.ui.components.TrackArtwork
+import com.tryniecki.kajutabot.ui.components.TrackListCardContent
 import com.tryniecki.kajutabot.ui.components.ActionFeedbackIcon
 import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
@@ -227,12 +224,8 @@ fun FavoritesScreen(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
                             ),
                         ) {
-                            ListItem(
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
-                                leadingContent = {
-                                    TrackArtwork(imageUrl = fav.thumbnailUrl, modifier = Modifier.size(64.dp))
-                                },
+                            TrackListCardContent(
+                                artworkUrl = fav.thumbnailUrl,
                                 supportingContent = {
                                     val zoneId = ZoneId.systemDefault()
                                     val date = remember(fav.addedAt, zoneId) {
@@ -243,16 +236,17 @@ fun FavoritesScreen(
                                     }
                                     Text(stringResource(R.string.favorites_saved_date, date))
                                 },
-                            ) {
-                                val canOpen = fav.contentUrl.startsWith("https://") || fav.contentUrl.startsWith("http://")
-                                Text(
-                                    text = fav.title.ifBlank { fav.contentUrl },
-                                    modifier = if (canOpen) Modifier.clickable { openUrl(fav.contentUrl) } else Modifier,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
+                                titleContent = {
+                                    val canOpen = fav.contentUrl.startsWith("https://") || fav.contentUrl.startsWith("http://")
+                                    Text(
+                                        text = fav.title.ifBlank { fav.contentUrl },
+                                        modifier = if (canOpen) Modifier.clickable { openUrl(fav.contentUrl) } else Modifier,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    )
+                                },
+                            )
                         }
                     }
                 }
@@ -334,7 +328,6 @@ private fun FavoriteSkeletonCard(modifier: Modifier = Modifier) {
                 SkeletonBlock(pulse, Modifier.fillMaxWidth(0.62f).height(17.dp))
                 SkeletonBlock(pulse, Modifier.width(96.dp).height(12.dp))
             }
-            SkeletonBlock(pulse, Modifier.size(38.dp), MaterialTheme.shapes.extraLarge)
         }
     }
 }

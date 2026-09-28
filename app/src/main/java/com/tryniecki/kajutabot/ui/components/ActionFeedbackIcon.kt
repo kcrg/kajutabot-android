@@ -11,7 +11,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,7 +50,7 @@ fun DelayedPendingSpinner(
     val show = rememberDelayedPending(visible)
     Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
         if (show) {
-            CircularProgressIndicator(color = color, strokeWidth = 2.dp, modifier = Modifier.size(size))
+            ExpressiveLoadingIndicator(color = color, modifier = Modifier.size(size))
         }
     }
 }
@@ -82,7 +81,7 @@ fun ActionFeedbackIcon(
     ) { displayedStatus ->
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(size)) {
             if (displayedStatus == SwipeActionStatus.PENDING) {
-                CircularProgressIndicator(color = tint, strokeWidth = 2.dp, modifier = Modifier.size(size))
+                ExpressiveLoadingIndicator(color = tint, modifier = Modifier.size(size))
             } else {
                 Icon(
                     painter = painterResource(

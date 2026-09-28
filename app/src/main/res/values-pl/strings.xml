@@ -200,6 +200,7 @@
     <string name="discord_selection_description">Wybierz serwer Discord, a potem kanał głosowy używany przez odtwarzacz.</string>
     <string name="player_nothing_playing">Nic nie gra</string>
     <string name="player_change_server_channel">Zmień serwer i kanał głosowy</string>
+    <string name="player_voice_channel_required">Wybierz kanał głosowy</string>
     <string name="player_load_failed">Nie udało się pobrać stanu odtwarzacza.</string>
     <string name="player_queue_title">Kolejka</string>
     <string name="player_queue_position">Pozycja w kolejce: %1$d</string>

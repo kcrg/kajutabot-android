@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 
@@ -54,6 +55,9 @@ fun SkeletonBlock(
 /** Material 3 Expressive morphing loader for indeterminate, non-layout-shaped work. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ExpressiveLoadingIndicator(modifier: Modifier = Modifier) {
-    LoadingIndicator(modifier = modifier)
+fun ExpressiveLoadingIndicator(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+) {
+    LoadingIndicator(modifier = modifier, color = color)
 }

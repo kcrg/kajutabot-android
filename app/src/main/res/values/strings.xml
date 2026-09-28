@@ -201,6 +201,7 @@
     <string name="discord_selection_description">Choose a Discord server and then the voice channel used by the player.</string>
     <string name="player_nothing_playing">Nothing is playing</string>
     <string name="player_change_server_channel">Change server and voice channel</string>
+    <string name="player_voice_channel_required">Select a voice channel</string>
     <string name="player_load_failed">Could not load player state.</string>
     <string name="player_queue_title">Queue</string>
     <string name="player_queue_position">Queue position %1$d</string>

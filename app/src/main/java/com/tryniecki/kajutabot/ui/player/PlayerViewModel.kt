@@ -46,6 +46,12 @@ enum class GuildAccessState {
     ERROR,
 }
 
+internal fun preferredVoiceChannelId(
+    channels: List<DiscordVoiceChannelResponse>,
+    savedChannelId: String?,
+): String? = savedChannelId?.takeIf { id -> channels.any { it.id == id } }
+    ?: channels.singleOrNull()?.id
+
 enum class PlayerControlAction {
     STOP,
     SKIP,
@@ -129,6 +135,7 @@ data class PlayerScreenState(
     val queueObservedAtElapsedRealtimeMs: Long? = null,
     val presentedNowPlaying: NowPlayingPresentation? = null,
     val isLoadingGuilds: Boolean = false,
+    val isLoadingVoiceChannels: Boolean = false,
     val isLoadingQueue: Boolean = false,
     val queueLoadState: QueueLoadState = QueueLoadState.IDLE,
     val queueLoadError: UiText? = null,
@@ -144,6 +151,9 @@ data class PlayerScreenState(
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
     val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
+    val needsVoiceChannelSelection: Boolean
+        get() = selectedGuildId != null && selectedVoiceChannelId == null &&
+            !isLoadingGuilds && !isLoadingVoiceChannels
     val isInitialContentLoading: Boolean
         get() = isLoadingGuilds || (selectedGuildId != null && queue == null)
 }
@@ -200,6 +210,7 @@ fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     queueObservedAtElapsedRealtimeMs = queueObservedAtElapsedRealtimeMs,
     presentedNowPlaying = effectiveNowPlaying,
     isLoadingGuilds = isLoadingGuilds,
+    isLoadingVoiceChannels = isLoadingVoiceChannels,
     isLoadingQueue = isLoadingQueue,
     queueLoadState = queueLoadState,
     queueLoadError = queueLoadError,
@@ -436,6 +447,7 @@ class PlayerViewModel(
                         transitionNowPlaying = if (it.selectedGuildId == selGuild) it.transitionNowPlaying else null,
                         transitionStartedAtNanos = if (it.selectedGuildId == selGuild) it.transitionStartedAtNanos else null,
                         isLoadingGuilds = false,
+                        isLoadingVoiceChannels = selGuild != null,
                         isLoadingQueue = selGuild != null && !keepsCurrentQueue,
                         queueLoadState = when {
                             selGuild == null -> QueueLoadState.IDLE
@@ -461,6 +473,7 @@ class PlayerViewModel(
                 _ui.update {
                     it.copy(
                         isLoadingGuilds = false,
+                        isLoadingVoiceChannels = false,
                         guildAccessState = if (noGuildAccess) {
                             GuildAccessState.NONE
                         } else {
@@ -474,12 +487,12 @@ class PlayerViewModel(
     }
 
     fun selectGuild(guildId: String) {
-        viewModelScope.launch { preferencesRepository.setGuildSelection(guildId, null) }
         _ui.update {
             it.copy(
                 selectedGuildId = guildId,
                 selectedVoiceChannelId = null,
                 voiceChannels = emptyList(),
+                isLoadingVoiceChannels = true,
                 queue = null,
                 queueObservedAtElapsedRealtimeMs = null,
                 transitionNowPlaying = null,
@@ -490,7 +503,10 @@ class PlayerViewModel(
                 searchResults = emptyList(),
             )
         }
-        refreshChannels(guildId, preserveChannel = null)
+        viewModelScope.launch {
+            preferencesRepository.setGuildSelection(guildId, null)
+            if (_ui.value.selectedGuildId == guildId) refreshChannels(guildId, preserveChannel = null)
+        }
     }
 
     fun selectChannel(channelId: String) {
@@ -500,17 +516,17 @@ class PlayerViewModel(
 
     fun refreshChannels(guildId: String, preserveChannel: String?) {
         viewModelScope.launch {
+            if (_ui.value.selectedGuildId != guildId) return@launch
             _ui.update { it.copy(isLoadingVoiceChannels = true, error = null) }
             try {
                 val channels = repository.getVoiceChannels(sessionIdentity, guildId)
                 if (_ui.value.selectedGuildId != guildId) return@launch
-                var selChannel = preserveChannel
-                if (selChannel != null && channels.none { c -> c.id == selChannel }) {
-                    selChannel = null
-                    preferencesRepository.setVoiceChannelId(null)
+                val selChannel = preferredVoiceChannelId(channels, preserveChannel)
+                if (selChannel != preserveChannel) {
+                    preferencesRepository.setVoiceChannelId(selChannel)
                 }
                 _ui.update {
-                    it.copy(
+                    if (it.selectedGuildId != guildId) it else it.copy(
                         voiceChannels = channels.sortedBy { c -> c.position },
                         selectedVoiceChannelId = selChannel,
                         isLoadingVoiceChannels = false,
