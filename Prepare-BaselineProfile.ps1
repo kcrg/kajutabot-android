@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$PackageName = "com.tryniecki.kajutabot",
     [string]$ActivityName = ".MainActivity"
 )
@@ -10,32 +10,41 @@ $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $RepoRoot
 
 $Gradle = Join-Path $RepoRoot "gradlew.bat"
-if (-not (Test-Path $Gradle)) {
-    throw "Nie znaleziono gradlew.bat. Umieść ten skrypt w głównym katalogu repozytorium KajutaBot."
+if (-not (Test-Path -LiteralPath $Gradle)) {
+    throw "gradlew.bat was not found. Put this script in the repository root."
 }
 
 $AdbCommand = Get-Command adb -ErrorAction SilentlyContinue
 if ($null -eq $AdbCommand) {
-    throw "Nie znaleziono adb w PATH."
+    throw "adb was not found in PATH."
 }
+
 $Adb = $AdbCommand.Source
 
 function Invoke-Checked {
     param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
     )
 
     & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Polecenie zakończyło się kodem $LASTEXITCODE`: $FilePath $($Arguments -join ' ')"
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        $commandLine = "$FilePath $($Arguments -join ' ')"
+        throw ("Command failed with exit code {0}: {1}" -f $exitCode, $commandLine)
     }
 }
 
 function Get-SingleDeviceSerial {
     $lines = & $Adb devices
-    if ($LASTEXITCODE -ne 0) {
-        throw "adb devices nie powiodło się."
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        throw ("adb devices failed with exit code {0}." -f $exitCode)
     }
 
     $devices = @(
@@ -45,11 +54,11 @@ function Get-SingleDeviceSerial {
     )
 
     if ($devices.Count -eq 0) {
-        throw "Brak podłączonego i autoryzowanego urządzenia ADB."
+        throw "No connected and authorized ADB device was found."
     }
 
     if ($devices.Count -gt 1) {
-        throw "Podłączono więcej niż jedno urządzenie: $($devices -join ', '). Zostaw jedno urządzenie podłączone."
+        throw ("More than one ADB device is connected: {0}. Leave only one device connected." -f ($devices -join ', '))
     }
 
     return $devices[0]
@@ -58,42 +67,65 @@ function Get-SingleDeviceSerial {
 $Serial = Get-SingleDeviceSerial
 
 Write-Host ""
-Write-Host "Urządzenie: $Serial"
+Write-Host "Device: $Serial"
 
 $sdkText = (& $Adb -s $Serial shell getprop ro.build.version.sdk | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to read Android API level through adb."
+}
+
+$sdk = 0
 if (-not [int]::TryParse($sdkText, [ref]$sdk)) {
-    throw "Nie udało się odczytać API level urządzenia: '$sdkText'"
+    throw ("Failed to parse Android API level: '{0}'" -f $sdkText)
 }
 
 if ($sdk -lt 34) {
-    throw "Manualne zbieranie bez roota w tym skrypcie wymaga API 34+. Urządzenie ma API $sdk."
+    throw ("This manual Baseline Profile workflow requires Android API 34 or newer. Device API: {0}." -f $sdk)
 }
 
 Write-Host "Android API: $sdk"
+
 Write-Host ""
-Write-Host "=== Budowanie i instalacja nonMinifiedRelease ==="
-Invoke-Checked $Gradle @(":app:installNonMinifiedRelease")
+Write-Host "=== Build and install nonMinifiedRelease ==="
+Invoke-Checked $Gradle @(
+    ":app:installNonMinifiedRelease"
+)
 
 $Receiver = "$PackageName/androidx.profileinstaller.ProfileInstallReceiver"
 
 Write-Host ""
-Write-Host "=== Wyłączenie automatycznej instalacji istniejącego Baseline Profile ==="
+Write-Host "=== Disable automatic installation of the bundled Baseline Profile ==="
 Invoke-Checked $Adb @(
     "-s", $Serial,
     "shell", "am", "broadcast",
     "-a", "androidx.profileinstaller.action.SKIP_FILE",
-    "-e", "EXTRA_SKIP_FILE_OPERATION", "WRITE_SKIP_FILE",
-    $Receiver
+    "WRITE_SKIP_FILE",
+    "-n", $Receiver
 )
 
 Write-Host ""
-Write-Host "=== Czyszczenie starego stanu kompilacji/profili ART ==="
-Invoke-Checked $Adb @("-s", $Serial, "shell", "am", "force-stop", $PackageName)
-Invoke-Checked $Adb @("-s", $Serial, "shell", "cmd", "package", "compile", "-f", "-m", "verify", $PackageName)
-Invoke-Checked $Adb @("-s", $Serial, "shell", "pm", "art", "clear-app-profiles", $PackageName)
+Write-Host "=== Clear previous ART compilation/profile state ==="
+Invoke-Checked $Adb @(
+    "-s", $Serial,
+    "shell", "am", "force-stop",
+    $PackageName
+)
+
+Invoke-Checked $Adb @(
+    "-s", $Serial,
+    "shell", "cmd", "package", "compile",
+    "-f", "-m", "verify",
+    $PackageName
+)
+
+Invoke-Checked $Adb @(
+    "-s", $Serial,
+    "shell", "pm", "art", "clear-app-profiles",
+    $PackageName
+)
 
 Write-Host ""
-Write-Host "=== Uruchamianie KajutaBota ==="
+Write-Host "=== Start KajutaBot ==="
 Invoke-Checked $Adb @(
     "-s", $Serial,
     "shell", "am", "start", "-W",
@@ -101,6 +133,5 @@ Invoke-Checked $Adb @(
 )
 
 Write-Host ""
-Write-Host "Gotowe."
-Write-Host "Teraz ręcznie przeklikaj najważniejsze ścieżki KajutaBota."
-Write-Host "Gdy skończysz, uruchom: .\Collect-BaselineProfile.ps1"
+Write-Host "Ready."
+Write-Host "Now run .\Collect-BaselineProfile.ps1, exercise the important app flows, then confirm profile collection when prompted."

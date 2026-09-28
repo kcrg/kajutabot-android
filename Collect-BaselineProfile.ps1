@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$PackageName = "com.tryniecki.kajutabot"
 )
 
@@ -10,26 +10,35 @@ Set-Location $RepoRoot
 
 $AdbCommand = Get-Command adb -ErrorAction SilentlyContinue
 if ($null -eq $AdbCommand) {
-    throw "Nie znaleziono adb w PATH."
+    throw "adb was not found in PATH."
 }
+
 $Adb = $AdbCommand.Source
 
 function Invoke-Checked {
     param(
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
     )
 
     & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Polecenie zakończyło się kodem $LASTEXITCODE`: $FilePath $($Arguments -join ' ')"
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        $argumentText = $Arguments -join " "
+        throw "Command failed with exit code $exitCode`: $FilePath $argumentText"
     }
 }
 
 function Get-SingleDeviceSerial {
     $lines = & $Adb devices
-    if ($LASTEXITCODE -ne 0) {
-        throw "adb devices nie powiodło się."
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        throw "adb devices failed with exit code $exitCode."
     }
 
     $devices = @(
@@ -39,11 +48,11 @@ function Get-SingleDeviceSerial {
     )
 
     if ($devices.Count -eq 0) {
-        throw "Brak podłączonego i autoryzowanego urządzenia ADB."
+        throw "No connected and authorized ADB device was found."
     }
 
     if ($devices.Count -gt 1) {
-        throw "Podłączono więcej niż jedno urządzenie: $($devices -join ', '). Zostaw jedno urządzenie podłączone."
+        throw "More than one ADB device is connected: $($devices -join ', '). Leave only one device connected."
     }
 
     return $devices[0]
@@ -52,27 +61,35 @@ function Get-SingleDeviceSerial {
 $Serial = Get-SingleDeviceSerial
 
 $sdkText = (& $Adb -s $Serial shell getprop ro.build.version.sdk | Out-String).Trim()
+$sdkReadExitCode = $LASTEXITCODE
+
+if ($sdkReadExitCode -ne 0) {
+    throw "Failed to read Android API level. adb exited with code $sdkReadExitCode."
+}
+
+$sdk = 0
 if (-not [int]::TryParse($sdkText, [ref]$sdk)) {
-    throw "Nie udało się odczytać API level urządzenia: '$sdkText'"
+    throw "Failed to parse Android API level: '$sdkText'"
 }
 
 if ($sdk -lt 34) {
-    throw "Manualne zbieranie bez roota w tym skrypcie wymaga API 34+. Urządzenie ma API $sdk."
+    throw "This non-root collection script requires Android API 34 or newer. Device API: $sdk."
 }
 
 Write-Host ""
-Write-Host "Urządzenie: $Serial"
+Write-Host "Device: $Serial"
 Write-Host "Android API: $sdk"
+Write-Host "Package: $PackageName"
 Write-Host ""
-[void](Read-Host "Przeklikaj aplikację. Gdy skończysz, naciśnij Enter, aby zebrać profil")
+[void](Read-Host "Use the app and exercise the important user journeys. Press Enter when finished")
 
 Write-Host ""
-Write-Host "Czekam 5 sekund, aby ART ustabilizował profil..."
+Write-Host "Waiting 5 seconds for ART profile data to stabilize..."
 Start-Sleep -Seconds 5
 
 $Receiver = "$PackageName/androidx.profileinstaller.ProfileInstallReceiver"
 
-Write-Host "=== Zapisywanie bieżącego profilu ART ==="
+Write-Host "=== Saving current ART profile ==="
 Invoke-Checked $Adb @(
     "-s", $Serial,
     "shell", "am", "broadcast",
@@ -82,10 +99,14 @@ Invoke-Checked $Adb @(
 
 Start-Sleep -Seconds 1
 
-Write-Host "=== Zatrzymywanie aplikacji ==="
-Invoke-Checked $Adb @("-s", $Serial, "shell", "am", "force-stop", $PackageName)
+Write-Host "=== Force-stopping app ==="
+Invoke-Checked $Adb @(
+    "-s", $Serial,
+    "shell", "am", "force-stop",
+    $PackageName
+)
 
-Write-Host "=== Konwersja profilu do human-readable format ==="
+Write-Host "=== Converting profile to human-readable format ==="
 Invoke-Checked $Adb @(
     "-s", $Serial,
     "shell", "pm", "dump-profiles",
@@ -109,23 +130,28 @@ if (Test-Path $TargetProfile) {
     $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $BackupProfile = Join-Path $BackupDir "baseline-prof-$Timestamp.txt"
     Copy-Item $TargetProfile $BackupProfile -Force
-    Write-Host "Backup starego profilu: $BackupProfile"
+    Write-Host "Existing profile backup: $BackupProfile"
 }
 
 if (Test-Path $TempProfile) {
     Remove-Item $TempProfile -Force
 }
 
-Write-Host "=== Pobieranie profilu z urządzenia ==="
-Invoke-Checked $Adb @("-s", $Serial, "pull", $RemoteProfile, $TempProfile)
+Write-Host "=== Pulling profile from device ==="
+Invoke-Checked $Adb @(
+    "-s", $Serial,
+    "pull",
+    $RemoteProfile,
+    $TempProfile
+)
 
 if (-not (Test-Path $TempProfile)) {
-    throw "adb pull zakończył się bez błędu, ale plik nie istnieje: $TempProfile"
+    throw "adb pull completed, but the profile file does not exist: $TempProfile"
 }
 
 $fileInfo = Get-Item $TempProfile
 if ($fileInfo.Length -eq 0) {
-    throw "Zebrany profil jest pusty."
+    throw "Collected profile is empty."
 }
 
 Copy-Item $TempProfile $TargetProfile -Force
@@ -133,7 +159,7 @@ Copy-Item $TempProfile $TargetProfile -Force
 $lineCount = (Get-Content $TargetProfile | Measure-Object -Line).Lines
 
 Write-Host ""
-Write-Host "=== Przywracanie normalnego działania ProfileInstaller ==="
+Write-Host "=== Re-enabling normal ProfileInstaller behavior ==="
 Invoke-Checked $Adb @(
     "-s", $Serial,
     "shell", "am", "broadcast",
@@ -143,10 +169,10 @@ Invoke-Checked $Adb @(
 )
 
 Write-Host ""
-Write-Host "Gotowe."
-Write-Host "Profil: $TargetProfile"
-Write-Host "Rozmiar: $($fileInfo.Length) B"
-Write-Host "Liczba linii: $lineCount"
+Write-Host "Done."
+Write-Host "Profile: $TargetProfile"
+Write-Host "Size: $($fileInfo.Length) B"
+Write-Host "Lines: $lineCount"
 Write-Host ""
-Write-Host "Możesz teraz zbudować normalny release:"
+Write-Host "You can now build the normal release:"
 Write-Host "  .\gradlew.bat :app:assembleRelease"
