@@ -38,29 +38,33 @@ data class PlaybackProgress(
 fun rememberPlaybackProgress(
     playbackKey: String,
     reportedPositionMs: Long?,
+    observedAtElapsedRealtimeMs: Long?,
     durationMs: Long,
     isPlaying: Boolean,
     tickMs: Long = PROGRESS_TICK_MS,
 ): PlaybackProgress {
-    val anchor = remember(playbackKey, reportedPositionMs, durationMs, isPlaying) {
-        PlaybackProgressAnchor(
-            positionAtAnchorMs = backendPositionMs(reportedPositionMs, durationMs),
-            elapsedRealtimeAnchorMs = SystemClock.elapsedRealtime(),
-        )
+    val anchorElapsedRealtimeMs = remember(
+        playbackKey, reportedPositionMs, observedAtElapsedRealtimeMs, durationMs, isPlaying,
+    ) {
+        observedAtElapsedRealtimeMs ?: SystemClock.elapsedRealtime()
     }
-    var nowElapsedRealtime by remember(playbackKey, reportedPositionMs, durationMs, isPlaying) {
-        mutableLongStateOf(anchor.elapsedRealtimeAnchorMs)
+    var nowElapsedRealtime by remember(
+        playbackKey, reportedPositionMs, observedAtElapsedRealtimeMs, durationMs, isPlaying,
+    ) {
+        // A newly mounted screen must show the time elapsed since the snapshot
+        // immediately, before the first 200 ms tick.
+        mutableLongStateOf(SystemClock.elapsedRealtime())
     }
-    LaunchedEffect(playbackKey, reportedPositionMs, durationMs, isPlaying) {
+    LaunchedEffect(playbackKey, reportedPositionMs, observedAtElapsedRealtimeMs, durationMs, isPlaying, tickMs) {
         if (!isPlaying) return@LaunchedEffect
         while (true) {
             delay(tickMs)
             nowElapsedRealtime = SystemClock.elapsedRealtime()
         }
     }
-    val positionMs = anchor.positionAtAnchorMs?.let {
-        currentPositionMs(it, anchor.elapsedRealtimeAnchorMs, nowElapsedRealtime, durationMs)
-    }
+    val positionMs = playbackPositionAt(
+        reportedPositionMs, anchorElapsedRealtimeMs, nowElapsedRealtime, durationMs, isPlaying,
+    )
     return PlaybackProgress(
         positionMs = positionMs,
         fraction = if (positionMs == null) 0f else progressFraction(positionMs, durationMs),
@@ -88,11 +92,14 @@ fun rememberSmoothPlaybackFraction(playbackKey: String, fraction: Float): Float 
 fun PlaybackProgressIndicator(
     playbackKey: String,
     reportedPositionMs: Long?,
+    observedAtElapsedRealtimeMs: Long?,
     durationMs: Long,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val progress = rememberPlaybackProgress(playbackKey, reportedPositionMs, durationMs, isPlaying)
+    val progress = rememberPlaybackProgress(
+        playbackKey, reportedPositionMs, observedAtElapsedRealtimeMs, durationMs, isPlaying,
+    )
     val animatedFraction = rememberSmoothPlaybackFraction(playbackKey, progress.fraction)
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {

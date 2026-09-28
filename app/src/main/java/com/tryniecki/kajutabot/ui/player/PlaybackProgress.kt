@@ -7,16 +7,9 @@ import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
  * Pure playback-progress and queue-snapshot helpers.
  *
  * The backend supplies the position; the UI advances it using a monotonic clock
- * between snapshots. Android-only [android.os.SystemClock] stays in Compose.
+ * between snapshots. The snapshot observation time is captured by the ViewModel.
  */
 const val PROGRESS_TICK_MS = 200L
-
-data class PlaybackProgressAnchor(
-    /** Backend position at anchor time, or null while playback is preparing. */
-    val positionAtAnchorMs: Long?,
-    /** `SystemClock.elapsedRealtime()` captured together with the anchor position. */
-    val elapsedRealtimeAnchorMs: Long,
-)
 
 /** Stable key of the backend's concrete playback instance. */
 fun playbackIdentity(track: PlaybackTrackResponse, instanceId: String?): String =
@@ -35,6 +28,18 @@ fun currentPositionMs(
     if (durationMs <= 0) return 0
     return (anchorPositionMs + (nowElapsedRealtimeMs - anchorElapsedRealtimeMs))
         .coerceIn(0, durationMs)
+}
+
+/** Rebuilds progress from the time the snapshot was accepted, even after UI recreation. */
+fun playbackPositionAt(
+    reportedPositionMs: Long?,
+    observedAtElapsedRealtimeMs: Long,
+    nowElapsedRealtimeMs: Long,
+    durationMs: Long,
+    isPlaying: Boolean,
+): Long? = backendPositionMs(reportedPositionMs, durationMs)?.let { position ->
+    if (isPlaying) currentPositionMs(position, observedAtElapsedRealtimeMs, nowElapsedRealtimeMs, durationMs)
+    else position
 }
 
 /** Progress fraction clamped to `0..1`. Returns 0 when duration is unusable. */
@@ -70,6 +75,7 @@ data class NowPlayingSlide(
     val durationMs: Long,
     val positionMs: Long?,
     val isPlaying: Boolean,
+    val positionObservedAtElapsedRealtimeMs: Long? = null,
 )
 
 /** Stable UI/media representation derived from the latest backend snapshot. */
@@ -88,6 +94,7 @@ fun QueueSnapshotResponse.nowPlayingPresentationOrNull(): NowPlayingPresentation
 fun nowPlayingSlide(
     presentation: NowPlayingPresentation?,
     hasQueue: Boolean,
+    positionObservedAtElapsedRealtimeMs: Long? = null,
 ): NowPlayingSlide {
     val track = presentation?.track
     if (track == null) {
@@ -112,6 +119,7 @@ fun nowPlayingSlide(
         durationMs = track.durationMilliseconds,
         positionMs = presentation.positionMs,
         isPlaying = presentation.isPlaying,
+        positionObservedAtElapsedRealtimeMs = positionObservedAtElapsedRealtimeMs,
     )
 }
 

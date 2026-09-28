@@ -59,6 +59,22 @@ class PlaybackProgressTest {
     }
 
     @Test
+    fun `returning to player resumes elapsed time from accepted snapshot`() {
+        val observedAt = 1_000L
+        val lastReportedPosition = 30_000L
+        assertEquals(30_000L, playbackPositionAt(lastReportedPosition, observedAt, observedAt, 120_000, true))
+        // The route is recreated fifteen seconds later without a new SignalR frame.
+        assertEquals(45_000L, playbackPositionAt(lastReportedPosition, observedAt, 16_000, 120_000, true))
+        assertEquals(120_000L, playbackPositionAt(119_000, observedAt, 16_000, 120_000, true))
+    }
+
+    @Test
+    fun `paused and preparing playback do not advance across navigation`() {
+        assertEquals(30_000L, playbackPositionAt(30_000, 1_000, 16_000, 120_000, false))
+        assertNull(playbackPositionAt(null, 1_000, 16_000, 120_000, true))
+    }
+
+    @Test
     fun `repeat restart resets identity even for the same content`() {
         val before = nowPlayingSlide(snapshot(instanceId = "play-1", positionMs = 110_000))
         val repeated = nowPlayingSlide(snapshot(version = 11, instanceId = "play-2", positionMs = 0))

@@ -84,6 +84,7 @@ data class PlayerUiState(
     val selectedGuildId: String? = null,
     val selectedVoiceChannelId: String? = null,
     val queue: QueueSnapshotResponse? = null,
+    val queueObservedAtElapsedRealtimeMs: Long? = null,
     val searchQuery: String = "",
     val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
     val searchResults: List<SearchItemResponse> = emptyList(),
@@ -125,6 +126,7 @@ data class PlayerScreenState(
     val selectedGuildId: String? = null,
     val selectedVoiceChannelId: String? = null,
     val queue: QueueSnapshotResponse? = null,
+    val queueObservedAtElapsedRealtimeMs: Long? = null,
     val presentedNowPlaying: NowPlayingPresentation? = null,
     val isLoadingGuilds: Boolean = false,
     val isLoadingQueue: Boolean = false,
@@ -194,6 +196,7 @@ fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     selectedGuildId = selectedGuildId,
     selectedVoiceChannelId = selectedVoiceChannelId,
     queue = queue,
+    queueObservedAtElapsedRealtimeMs = queueObservedAtElapsedRealtimeMs,
     presentedNowPlaying = effectiveNowPlaying,
     isLoadingGuilds = isLoadingGuilds,
     isLoadingQueue = isLoadingQueue,
@@ -235,7 +238,10 @@ fun PlayerUiState.toSearchUiState(): SearchUiState = SearchUiState(
 fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
     val presentation = effectiveNowPlaying ?: return null
     return MiniPlayerState(
-        slide = nowPlayingSlide(presentation, hasQueue = queue != null),
+        slide = nowPlayingSlide(
+            presentation, hasQueue = queue != null,
+            positionObservedAtElapsedRealtimeMs = queueObservedAtElapsedRealtimeMs,
+        ),
         track = presentation.track,
         isMutating = isMutating,
         isQueueReordering = isQueueReordering,
@@ -435,6 +441,7 @@ class PlayerViewModel(
                         selectedGuildId = selGuild,
                         selectedVoiceChannelId = selChannel,
                         queue = if (it.selectedGuildId == selGuild) it.queue else null,
+                        queueObservedAtElapsedRealtimeMs = if (it.selectedGuildId == selGuild) it.queueObservedAtElapsedRealtimeMs else null,
                         isLoadingGuilds = false,
                         isLoadingQueue = selGuild != null && !keepsCurrentQueue,
                         queueLoadState = when {
@@ -481,6 +488,7 @@ class PlayerViewModel(
                 selectedVoiceChannelId = null,
                 voiceChannels = emptyList(),
                 queue = null,
+                queueObservedAtElapsedRealtimeMs = null,
                 isLoadingQueue = true,
                 queueLoadState = QueueLoadState.LOADING,
                 queueLoadError = null,
@@ -599,6 +607,7 @@ class PlayerViewModel(
         repository.observe(snapshot)
         // Enqueue-only result metadata is not part of the shared playback state.
         val playbackSnapshot = if (snapshot.addedTracks == null) snapshot else snapshot.copy(addedTracks = null)
+        val observedAtElapsedRealtimeMs = SystemClock.elapsedRealtime()
         var applied = false
         _ui.update { current ->
             if (shouldApplyQueueSnapshot(current.queue, playbackSnapshot, current.selectedGuildId)) {
@@ -613,6 +622,7 @@ class PlayerViewModel(
                 applied = true
                 current.copy(
                     queue = playbackSnapshot,
+                    queueObservedAtElapsedRealtimeMs = observedAtElapsedRealtimeMs,
                     isLoadingQueue = false,
                     queueLoadState = QueueLoadState.READY,
                     queueLoadError = null,

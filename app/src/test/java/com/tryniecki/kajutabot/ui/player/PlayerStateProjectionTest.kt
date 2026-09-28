@@ -17,6 +17,16 @@ import org.junit.Test
 class PlayerStateProjectionTest {
 
     @Test
+    fun `mini player keeps snapshot observation time when switching pages`() {
+        val state = PlayerUiState(
+            queue = snapshot(),
+            queueObservedAtElapsedRealtimeMs = 12_345L,
+        )
+        assertEquals(12_345L, state.toPlayerScreenState().queueObservedAtElapsedRealtimeMs)
+        assertEquals(12_345L, state.toMiniPlayerState()?.slide?.positionObservedAtElapsedRealtimeMs)
+    }
+
+    @Test
     fun `queue reorder keeps playback controls available`() {
         assertFalse(shouldBlockPlaybackControls(true, null, true))
         assertFalse(shouldBlockPlaybackControls(true, null, false))

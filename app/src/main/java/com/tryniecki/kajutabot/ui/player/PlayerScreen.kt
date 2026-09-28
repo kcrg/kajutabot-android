@@ -524,6 +524,7 @@ fun PlayerScreen(
                         )
                         PlayerSurfaceState.READY -> NowPlayingCard(
                             queue = ui.queue,
+                            queueObservedAtElapsedRealtimeMs = ui.queueObservedAtElapsedRealtimeMs,
                             presentedNowPlaying = ui.presentedNowPlaying
                                 ?: ui.queue?.nowPlayingPresentationOrNull(),
                             isMutating = ui.isMutating,
@@ -800,6 +801,7 @@ private fun QueuePositionIndicator(position: Int, modifier: Modifier = Modifier)
 @Composable
 private fun NowPlayingCard(
     queue: QueueSnapshotResponse?,
+    queueObservedAtElapsedRealtimeMs: Long?,
     presentedNowPlaying: NowPlayingPresentation?,
     isMutating: Boolean,
     isQueueReordering: Boolean,
@@ -823,6 +825,7 @@ private fun NowPlayingCard(
     val currentSlide = nowPlayingSlide(
         presentation = presentedNowPlaying,
         hasQueue = queue != null,
+        positionObservedAtElapsedRealtimeMs = queueObservedAtElapsedRealtimeMs,
     )
     val playbackControlsBlocked = shouldBlockPlaybackControls(
         isMutating, activeControlAction, isQueueReordering,
@@ -913,6 +916,7 @@ private fun NowPlayingCard(
                             PlaybackProgressIndicator(
                                 playbackKey = slide.identity,
                                 reportedPositionMs = slide.positionMs,
+                                observedAtElapsedRealtimeMs = slide.positionObservedAtElapsedRealtimeMs,
                                 durationMs = slide.durationMs,
                                 isPlaying = slide.isPlaying,
                             )

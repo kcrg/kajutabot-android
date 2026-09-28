@@ -90,6 +90,7 @@ fun MiniPlayer(
     val progress = rememberPlaybackProgress(
         playbackKey = slide.identity,
         reportedPositionMs = slide.positionMs,
+        observedAtElapsedRealtimeMs = slide.positionObservedAtElapsedRealtimeMs,
         durationMs = slide.durationMs,
         isPlaying = slide.isPlaying,
     )
