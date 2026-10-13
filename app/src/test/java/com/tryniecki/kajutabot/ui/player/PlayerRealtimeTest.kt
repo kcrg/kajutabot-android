@@ -4,6 +4,8 @@ import com.tryniecki.kajutabot.api.client.KajutaBotRealtimeClient
 import com.tryniecki.kajutabot.api.client.RealtimeDisconnect
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.radio.RadioStateResponse
+import com.tryniecki.kajutabot.api.model.playback.LocalVolumeStateDto
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,9 +45,19 @@ class PlayerRealtimeTest {
         override val updates: Flow<QueueSnapshotResponse> = _updates
         override val heartbeats: Flow<Unit> = _heartbeats
         override val closed: Flow<RealtimeDisconnect> = _closed
+        override val localVolumeUpdates = MutableSharedFlow<LocalVolumeStateDto>(extraBufferCapacity = 1)
+        var localVolumeReads = 0
+        var localVolumeSnapshot = LocalVolumeStateDto(true, true, true, 87)
+        var localVolumeSnapshotGate: CompletableDeferred<LocalVolumeStateDto>? = null
+        var onStart: () -> Unit = {}
+        override suspend fun getLocalVolumeState(): LocalVolumeStateDto {
+            localVolumeReads++
+            return localVolumeSnapshotGate?.await() ?: localVolumeSnapshot
+        }
+        override suspend fun setLocalVolume(volume: Int) = Unit
         val subscriptions = mutableListOf<String>()
         var stopped = false
-        override suspend fun start() = Unit
+        override suspend fun start() = onStart()
         override suspend fun subscribeGuild(guildId: String): Boolean {
             subscriptions += guildId
             if (emitOnSubscribe) _updates.emit(snapshot(guildId))
@@ -55,6 +67,58 @@ class PlayerRealtimeTest {
         fun sendUpdate(snapshot: QueueSnapshotResponse) { _updates.tryEmit(snapshot) }
         fun heartbeat() { _heartbeats.tryEmit(Unit) }
         suspend fun disconnect() { _closed.emit(RealtimeDisconnect("IOException")) }
+    }
+
+    @Test
+    fun `local volume shares connection without guild and refreshes only on reconnect with new token`() = runTest {
+        val identity = MutableStateFlow<Long?>(7)
+        val guild = MutableStateFlow<String?>(null)
+        val connections = mutableListOf<FakeConnection>()
+        val tokens = mutableListOf<String>()
+        var currentToken = "discord-jwt-1"
+        val volume = LocalVolumeController(backgroundScope, 7, identity, true)
+        val realtime = PlayerRealtime(backgroundScope, 7, identity, guild, { currentToken },
+            { token -> tokens += token; FakeConnection().also(connections::add) }, {}, {}, localVolume = volume)
+        realtime.setOwner(RealtimeOwner.UI, true)
+        runCurrent()
+        assertEquals(87, volume.state.value.observed?.volume)
+        assertEquals(1, connections.single().localVolumeReads)
+        assertEquals(emptyList<String>(), connections.single().subscriptions)
+        guild.value = "g1"; runCurrent()
+        guild.value = "g2"; runCurrent()
+        assertEquals(1, connections.single().localVolumeReads)
+        currentToken = "discord-jwt-2"
+        connections.single().disconnect(); runCurrent()
+        assertEquals(listOf("discord-jwt-1", "discord-jwt-2"), tokens)
+        assertEquals(1, connections.last().localVolumeReads)
+        assertEquals(listOf("g2"), connections.last().subscriptions)
+        connections.first().localVolumeUpdates.tryEmit(LocalVolumeStateDto(true, true, true, 200))
+        runCurrent()
+        assertEquals(87, volume.state.value.observed?.volume)
+        realtime.setOwner(RealtimeOwner.UI, false); runCurrent()
+        assertEquals(false, volume.state.value.enabled)
+        assertEquals(true, volume.state.value.observed?.installed)
+        volume.close()
+    }
+
+    @Test
+    fun `local volume event handler is active during connection start`() = runTest {
+        val identity = MutableStateFlow<Long?>(7)
+        val connection = FakeConnection()
+        val volume = LocalVolumeController(backgroundScope, 7, identity, true)
+        connection.localVolumeSnapshotGate = CompletableDeferred()
+        connection.onStart = {
+            connection.localVolumeUpdates.tryEmit(LocalVolumeStateDto(true, true, true, 123))
+        }
+        val realtime = PlayerRealtime(backgroundScope, 7, identity, MutableStateFlow(null), { "jwt" },
+            { connection }, {}, {}, localVolume = volume)
+        realtime.setOwner(RealtimeOwner.UI, true); runCurrent()
+        assertEquals(123, volume.state.value.observed?.volume)
+        assertEquals(true, volume.state.value.fresh)
+        assertEquals(1, connection.localVolumeReads)
+        connection.localVolumeSnapshotGate!!.complete(connection.localVolumeSnapshot)
+        runCurrent()
+        realtime.close(); volume.close()
     }
 
     @Test

@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="local_volume_title">KajutaBot volume in Discord</string>
+    <string name="local_volume_percent">%1$d%%</string>
+    <string name="local_volume_unknown">—</string>
+    <string name="local_volume_guest">Sign in with Discord.</string>
+    <string name="local_volume_disconnected">Disconnected · state out of date</string>
+    <string name="local_volume_syncing">Syncing…</string>
+    <string name="local_volume_install">Install and start the KajutaBot helper on your Windows 11 computer.</string>
+    <string name="local_volume_offline">Start the helper and Discord Desktop.</string>
+    <string name="local_volume_unavailable">Check accounts and the voice channel with KajutaBot.</string>
+    <string name="local_volume_unsupported">This API does not support local volume yet.</string>
+    <string name="local_volume_sending">Applying volume…</string>
+    <string name="local_volume_invalid">Select a volume between 0 and 200%.</string>
+    <string name="local_volume_rpc_failed">Discord could not apply the volume. Check Discord Desktop.</string>
+    <string name="local_volume_timeout">No confirmation · syncing state</string>
+    <string name="local_volume_busy">Another device is changing the volume. Wait and try again.</string>
+    <string name="local_volume_failed">Could not read the volume.</string>
     <string name="app_name">KajutaBot</string>
     <string name="action_ok">OK</string>
     <string name="action_cancel">Cancel</string>

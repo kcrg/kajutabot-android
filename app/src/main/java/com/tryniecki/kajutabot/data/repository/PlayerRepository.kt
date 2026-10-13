@@ -13,6 +13,7 @@ import com.tryniecki.kajutabot.api.model.queue.SwapQueueEntriesRequest
 import com.tryniecki.kajutabot.api.model.radio.EnableRadioRequest
 import com.tryniecki.kajutabot.api.model.search.SearchResponse
 import com.tryniecki.kajutabot.auth.SessionManager
+import com.tryniecki.kajutabot.api.model.auth.SessionType
 import kotlinx.coroutines.flow.StateFlow
 
 class PlayerRepository(
@@ -22,6 +23,9 @@ class PlayerRepository(
 ) {
     val sessionIdentity: StateFlow<Long?> = sessionManager.sessionIdentity
     val apiSnapshots = coordinator.apiSnapshots
+    fun isDiscordSession(expectedIdentity: Long): Boolean =
+        sessionIdentity.value == expectedIdentity &&
+            sessionManager.currentUserSession()?.sessionType == SessionType.DISCORD
 
     suspend fun accessToken(expectedIdentity: Long): String =
         sessionManager.accessTokenForSession(expectedIdentity)

@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="local_volume_title">Głośność KajutaBot w Discordzie</string>
+    <string name="local_volume_percent">%1$d%%</string>
+    <string name="local_volume_unknown">—</string>
+    <string name="local_volume_guest">Zaloguj się przez Discord.</string>
+    <string name="local_volume_disconnected">Brak połączenia · stan nieaktualny</string>
+    <string name="local_volume_syncing">Synchronizacja…</string>
+    <string name="local_volume_install">Zainstaluj i uruchom helper KajutaBot na swoim komputerze z Windows 11.</string>
+    <string name="local_volume_offline">Uruchom helper i Discord Desktop.</string>
+    <string name="local_volume_unavailable">Sprawdź zgodność kont i kanał z KajutaBotem.</string>
+    <string name="local_volume_unsupported">To API nie obsługuje jeszcze lokalnej głośności.</string>
+    <string name="local_volume_sending">Ustawianie głośności…</string>
+    <string name="local_volume_invalid">Wybierz głośność od 0 do 200%.</string>
+    <string name="local_volume_rpc_failed">Discord nie mógł ustawić głośności. Sprawdź Discord Desktop.</string>
+    <string name="local_volume_timeout">Brak potwierdzenia · synchronizacja stanu</string>
+    <string name="local_volume_busy">Inne urządzenie zmienia głośność. Poczekaj i spróbuj ponownie.</string>
+    <string name="local_volume_failed">Nie udało się odczytać głośności.</string>
     <string name="app_name">KajutaBot</string>
     <string name="action_ok">OK</string>
     <string name="action_cancel">Anuluj</string>

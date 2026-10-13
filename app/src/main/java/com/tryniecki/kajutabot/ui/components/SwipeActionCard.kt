@@ -50,25 +50,26 @@ enum class SwipeActionStatus { IDLE, PENDING, SUCCESS, FAILURE }
 
 const val SWIPE_RESULT_HOLD_MS = 900L
 
-/** Shared, bounded swipe actions for Favorites and pending queue cards. */
+/** Shared, bounded swipe actions for track cards, with optional removal. */
 @Composable
 fun SwipeActionCard(
     addLabel: String,
-    removeLabel: String,
+    removeLabel: String = "",
     enabled: Boolean,
     modifier: Modifier = Modifier,
     addStatus: SwipeActionStatus = SwipeActionStatus.IDLE,
     removeStatus: SwipeActionStatus = SwipeActionStatus.IDLE,
     onAdd: () -> Unit,
-    onRemove: () -> Unit,
+    onRemove: (() -> Unit)? = null,
     content: @Composable (Modifier) -> Unit,
 ) {
     val revealWidth = with(LocalDensity.current) { (48.dp + 32.dp).toPx() }
-    val swipeState = remember(revealWidth) {
+    val canRemove = onRemove != null
+    val swipeState = remember(revealWidth, canRemove) {
         AnchoredDraggableState(
             initialValue = SwipeToDismissBoxValue.Settled,
             anchors = DraggableAnchors {
-                SwipeToDismissBoxValue.EndToStart at -revealWidth
+                if (canRemove) SwipeToDismissBoxValue.EndToStart at -revealWidth
                 SwipeToDismissBoxValue.Settled at 0f
                 SwipeToDismissBoxValue.StartToEnd at revealWidth
             },
@@ -124,7 +125,7 @@ fun SwipeActionCard(
                     }
                     SwipeToDismissBoxValue.EndToStart -> {
                         removeTriggered = true
-                        currentRemove.value()
+                        currentRemove.value?.invoke()
                     }
                     SwipeToDismissBoxValue.Settled -> Unit
                 }
@@ -187,16 +188,16 @@ fun SwipeActionCard(
         content(
             Modifier.offset { IntOffset(swipeState.requireOffset().roundToInt(), 0) }
                 .semantics {
-                    customActions = listOf(
-                        CustomAccessibilityAction(addLabel) {
+                    customActions = buildList {
+                        add(CustomAccessibilityAction(addLabel) {
                             if (!enabled || addTriggered || removeTriggered) false
                             else { addTriggered = true; onAdd(); true }
-                        },
-                        CustomAccessibilityAction(removeLabel) {
+                        })
+                        if (onRemove != null) add(CustomAccessibilityAction(removeLabel) {
                             if (!enabled || addTriggered || removeTriggered) false
                             else { removeTriggered = true; onRemove(); true }
-                        },
-                    )
+                        })
+                    }
                 },
         )
     }

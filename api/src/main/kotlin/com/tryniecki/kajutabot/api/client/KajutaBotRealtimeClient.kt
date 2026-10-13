@@ -5,6 +5,7 @@ import com.microsoft.signalr.HubConnectionBuilder
 import com.microsoft.signalr.Subscription
 import com.microsoft.signalr.TransportEnum
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
+import com.tryniecki.kajutabot.api.model.playback.LocalVolumeStateDto
 import io.reactivex.rxjava3.core.Completable
 import io.reactivex.rxjava3.core.Single
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +21,10 @@ interface KajutaBotRealtimeClient {
     val updates: Flow<QueueSnapshotResponse>
     val heartbeats: Flow<Unit>
     val closed: Flow<RealtimeDisconnect>
+    val localVolumeUpdates: Flow<LocalVolumeStateDto>
+    suspend fun getLocalVolumeState(): LocalVolumeStateDto
+    /** Invocation completion acknowledges the command, never an observed volume. */
+    suspend fun setLocalVolume(volume: Int)
     suspend fun start()
     /** True when the server had an initial queue snapshot to send. */
     suspend fun subscribeGuild(guildId: String): Boolean
@@ -30,19 +35,26 @@ interface KajutaBotRealtimeClient {
 data class RealtimeDisconnect(val reason: String?)
 
 object KajutaBotRealtimeClientFactory {
-    fun create(baseUrl: String, accessToken: String): KajutaBotRealtimeClient {
-        val root = baseUrl.trimEnd('/')
+    internal fun playbackHubUrl(baseUrl: String): String {
+        val root = baseUrl.trim().trimEnd('/').removeSuffix("/api/v1/app")
         require(root.startsWith("https://")) { "Realtime requires an HTTPS server root." }
+        return "$root/api/v1/app/hubs/playback"
+    }
+
+    fun create(baseUrl: String, accessToken: String): KajutaBotRealtimeClient {
         require(accessToken.isNotBlank()) { "Access token is required." }
-        val connection = HubConnectionBuilder.create("$root/api/v1/app/hubs/playback")
-            .withTransport(TransportEnum.WEBSOCKETS)
-            .withAccessTokenProvider(Single.just(accessToken))
-            .build()
-        return SignalRRealtimeClient(connection)
+        return SignalRRealtimeClient(buildPlaybackConnection(playbackHubUrl(baseUrl), accessToken))
     }
 }
 
-private class SignalRRealtimeClient(
+/** Shared builder: access token headers are passed to both negotiate and WebSocket transport. */
+internal fun buildPlaybackConnection(hubUrl: String, accessToken: String): com.microsoft.signalr.HubConnection =
+    HubConnectionBuilder.create(hubUrl)
+        .withTransport(TransportEnum.WEBSOCKETS)
+        .withAccessTokenProvider(Single.just(accessToken))
+        .build()
+
+internal class SignalRRealtimeClient(
     private val connection: com.microsoft.signalr.HubConnection,
 ) : KajutaBotRealtimeClient {
     // A queue event is full state. Each slow collector retains only the newest snapshot.
@@ -56,6 +68,16 @@ private class SignalRRealtimeClient(
     override val heartbeats: Flow<Unit> = _heartbeats.asSharedFlow()
     private val _closed = MutableSharedFlow<RealtimeDisconnect>(replay = 1)
     override val closed: Flow<RealtimeDisconnect> = _closed.asSharedFlow()
+    private val _localVolumeUpdates = MutableSharedFlow<LocalVolumeStateDto>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    override val localVolumeUpdates: Flow<LocalVolumeStateDto> = _localVolumeUpdates.asSharedFlow()
+    private val localVolumeHandler = connection.on(
+        "LocalVolumeStateChanged",
+        Action1<LocalVolumeStateDto> { _localVolumeUpdates.tryEmit(it) },
+        LocalVolumeStateDto::class.java,
+    )
     private val queueHandler: Subscription = connection.on(
         "QueueUpdated",
         Action1<QueueSnapshotResponse> { snapshot -> _updates.tryEmit(snapshot) },
@@ -78,9 +100,18 @@ private class SignalRRealtimeClient(
     override suspend fun subscribeGuild(guildId: String): Boolean =
         connection.invoke(Boolean::class.javaObjectType, "SubscribeGuild", guildId).awaitValue()
 
+    override suspend fun getLocalVolumeState(): LocalVolumeStateDto =
+        connection.invoke(LocalVolumeStateDto::class.java, "GetLocalVolumeState").awaitValue()
+
+    override suspend fun setLocalVolume(volume: Int) {
+        require(volume in 0..200) { "invalid_volume" }
+        connection.invoke("SetLocalVolume", volume).awaitCompletion()
+    }
+
     override suspend fun stop() {
         queueHandler.unsubscribe()
         heartbeatHandler.unsubscribe()
+        localVolumeHandler.unsubscribe()
         try {
             connection.stop().awaitCompletion()
         } finally {

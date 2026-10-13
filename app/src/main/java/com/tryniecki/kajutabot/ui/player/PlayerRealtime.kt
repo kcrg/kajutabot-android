@@ -61,6 +61,7 @@ internal class PlayerRealtime(
     private val recoverQueue: suspend (String) -> Unit,
     private val elapsedRealtimeMs: () -> Long = { System.nanoTime() / 1_000_000L },
     private val jitterMs: () -> Long = { Random.nextLong(0, 251) },
+    private val localVolume: LocalVolumeController? = null,
 ) {
     private val owners = MutableStateFlow<Set<RealtimeOwner>>(emptySet())
     private val _diagnostics = MutableStateFlow(RealtimeDiagnostics())
@@ -110,6 +111,7 @@ internal class PlayerRealtime(
                         )
                     }
                     client = connect(token())
+                    localVolume?.bind(client)
                     coroutineScope {
                         // One serial consumer. The bounded transport flow conflates bursts.
                         val snapshots = launch(start = CoroutineStart.UNDISPATCHED) {
@@ -132,6 +134,7 @@ internal class PlayerRealtime(
                         }
                         val closed = async(start = CoroutineStart.UNDISPATCHED) { client.closed.first() }
                         client.start()
+                        localVolume?.connected()
                         connectedAt = elapsedRealtimeMs()
                         _diagnostics.update {
                             it.copy(
@@ -185,6 +188,7 @@ internal class PlayerRealtime(
                         }
                         try {
                             val disconnect = closed.await()
+                            localVolume?.disconnect()
                             _diagnostics.update { it.copy(lastDisconnectReason = disconnect.reason) }
                         } finally {
                             subscriptions.cancelAndJoin()
@@ -201,6 +205,7 @@ internal class PlayerRealtime(
                     _diagnostics.update { it.copy(lastDisconnectReason = reason) }
                     guildId.value?.let { recoverOnce(it) }
                 } finally {
+                    localVolume?.disconnect()
                     client?.let { connection ->
                         withContext(NonCancellable) {
                             try {
@@ -222,6 +227,7 @@ internal class PlayerRealtime(
                 if (waitMs > 0) delay(waitMs + jitterMs().coerceIn(0, 250))
             }
         } finally {
+            localVolume?.disconnect()
             _diagnostics.update { it.copy(state = RealtimeConnectionState.DISCONNECTED, connectedAtMs = null) }
         }
     }

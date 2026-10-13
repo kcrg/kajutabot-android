@@ -136,7 +136,7 @@ class GuestUiTest {
                         ),
                     )),
                     onClose = {}, onQueryChange = {}, onSearchSourceChange = {}, onSubmit = {},
-                    onHistoryClick = {}, onResultClick = {},
+                    onHistoryClick = {}, onResultSwipe = {},
                     isFavorite = { false }, onToggleFavorite = {}, favoritesBusy = false,
                     onDismissMessage = {},
                 )
@@ -159,7 +159,7 @@ class GuestUiTest {
                     onSearchSourceChange = {},
                     onSubmit = {},
                     onHistoryClick = { clicked = it },
-                    onResultClick = {},
+                    onResultSwipe = {},
                     isFavorite = { false },
                     onToggleFavorite = {},
                     favoritesBusy = false,

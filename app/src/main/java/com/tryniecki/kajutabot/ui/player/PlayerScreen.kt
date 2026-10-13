@@ -45,6 +45,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -174,6 +176,9 @@ fun PlayerRoute(
     val ui by viewModel.playerScreenState.collectAsStateWithLifecycle()
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
 
+    val localVolume by viewModel.localVolumeState.collectAsStateWithLifecycle()
+    var localVolumeOpen by rememberSaveable { mutableStateOf(false) }
+
     PlayerScreen(
         ui = ui,
         onDiscordSelectionOpen = onDiscordSelectionOpen,
@@ -197,7 +202,18 @@ fun PlayerRoute(
         },
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
+        onLocalVolumeOpen = { localVolumeOpen = true },
+        showLocalVolumeButton = localVolume.showVolumeButton,
     )
+    if (localVolumeOpen) {
+        LocalVolumeSheet(
+            state = localVolume,
+            onDraftChange = viewModel::changeLocalVolumeDraft,
+            onGestureFinished = viewModel::finishLocalVolumeGesture,
+            onGestureCancelled = viewModel::cancelLocalVolumeGesture,
+            onDismiss = { localVolumeOpen = false },
+        )
+    }
 }
 
 @Composable
@@ -248,7 +264,7 @@ fun SearchRoute(
             savedQuery = query
             viewModel.searchFromHistory(query)
         },
-        onResultClick = viewModel::enqueueSearchResult,
+        onResultSwipe = viewModel::enqueueSearchResult,
         isFavorite = favoritesUi::isFavorite,
         favoriteStatus = favoritesUi::statusFor,
         onToggleFavorite = favoritesViewModel::toggle,
@@ -280,6 +296,8 @@ fun PlayerScreen(
     onRetryQueue: () -> Unit = {},
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    onLocalVolumeOpen: () -> Unit = {},
+    showLocalVolumeButton: Boolean = false,
 ) {
     val motion = MaterialTheme.motionScheme
     var confirmStop by rememberSaveable { mutableStateOf(false) }
@@ -581,6 +599,8 @@ fun PlayerScreen(
                             favoritesBusy = favoritesBusy,
                             onRepeatToggle = onRepeatToggle,
                             onRadioToggle = onRadioToggle,
+                            onLocalVolumeOpen = onLocalVolumeOpen,
+                            showLocalVolumeButton = showLocalVolumeButton,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                         )
@@ -830,6 +850,8 @@ private fun NowPlayingCard(
     favoritesBusy: Boolean,
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,
+    onLocalVolumeOpen: () -> Unit,
+    showLocalVolumeButton: Boolean,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
@@ -941,18 +963,38 @@ private fun NowPlayingCard(
                 }
             }
 
-            OutlinedButton(
-                onClick = onRequeueNowPlaying,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = hasActivePlayback && activeControlAction != PlayerControlAction.REQUEUE,
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.player_requeue_now_playing))
+                OutlinedButton(
+                    onClick = onRequeueNowPlaying,
+                    modifier = Modifier.weight(1f),
+                    enabled = hasActivePlayback && activeControlAction != PlayerControlAction.REQUEUE,
+                ) {
+                    Icon(
+                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.player_requeue_now_playing))
+                }
+                if (showLocalVolumeButton) OutlinedIconButton(
+                    onClick = onLocalVolumeOpen,
+                    shape = CircleShape,
+                    modifier = Modifier.size(ButtonDefaults.MinHeight).testTag("local-volume-open"),
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = true),
+                    colors = IconButtonDefaults.outlinedIconButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Icon(
+                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_volume_outline),
+                        contentDescription = stringResource(R.string.local_volume_title),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
 
             Row(

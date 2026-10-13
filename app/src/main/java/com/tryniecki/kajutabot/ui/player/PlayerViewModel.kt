@@ -97,6 +97,7 @@ data class PlayerUiState(
     val searchQuery: String = "",
     val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
     val searchResults: List<SearchItemResponse> = emptyList(),
+    val searchQueueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val searchHistory: List<String> = emptyList(),
     val lastCompletedSearchQuery: String? = null,
     val isLoadingGuilds: Boolean = true,
@@ -178,6 +179,7 @@ data class SearchUiState(
     val searchQuery: String = "",
     val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
     val searchResults: List<SearchItemResponse> = emptyList(),
+    val searchQueueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val searchHistory: List<String> = emptyList(),
     val lastCompletedSearchQuery: String? = null,
     val isSearching: Boolean = false,
@@ -245,6 +247,7 @@ fun PlayerUiState.toSearchUiState(): SearchUiState = SearchUiState(
     searchQuery = searchQuery,
     searchSource = searchSource,
     searchResults = searchResults,
+    searchQueueStatuses = searchQueueStatuses,
     searchHistory = searchHistory,
     lastCompletedSearchQuery = lastCompletedSearchQuery,
     isSearching = isSearching,
@@ -273,6 +276,14 @@ class PlayerViewModel(
     private val preferencesRepository: UserPreferencesRepository,
 ) : ViewModel() {
     private val sessionIdentity = checkNotNull(repository.sessionIdentity.value)
+    private val localVolume = LocalVolumeController(
+        viewModelScope, sessionIdentity, repository.sessionIdentity,
+        repository.isDiscordSession(sessionIdentity),
+    )
+    val localVolumeState: StateFlow<LocalVolumeUiState> = localVolume.state
+    fun changeLocalVolumeDraft(volume: Int) = localVolume.changeDraft(volume)
+    fun finishLocalVolumeGesture() = localVolume.finishGesture()
+    fun cancelLocalVolumeGesture() = localVolume.cancelGesture()
 
     private val _ui = MutableStateFlow(PlayerUiState())
     val ui: StateFlow<PlayerUiState> = _ui.asStateFlow()
@@ -291,6 +302,7 @@ class PlayerViewModel(
         onSnapshot = { snapshot -> applyQueueSnapshot(snapshot) },
         recoverQueue = ::recoverQueueOnce,
         elapsedRealtimeMs = SystemClock::elapsedRealtime,
+        localVolume = localVolume,
     )
     val realtimeDiagnostics: StateFlow<RealtimeDiagnostics> = realtime.diagnostics
 
@@ -367,6 +379,7 @@ class PlayerViewModel(
     fun setRealtimeOwner(owner: RealtimeOwner, active: Boolean) = realtime.setOwner(owner, active)
 
     override fun onCleared() {
+        localVolume.close()
         realtime.close()
     }
 
@@ -411,6 +424,7 @@ class PlayerViewModel(
             it.copy(
                 searchQuery = "",
                 searchResults = emptyList(),
+                searchQueueStatuses = emptyMap(),
                 lastCompletedSearchQuery = null,
                 isSearching = false,
                 error = null,
@@ -770,7 +784,7 @@ class PlayerViewModel(
     }
 
     fun enqueueSearchResult(item: SearchItemResponse) {
-        enqueueInputs(listOf(item.input))
+        enqueueInputs(listOf(item.input), searchResultInput = item.input, closeSearch = false)
     }
 
     fun enqueueSharedUrl(requestId: Long, url: String) {
@@ -814,14 +828,27 @@ class PlayerViewModel(
         }
     }
 
-    fun enqueueInputs(inputs: List<String>) {
+    fun enqueueInputs(
+        inputs: List<String>,
+        searchResultInput: String? = null,
+        closeSearch: Boolean = true,
+    ) {
         if (_ui.value.isEnqueuing) return
+        fun updateSearchStatus(status: SwipeActionStatus) {
+            if (searchResultInput != null) {
+                _ui.update {
+                    it.copy(searchQueueStatuses = it.searchQueueStatuses + (searchResultInput to status))
+                }
+            }
+        }
         val guildId = _ui.value.selectedGuildId
         val channelId = _ui.value.selectedVoiceChannelId
         if (guildId == null || channelId == null) {
             _ui.update { it.copy(error = uiText(R.string.player_select_target_to_add)) }
+            updateSearchStatus(SwipeActionStatus.FAILURE)
             return
         }
+        updateSearchStatus(SwipeActionStatus.PENDING)
         _ui.update { it.copy(isEnqueuing = true, error = null, info = null) }
         viewModelScope.launch {
             try {
@@ -834,10 +861,16 @@ class PlayerViewModel(
                 // Query/results stay intact so the Search exit transition renders stable
                 // content; the shell clears them after the Search route closes.
                 _ui.update { it.copy(isEnqueuing = false) }
-                _ui.update { it.copy(searchEnqueueCompleted = true) }
+                updateSearchStatus(SwipeActionStatus.SUCCESS)
+                if (closeSearch) _ui.update { it.copy(searchEnqueueCompleted = true) }
             } catch (e: Exception) {
                 _ui.update { it.copy(isEnqueuing = false) }
                 handleMutationError(e)
+                updateSearchStatus(SwipeActionStatus.FAILURE)
+            }
+            if (searchResultInput != null) {
+                delay(1800)
+                _ui.update { it.copy(searchQueueStatuses = it.searchQueueStatuses - searchResultInput) }
             }
         }
     }

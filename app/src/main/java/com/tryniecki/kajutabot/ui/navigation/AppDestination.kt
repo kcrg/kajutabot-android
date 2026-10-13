@@ -17,6 +17,9 @@ sealed interface AppRoute : NavKey {
     @Serializable data object DiscordSelection : AppRoute
 }
 
+internal fun AppRoute.hidesBottomNavigation(): Boolean =
+    this == AppRoute.Search || this is AppRoute.SharedTrack || this == AppRoute.DiscordSelection
+
 enum class AppDestination(
     @StringRes val labelResId: Int,
     @DrawableRes val icon: Int,

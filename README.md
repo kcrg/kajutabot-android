@@ -7,6 +7,7 @@ Native Android client for controlling KajutaBot, a Discord music bot, through it
 - Discord OAuth login or credential-free guest access to a demo server
 - Discord server and voice channel selection
 - Live player state, playback controls and queue management
+- Per-user local KajutaBot volume in Discord Desktop through the Windows helper ([details and validation](docs/local-volume.md))
 - Track search, URL sharing and favorites
 - Material 3 UI with system dynamic colors on Android 12+
 - Android media controls through Media3

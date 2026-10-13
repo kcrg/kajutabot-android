@@ -76,6 +76,7 @@ import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.components.resolveArtworkUrl
 import com.tryniecki.kajutabot.ui.favorites.FavoriteTrackButton
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
+import com.tryniecki.kajutabot.ui.components.SwipeActionCard
 import com.tryniecki.kajutabot.ui.text.asString
 import java.text.NumberFormat
 import java.util.Locale
@@ -95,7 +96,7 @@ fun SearchScreen(
     onSearchSourceChange: (SearchSourceOption) -> Unit,
     onSubmit: () -> Unit,
     onHistoryClick: (String) -> Unit,
-    onResultClick: (SearchItemResponse) -> Unit,
+    onResultSwipe: (SearchItemResponse) -> Unit,
     isFavorite: (PlaybackTrackResponse) -> Boolean,
     favoriteStatus: (PlaybackTrackResponse) -> SwipeActionStatus = { SwipeActionStatus.IDLE },
     onToggleFavorite: (PlaybackTrackResponse) -> Unit,
@@ -267,21 +268,6 @@ fun SearchScreen(
                     }
                 }
 
-                if (ui.isMutating) {
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            if (rememberDelayedPending(ui.isMutating)) {
-                                ExpressiveLoadingIndicator(modifier = Modifier.size(40.dp))
-                            } else {
-                                Spacer(Modifier.size(40.dp))
-                            }
-                        }
-                    }
-                }
-
                 if (ui.isSearching && ui.searchResults.isEmpty() && !isUrlInput) {
                     items(3, key = { "search-skeleton-$it" }) {
                         SearchResultSkeleton(
@@ -291,62 +277,64 @@ fun SearchScreen(
                 } else if (ui.searchResults.isNotEmpty()) {
                     items(ui.searchResults, key = { it.input }) { item ->
                         val favoriteTrack = item.track.asFavoriteTrack()
-                        Card(
-                            modifier = Modifier
-                                .animateItem()
-                                .fillMaxWidth()
-                                .clickable(
-                                    enabled = !ui.isMutating,
-                                    onClick = { onResultClick(item) },
-                                ),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                        ) {
-                            ListItem(
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                verticalAlignment = Alignment.CenterVertically,
-                                leadingContent = {
-                                    SearchResultArtwork(
-                                        imageUrl = item.track.artworkUrl,
-                                        modifier = Modifier.size(64.dp),
-                                    )
-                                },
-                                supportingContent = {
-                                    Column(
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                                    ) {
-                                        searchResultUploadLabel(item)?.let { uploadLabel ->
+                        SwipeActionCard(
+                            addLabel = stringResource(R.string.action_add_to_queue),
+                            enabled = !ui.isMutating,
+                            addStatus = ui.searchQueueStatuses[item.input] ?: SwipeActionStatus.IDLE,
+                            onAdd = { onResultSwipe(item) },
+                            modifier = Modifier.animateItem(),
+                        ) { foregroundModifier ->
+                            Card(
+                                modifier = foregroundModifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                            ) {
+                                ListItem(
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    leadingContent = {
+                                        SearchResultArtwork(
+                                            imageUrl = item.track.artworkUrl,
+                                            modifier = Modifier.size(64.dp),
+                                        )
+                                    },
+                                    supportingContent = {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                        ) {
+                                            searchResultUploadLabel(item)?.let { uploadLabel ->
+                                                Text(
+                                                    text = uploadLabel,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
                                             Text(
-                                                text = uploadLabel,
+                                                text = formatSearchResultMetric(item, appLocale),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
                                         }
-                                        Text(
-                                            text = formatSearchResultMetric(item, appLocale),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                                    },
+                                    trailingContent = {
+                                        FavoriteTrackButton(
+                                            track = favoriteTrack,
+                                            checked = isFavorite(favoriteTrack),
+                                            status = favoriteStatus(favoriteTrack),
+                                            enabled = !favoritesBusy,
+                                            onToggle = onToggleFavorite,
                                         )
-                                    }
-                                },
-                                trailingContent = {
-                                    FavoriteTrackButton(
-                                        track = favoriteTrack,
-                                        checked = isFavorite(favoriteTrack),
-                                        status = favoriteStatus(favoriteTrack),
-                                        enabled = !favoritesBusy,
-                                        onToggle = onToggleFavorite,
+                                    },
+                                ) {
+                                    Text(
+                                        item.track.title,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
-                                },
-                            ) {
-                                Text(
-                                    item.track.title,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                                }
                             }
                         }
                     }

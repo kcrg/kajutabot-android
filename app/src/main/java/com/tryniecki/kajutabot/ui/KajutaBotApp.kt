@@ -83,6 +83,7 @@ import com.tryniecki.kajutabot.ui.more.LibrariesScreen
 import com.tryniecki.kajutabot.ui.more.MoreRootScreen
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
 import com.tryniecki.kajutabot.ui.navigation.AppRoute
+import com.tryniecki.kajutabot.ui.navigation.hidesBottomNavigation
 import com.tryniecki.kajutabot.ui.navigation.kajutaForwardTransition
 import com.tryniecki.kajutabot.ui.navigation.kajutaPopTransition
 import com.tryniecki.kajutabot.ui.navigation.navigationMotionMetadata
@@ -371,10 +372,7 @@ private fun AuthenticatedContent(
         AppDestination.MORE -> moreBackStack
     }
     val currentRoute = activeBackStack.lastOrNull() as? AppRoute ?: AppRoute.Player
-    val isSearchOpen = currentRoute == AppRoute.Search
-    val isSharedTrackOpen = currentRoute is AppRoute.SharedTrack
-    val isDiscordSelectionOpen = currentRoute == AppRoute.DiscordSelection
-    val isFullScreenDetailOpen = isSearchOpen || isSharedTrackOpen || isDiscordSelectionOpen
+    val isFullScreenDetailOpen = currentRoute.hidesBottomNavigation()
 
     fun popActiveBackStack() {
         if (activeBackStack.size > 1) {
