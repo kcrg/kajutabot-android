@@ -8,6 +8,7 @@ data class RadioStateResponse(
     val minimumDurationSeconds: Int? = null,
     val maximumDurationSeconds: Int? = null,
     val availableTrackCount: Int? = null,
+    val mode: String = "cache",
 )
 
 @Serializable
@@ -16,4 +17,5 @@ data class EnableRadioRequest(
     val minimumDurationSeconds: Int,
     val maximumDurationSeconds: Int,
     val expectedQueueVersion: Long? = null,
+    val mode: String = "cache",
 )

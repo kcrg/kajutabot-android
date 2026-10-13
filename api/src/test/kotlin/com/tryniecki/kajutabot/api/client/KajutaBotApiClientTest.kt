@@ -57,6 +57,19 @@ class KajutaBotApiClientTest {
         }
     }
 
+    @Test
+    fun `favorites radio round trips mode through existing radio endpoint`() {
+        val api = KajutaBotApiClientFactory.create(server.url("/").toString()) { "guest-token" }
+        server.enqueue(MockResponse().setBody("""{"guildId":"g","voiceChannelId":"c","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":true,"mode":"favorites"},"pendingEntries":[],"pendingEntriesCount":0,"pendingDurationMilliseconds":0,"version":20,"queueVersion":11}"""))
+        val result = kotlinx.coroutines.runBlocking {
+            api.enableRadio("g", EnableRadioRequest("c", 60, 600, 10, mode = "favorites"), "operation-key")
+        }
+        assertEquals("favorites", result.radio.mode)
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertTrue(request.body.readUtf8().contains("\"mode\":\"favorites\""))
+    }
+
     @Before
     fun setUp() {
         server = MockWebServer()

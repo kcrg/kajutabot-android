@@ -92,6 +92,7 @@ data class PlayerUiState(
     val selectedGuildId: String? = null,
     val selectedVoiceChannelId: String? = null,
     val queue: QueueSnapshotResponse? = null,
+    val favoritesRadioSelected: Boolean = false,
     val queueObservedAtElapsedRealtimeMs: Long? = null,
     val transitionNowPlaying: NowPlayingPresentation? = null,
     val transitionStartedAtNanos: Long? = null,
@@ -138,6 +139,7 @@ data class PlayerScreenState(
     val selectedGuildId: String? = null,
     val selectedVoiceChannelId: String? = null,
     val queue: QueueSnapshotResponse? = null,
+    val favoritesRadioSelected: Boolean = false,
     val queueObservedAtElapsedRealtimeMs: Long? = null,
     val presentedNowPlaying: NowPlayingPresentation? = null,
     val isLoadingGuilds: Boolean = false,
@@ -215,6 +217,7 @@ fun PlayerUiState.toPlayerScreenState(): PlayerScreenState = PlayerScreenState(
     selectedGuildId = selectedGuildId,
     selectedVoiceChannelId = selectedVoiceChannelId,
     queue = queue,
+    favoritesRadioSelected = favoritesRadioSelected,
     queueObservedAtElapsedRealtimeMs = queueObservedAtElapsedRealtimeMs,
     presentedNowPlaying = effectiveNowPlaying,
     isLoadingGuilds = isLoadingGuilds,
@@ -511,6 +514,7 @@ class PlayerViewModel(
         _ui.update {
             it.copy(
                 selectedGuildId = guildId,
+                favoritesRadioSelected = false,
                 selectedVoiceChannelId = null,
                 voiceChannels = emptyList(),
                 isLoadingVoiceChannels = true,
@@ -660,6 +664,7 @@ class PlayerViewModel(
                 applied = true
                 current.copy(
                     queue = playbackSnapshot,
+                    favoritesRadioSelected = if (playbackSnapshot.radio.isEnabled) playbackSnapshot.radio.mode == "favorites" else current.favoritesRadioSelected,
                     queueObservedAtElapsedRealtimeMs = if (holdPrevious) {
                         current.queueObservedAtElapsedRealtimeMs
                     } else {
@@ -933,6 +938,28 @@ class PlayerViewModel(
         }
     }
 
+    fun toggleRadioSource() {
+        val state = _ui.value
+        if (state.isMutating) return
+        if (state.queue?.radio?.isEnabled != true) {
+            _ui.update { it.copy(favoritesRadioSelected = !it.favoritesRadioSelected) }
+            return
+        }
+        mutate(controlAction = PlayerControlAction.RADIO) {
+            val current = _ui.value
+            val guildId = current.selectedGuildId ?: return@mutate null
+            val queue = current.queue ?: return@mutate null
+            when (val action = decideRadioSourceToggle(queue, current.selectedVoiceChannelId)) {
+                is RadioToggleAction.Enable -> repository.enableRadio(sessionIdentity, guildId, action.request)
+                RadioToggleAction.MissingVoiceChannel -> {
+                    _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }
+                    null
+                }
+                is RadioToggleAction.Disable -> null
+            }
+        }
+    }
+
     fun toggleRadio() {
         mutate(controlAction = PlayerControlAction.RADIO) {
             val guildId = _ui.value.selectedGuildId
@@ -941,7 +968,7 @@ class PlayerViewModel(
                 _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }
                 return@mutate null
             }
-            when (val action = decideRadioToggle(queue, _ui.value.selectedVoiceChannelId)) {
+            when (val action = decideRadioToggle(queue, _ui.value.selectedVoiceChannelId, _ui.value.favoritesRadioSelected)) {
                 RadioToggleAction.MissingVoiceChannel -> {
                     _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }
                     null

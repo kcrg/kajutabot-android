@@ -232,6 +232,7 @@
     <string name="player_repeat_enable">Enable repeat</string>
     <string name="player_radio_disable">Disable radio</string>
     <string name="player_radio_enable">Enable radio</string>
+    <string name="player_radio_favorites_source">Use favorites of people in the voice channel with Qumi</string>
     <string name="player_queue_empty_title">The queue is empty</string>
     <string name="player_queue_empty_body">Use the search button to add tracks.</string>
     <string name="player_select_target_to_add">Select a server and voice channel on the player screen before adding a track.</string>

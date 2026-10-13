@@ -254,4 +254,5 @@
     <string name="error_operation_key_conflict">Nie można ponowić zmienionej operacji. Odśwież kolejkę.</string>
     <string name="error_voice_channel_access">Nie masz dostępu do aktualnego kanału bota. Wymagane są uprawnienia Wyświetlanie kanału i Połącz.</string>
     <string name="error_voice_channel_changed">Kanał bota zmienił się w trakcie żądania. Odśwież stan i spróbuj ponownie.</string>
+    <string name="player_radio_favorites_source">Ulubione osób na kanale głosowym z Qumi</string>
 </resources>

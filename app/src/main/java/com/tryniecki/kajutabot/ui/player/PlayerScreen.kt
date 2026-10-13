@@ -188,6 +188,7 @@ fun PlayerRoute(
         onStop = viewModel::stop,
         onRepeatToggle = { viewModel.setRepeat(ui.queue?.isRepeatEnabled != true) },
         onRadioToggle = viewModel::toggleRadio,
+        onRadioSourceToggle = viewModel::toggleRadioSource,
         onRemoveEntry = viewModel::removeEntry,
         onSwapEntries = viewModel::swapEntries,
         onClearQueue = viewModel::clearQueue,
@@ -284,6 +285,7 @@ fun PlayerScreen(
     onStop: () -> Unit,
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,
+    onRadioSourceToggle: () -> Unit = {},
     onRemoveEntry: (String) -> Unit,
     onSwapEntries: (String, String, Long) -> Boolean,
     onClearQueue: () -> Unit,
@@ -599,6 +601,8 @@ fun PlayerScreen(
                             favoritesBusy = favoritesBusy,
                             onRepeatToggle = onRepeatToggle,
                             onRadioToggle = onRadioToggle,
+                            onRadioSourceToggle = onRadioSourceToggle,
+                            favoritesRadioSelected = ui.favoritesRadioSelected,
                             onLocalVolumeOpen = onLocalVolumeOpen,
                             showLocalVolumeButton = showLocalVolumeButton,
                             sharedTransitionScope = sharedTransitionScope,
@@ -837,6 +841,7 @@ fun PlayerScreen(
 private fun NowPlayingCard(
     queue: QueueSnapshotResponse?,
     queueObservedAtElapsedRealtimeMs: Long?,
+    favoritesRadioSelected: Boolean = false,
     presentedNowPlaying: NowPlayingPresentation?,
     isMutating: Boolean,
     isQueueReordering: Boolean,
@@ -850,6 +855,7 @@ private fun NowPlayingCard(
     favoritesBusy: Boolean,
     onRepeatToggle: () -> Unit,
     onRadioToggle: () -> Unit,
+    onRadioSourceToggle: () -> Unit = {},
     onLocalVolumeOpen: () -> Unit,
     showLocalVolumeButton: Boolean,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -857,6 +863,7 @@ private fun NowPlayingCard(
 ) {
     val repeatEnabled = queue?.isRepeatEnabled == true
     val radioEnabled = queue?.radio?.isEnabled == true
+    val favoritesSource = if (radioEnabled) queue.radio.mode == "favorites" else favoritesRadioSelected
     val activeTrack = presentedNowPlaying?.track
     val hasActivePlayback = activeTrack != null
     val motion = MaterialTheme.motionScheme
@@ -999,7 +1006,7 @@ private fun NowPlayingCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedIconButton(
@@ -1034,14 +1041,35 @@ private fun NowPlayingCard(
                     uncheckedContentDescription = stringResource(R.string.player_repeat_enable),
                     enabled = hasActivePlayback && !playbackControlsBlocked,
                 )
-                TonalToggleIconButton(
-                    checked = radioEnabled,
-                    onCheckedChange = { onRadioToggle() },
-                    iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline,
-                    checkedContentDescription = stringResource(R.string.player_radio_disable),
-                    uncheckedContentDescription = stringResource(R.string.player_radio_enable),
-                    enabled = true,
-                )
+                Row(
+                    modifier = Modifier.background(
+                        MaterialTheme.colorScheme.surfaceContainerHighest,
+                        MaterialTheme.shapes.extraLarge,
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TonalToggleIconButton(
+                        checked = radioEnabled,
+                        onCheckedChange = { onRadioToggle() },
+                        iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline,
+                        checkedContentDescription = stringResource(R.string.player_radio_disable),
+                        uncheckedContentDescription = stringResource(R.string.player_radio_enable),
+                        enabled = !playbackControlsBlocked,
+                    )
+                    androidx.compose.material3.IconToggleButton(
+                        checked = favoritesSource,
+                        onCheckedChange = { onRadioSourceToggle() },
+                        enabled = !playbackControlsBlocked,
+                        modifier = Modifier.testTag("radio-favorites-source"),
+                    ) {
+                        Icon(
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_music_heart_outline),
+                            contentDescription = stringResource(R.string.player_radio_favorites_source),
+                            tint = if (favoritesSource) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
                 if (activeTrack != null) {
                     FavoriteTrackButton(
                         track = activeTrack,
@@ -1246,7 +1274,7 @@ private fun NowPlayingSkeletonCard() {
             SkeletonBlock(pulse, Modifier.fillMaxWidth().height(40.dp), RoundedCornerShape(999.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SkeletonBlock(pulse, Modifier.size(40.dp), RoundedCornerShape(999.dp))

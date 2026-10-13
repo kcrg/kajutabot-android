@@ -24,10 +24,28 @@ object RadioToggleDefaults {
 fun decideRadioToggle(
     queue: QueueSnapshotResponse,
     voiceChannelId: String?,
+    favoritesSelected: Boolean = false,
 ): RadioToggleAction {
     if (queue.radio.isEnabled) {
         return RadioToggleAction.Disable(queue.queueVersion)
     }
+    return radioEnableAction(queue, voiceChannelId, favoritesSelected)
+}
+
+fun decideRadioSourceToggle(
+    queue: QueueSnapshotResponse,
+    voiceChannelId: String?,
+): RadioToggleAction = radioEnableAction(
+    queue,
+    queue.voiceChannelId ?: voiceChannelId,
+    favoritesSelected = queue.radio.mode != "favorites",
+)
+
+private fun radioEnableAction(
+    queue: QueueSnapshotResponse,
+    voiceChannelId: String?,
+    favoritesSelected: Boolean,
+): RadioToggleAction {
     val channelId = voiceChannelId ?: return RadioToggleAction.MissingVoiceChannel
     return RadioToggleAction.Enable(
         EnableRadioRequest(
@@ -37,6 +55,7 @@ fun decideRadioToggle(
             maximumDurationSeconds = queue.radio.maximumDurationSeconds
                 ?: RadioToggleDefaults.MAX_DURATION_SECONDS,
             expectedQueueVersion = queue.queueVersion,
+            mode = if (favoritesSelected) "favorites" else "cache",
         ),
     )
 }

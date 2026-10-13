@@ -15,6 +15,13 @@ import org.junit.Test
  * player-screen or mini-player slices (and vice versa).
  */
 class PlayerStateProjectionTest {
+    @Test
+    fun `radio source selection belongs to player projection`() {
+        val state = PlayerUiState(favoritesRadioSelected = true)
+        assertTrue(state.toPlayerScreenState().favoritesRadioSelected)
+        assertEquals(PlayerUiState().toSearchUiState(), state.toSearchUiState())
+    }
+
 
     @Test
     fun `mini player keeps snapshot observation time when switching pages`() {
