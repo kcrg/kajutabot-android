@@ -40,8 +40,8 @@ class FavoritesRepository(
     ): QueueSnapshotResponse = coordinator.run(
         guildId,
         fetch = { sessionManager.withApiForSession(expectedIdentity) { it.getQueue(guildId) } },
-        mutation = { token -> sessionManager.withApiForSession(expectedIdentity) {
-            it.queueFavorites(QueueFavoritesRequest(guildId, channelId, token, shuffle))
+        mutation = { token, key -> sessionManager.withApiForSession(expectedIdentity) {
+            it.queueFavorites(QueueFavoritesRequest(guildId, channelId, token, shuffle), key)
         } },
     )
 
@@ -53,8 +53,8 @@ class FavoritesRepository(
     ): QueueSnapshotResponse = coordinator.run(
         guildId,
         fetch = { sessionManager.withApiForSession(expectedIdentity) { it.getQueue(guildId) } },
-        mutation = { token -> sessionManager.withApiForSession(expectedIdentity) {
-            it.enqueue(guildId, EnqueueRequest(channelId, listOf(contentUrl), token))
+        mutation = { token, key -> sessionManager.withApiForSession(expectedIdentity) {
+            it.enqueue(guildId, EnqueueRequest(channelId, listOf(contentUrl), token), key)
         } },
     )
 }

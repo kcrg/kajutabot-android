@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.UUID
 
 /** One process-wide serialization point for mutations of each guild queue. */
 class QueueMutationCoordinator {
@@ -41,16 +42,17 @@ class QueueMutationCoordinator {
     suspend fun run(
         guildId: String,
         fetch: suspend () -> QueueSnapshotResponse,
-        mutation: suspend (Long) -> QueueSnapshotResponse,
+        mutation: suspend (Long, String) -> QueueSnapshotResponse,
     ): QueueSnapshotResponse = lockFor(guildId).withLock {
+        val operationKey = UUID.randomUUID().toString()
         val token = tokenFor(guildId) ?: fetch().also(::publish).queueVersion
         try {
-            mutation(token).also(::publish)
+            mutation(token, operationKey).also(::publish)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
             // The outcome of 503 and transport failures is ambiguous. Reconcile,
-            // never resend a POST. A 409 is guaranteed to have made no change.
+            // never resend a mutation automatically. An in-progress operation may still commit.
             try {
                 publish(fetch())
             } catch (cancelled: CancellationException) {

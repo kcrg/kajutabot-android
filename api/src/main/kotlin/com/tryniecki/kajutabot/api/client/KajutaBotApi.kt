@@ -17,6 +17,7 @@ import com.tryniecki.kajutabot.api.model.search.SearchResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -50,6 +51,7 @@ interface KajutaBotApi {
     suspend fun enqueue(
         @Path("guildId") guildId: String,
         @Body request: EnqueueRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @DELETE("guilds/{guildId}/queue/items/{entryId}")
@@ -57,6 +59,7 @@ interface KajutaBotApi {
         @Path("guildId") guildId: String,
         @Path("entryId") entryId: String,
         @Query("expectedQueueVersion") expectedQueueVersion: Long? = null,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @PUT("guilds/{guildId}/queue/items/{entryId}/position")
@@ -64,48 +67,56 @@ interface KajutaBotApi {
         @Path("guildId") guildId: String,
         @Path("entryId") entryId: String,
         @Body request: MoveQueueEntryRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @POST("guilds/{guildId}/queue/items/swap")
     suspend fun swapQueueEntries(
         @Path("guildId") guildId: String,
         @Body request: SwapQueueEntriesRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @DELETE("guilds/{guildId}/queue/items")
     suspend fun clearPendingQueue(
         @Path("guildId") guildId: String,
         @Query("expectedQueueVersion") expectedQueueVersion: Long? = null,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @POST("guilds/{guildId}/queue/skip")
     suspend fun skip(
         @Path("guildId") guildId: String,
         @Body request: SkipQueueRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @PUT("guilds/{guildId}/queue/repeat")
     suspend fun setRepeat(
         @Path("guildId") guildId: String,
         @Body request: SetQueueRepeatRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @POST("guilds/{guildId}/queue/stop")
     suspend fun stop(
         @Path("guildId") guildId: String,
         @Body request: QueueMutationRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @PUT("guilds/{guildId}/radio")
     suspend fun enableRadio(
         @Path("guildId") guildId: String,
         @Body request: EnableRadioRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @DELETE("guilds/{guildId}/radio")
     suspend fun disableRadio(
         @Path("guildId") guildId: String,
         @Query("expectedQueueVersion") expectedQueueVersion: Long? = null,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @GET("search")
@@ -131,5 +142,6 @@ interface KajutaBotApi {
     @POST("users/me/favorites/queue")
     suspend fun queueFavorites(
         @Body request: QueueFavoritesRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 }

@@ -35,21 +35,22 @@ class KajutaBotApiClientTest {
         val response = """{"guildId":"g","voiceChannelId":"c","nowPlaying":null,"nowPlayingFromRadio":false,"radio":{"isEnabled":false},"pendingEntries":[],"pendingEntriesCount":0,"pendingDurationMilliseconds":0,"version":20,"queueVersion":11}"""
         repeat(11) { server.enqueue(MockResponse().setBody(response)) }
         kotlinx.coroutines.runBlocking {
-            api.enqueue("g", EnqueueRequest("c", listOf("https://example.test/x"), 10))
-            api.skip("g", SkipQueueRequest(expectedQueueVersion = 10))
-            api.stop("g", QueueMutationRequest(10))
-            api.setRepeat("g", SetQueueRepeatRequest(true, 10))
-            api.enableRadio("g", EnableRadioRequest("c", 60, 600, 10))
-            api.removeQueueEntry("g", "entry", 10)
-            api.clearPendingQueue("g", 10)
-            api.disableRadio("g", 10)
-            api.moveQueueEntry("g", "entry", MoveQueueEntryRequest(2, 10))
-            api.swapQueueEntries("g", SwapQueueEntriesRequest("a", "b", 10))
-            api.queueFavorites(QueueFavoritesRequest("g", "c", 10))
+            api.enqueue("g", EnqueueRequest("c", listOf("https://example.test/x"), 10), "operation-key")
+            api.skip("g", SkipQueueRequest(expectedQueueVersion = 10), "operation-key")
+            api.stop("g", QueueMutationRequest(10), "operation-key")
+            api.setRepeat("g", SetQueueRepeatRequest(true, 10), "operation-key")
+            api.enableRadio("g", EnableRadioRequest("c", 60, 600, 10), "operation-key")
+            api.removeQueueEntry("g", "entry", 10, "operation-key")
+            api.clearPendingQueue("g", 10, "operation-key")
+            api.disableRadio("g", 10, "operation-key")
+            api.moveQueueEntry("g", "entry", MoveQueueEntryRequest(2, 10), "operation-key")
+            api.swapQueueEntries("g", SwapQueueEntriesRequest("a", "b", 10), "operation-key")
+            api.queueFavorites(QueueFavoritesRequest("g", "c", 10), "operation-key")
         }
         repeat(11) {
             val request = server.takeRequest()
             val sent = request.path.orEmpty() + request.body.readUtf8()
+            assertEquals("operation-key", request.getHeader("Idempotency-Key"))
             assertTrue(sent.contains("expectedQueueVersion"))
             assertTrue(sent.contains("10"))
             assertTrue(!sent.contains("expectedVersion"))
@@ -195,7 +196,7 @@ class KajutaBotApiClientTest {
                 "11111111-1111-1111-1111-111111111111",
                 "33333333-3333-3333-3333-333333333333",
                 123,
-            ))
+            ), "operation-key")
         }
 
         val request = server.takeRequest()

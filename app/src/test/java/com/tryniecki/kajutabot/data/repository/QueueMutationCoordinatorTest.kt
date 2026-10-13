@@ -27,7 +27,7 @@ class QueueMutationCoordinatorTest {
         val finishFirst = CompletableDeferred<Unit>()
         val tokens = mutableListOf<Long>()
         val first = async {
-            coordinator.run("guild", { error("unexpected fetch") }) { token ->
+            coordinator.run("guild", { error("unexpected fetch") }) { token, _ ->
                 tokens += token
                 firstStarted.complete(Unit)
                 finishFirst.await()
@@ -36,7 +36,7 @@ class QueueMutationCoordinatorTest {
         }
         firstStarted.await()
         val second = async {
-            coordinator.run("guild", { error("unexpected fetch") }) { token ->
+            coordinator.run("guild", { error("unexpected fetch") }) { token, _ ->
                 tokens += token
                 snapshot(22, 12)
             }
@@ -54,7 +54,7 @@ class QueueMutationCoordinatorTest {
         var calls = 0
         var fetches = 0
         val caught = runCatching {
-            coordinator.run("guild", { fetches++; snapshot(21, 11) }) {
+            coordinator.run("guild", { fetches++; snapshot(21, 11) }) { token, _ ->
                 calls++
                 throw failure
             }
@@ -63,8 +63,8 @@ class QueueMutationCoordinatorTest {
         assertEquals(1, calls)
         assertEquals(1, fetches)
         var nextToken = -1L
-        coordinator.run("guild", { error("unexpected fetch") }) {
-            nextToken = it
+        coordinator.run("guild", { error("unexpected fetch") }) { token, _ ->
+            nextToken = token
             snapshot(22, 12)
         }
         assertEquals(11L, nextToken)
@@ -75,8 +75,8 @@ class QueueMutationCoordinatorTest {
         coordinator.observe(snapshot(20, 10))
         coordinator.observe(snapshot(19, 99))
         var token = -1L
-        coordinator.run("guild", { error("unexpected fetch") }) {
-            token = it
+        coordinator.run("guild", { error("unexpected fetch") }) { queueToken, _ ->
+            token = queueToken
             snapshot(21, 11)
         }
         assertEquals(10L, token)
@@ -90,7 +90,7 @@ class QueueMutationCoordinatorTest {
             var fetches = 0
             val failure = HttpException(Response.error<Any>(status, "failure".toResponseBody()))
             val caught = runCatching {
-                coordinator.run("guild", { fetches++; snapshot(21, 11) }) {
+                coordinator.run("guild", { fetches++; snapshot(21, 11) }) { _, _ ->
                     calls++
                     throw failure
                 }
@@ -105,12 +105,12 @@ class QueueMutationCoordinatorTest {
         val coordinator = QueueMutationCoordinator()
         coordinator.observe(snapshot(20, 10))
         runCatching {
-            coordinator.run("guild", { error("offline") }) { error("timeout") }
+            coordinator.run("guild", { error("offline") }) { token, _ -> error("timeout") }
         }
         var fetched = 0
         var token = -1L
-        coordinator.run("guild", { fetched++; snapshot(21, 11) }) {
-            token = it
+        coordinator.run("guild", { fetched++; snapshot(21, 11) }) { queueToken, _ ->
+            token = queueToken
             snapshot(22, 12)
         }
         assertEquals(1, fetched)

@@ -50,11 +50,11 @@ class PlayerRepository(
     private suspend fun mutate(
         identity: Long,
         guildId: String,
-        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long) -> QueueSnapshotResponse,
+        call: suspend (com.tryniecki.kajutabot.api.client.KajutaBotApi, Long, String) -> QueueSnapshotResponse,
     ): QueueSnapshotResponse = coordinator.run(
         guildId = guildId,
         fetch = { getQueue(identity, guildId) },
-        mutation = { token -> sessionManager.withApiForSession(identity) { call(it, token) } },
+        mutation = { token, key -> sessionManager.withApiForSession(identity) { call(it, token, key) } },
     )
 
     suspend fun search(
@@ -70,53 +70,53 @@ class PlayerRepository(
         expectedIdentity: Long,
         guildId: String,
         request: EnqueueRequest,
-    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token ->
-        api.enqueue(guildId, request.copy(expectedQueueVersion = token))
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.enqueue(guildId, request.copy(expectedQueueVersion = token), key)
     }
 
     suspend fun skip(
         expectedIdentity: Long,
         guildId: String,
-    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token ->
-        api.skip(guildId, SkipQueueRequest(expectedQueueVersion = token))
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.skip(guildId, SkipQueueRequest(expectedQueueVersion = token), key)
     }
 
     suspend fun stop(
         expectedIdentity: Long,
         guildId: String,
-    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token ->
-        api.stop(guildId, QueueMutationRequest(expectedQueueVersion = token))
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.stop(guildId, QueueMutationRequest(expectedQueueVersion = token), key)
     }
 
     suspend fun setRepeat(
         expectedIdentity: Long,
         guildId: String,
         enabled: Boolean,
-    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token ->
-        api.setRepeat(guildId, SetQueueRepeatRequest(enabled, token))
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.setRepeat(guildId, SetQueueRepeatRequest(enabled, token), key)
     }
 
     suspend fun enableRadio(
         expectedIdentity: Long,
         guildId: String,
         request: EnableRadioRequest,
-    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token ->
-        api.enableRadio(guildId, request.copy(expectedQueueVersion = token))
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.enableRadio(guildId, request.copy(expectedQueueVersion = token), key)
     }
 
     suspend fun disableRadio(
         expectedIdentity: Long,
         guildId: String,
-    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token ->
-        api.disableRadio(guildId, token)
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.disableRadio(guildId, token, key)
     }
 
     suspend fun removeQueueEntry(
         expectedIdentity: Long,
         guildId: String,
         entryId: String,
-    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token ->
-        api.removeQueueEntry(guildId, entryId, token)
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.removeQueueEntry(guildId, entryId, token, key)
     }
 
     suspend fun swapQueueEntries(
@@ -124,14 +124,14 @@ class PlayerRepository(
         guildId: String,
         firstEntryId: String,
         secondEntryId: String,
-    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token ->
-        api.swapQueueEntries(guildId, SwapQueueEntriesRequest(firstEntryId, secondEntryId, token))
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.swapQueueEntries(guildId, SwapQueueEntriesRequest(firstEntryId, secondEntryId, token), key)
     }
 
     suspend fun clearQueue(
         expectedIdentity: Long,
         guildId: String,
-    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token ->
-        api.clearPendingQueue(guildId, token)
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.clearPendingQueue(guildId, token, key)
     }
 }
