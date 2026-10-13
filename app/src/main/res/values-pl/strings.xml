@@ -196,8 +196,8 @@
     <string name="onboarding_system_media_description">Podczas odtwarzania Android pokazuje systemową kartę multimediów. Możesz sprawdzić aktualny utwór i korzystać z najważniejszych akcji bez otwierania aplikacji.</string>
     <string name="onboarding_guest_description">Telefon jest pilotem do KajutaBota na serwerze demonstracyjnym Discord. Podejrzysz aktualny utwór i postęp oraz skorzystasz z tych samych podstawowych kontrolek bez wpisywania komend.</string>
     <string name="onboarding_selection_title">Gdzie chcesz sterować botem?</string>
-    <string name="onboarding_selection_guest_description">Serwer demonstracyjny jest już wybrany. Wybierz kanał głosowy, możesz go później zmienić z ekranu odtwarzacza.</string>
-    <string name="onboarding_selection_description">Wybierz serwer Discord, a potem kanał głosowy. Ten wybór możesz później zmienić z ekranu odtwarzacza.</string>
+    <string name="onboarding_selection_guest_description">Serwer demonstracyjny jest wybrany. Kanał wskazuje miejsce dołączenia; gdy bot jest już na voice, sterujesz jego aktualnym kanałem.</string>
+    <string name="onboarding_selection_description">Wybierz serwer i kanał dołączenia. Gdy bot jest już na voice, sterujesz jego aktualnym kanałem. Wymagany jest dostęp do tego kanału; nie musisz na nim przebywać.</string>
     <string name="onboarding_discord_connection">Połączenie z Discordem</string>
     <string name="search_title">Wyszukaj</string>
     <string name="search_hint">Wklej link lub wyszukaj utwór</string>
@@ -212,8 +212,8 @@
     <string name="shared_track_open_app">Przejdź do aplikacji</string>
     <string name="search_source_database">Baza danych</string>
     <string name="discord_selection_title">Serwer i kanał</string>
-    <string name="discord_selection_guest_description">Wybierz kanał głosowy na serwerze demonstracyjnym.</string>
-    <string name="discord_selection_description">Wybierz serwer Discord, a potem kanał głosowy używany przez odtwarzacz.</string>
+    <string name="discord_selection_guest_description">Wybierz kanał dołączenia na serwerze demonstracyjnym. Gdy bot jest już na voice, sterujesz jego aktualnym kanałem.</string>
+    <string name="discord_selection_description">Sterujesz muzyką na aktualnym kanale bota. Wybrany kanał to miejsce dołączenia, gdy bot jest rozłączony. Wymagany jest dostęp do kanału bota; nie musisz na nim przebywać.</string>
     <string name="player_nothing_playing">Nic nie gra</string>
     <string name="player_change_server_channel">Zmień serwer i kanał głosowy</string>
     <string name="player_voice_channel_required">Wybierz kanał głosowy</string>
@@ -250,4 +250,8 @@
     <string name="swipe_remove_success">Usunięto</string>
     <string name="swipe_remove_failure">Nie udało się usunąć</string>
     <string name="action_failed">Nie udało się wykonać akcji</string>
+    <string name="error_operation_in_progress">Operacja jest jeszcze wykonywana. Poczekaj na aktualizację kolejki.</string>
+    <string name="error_operation_key_conflict">Nie można ponowić zmienionej operacji. Odśwież kolejkę.</string>
+    <string name="error_voice_channel_access">Nie masz dostępu do aktualnego kanału bota. Wymagane są uprawnienia Wyświetlanie kanału i Połącz.</string>
+    <string name="error_voice_channel_changed">Kanał bota zmienił się w trakcie żądania. Odśwież stan i spróbuj ponownie.</string>
 </resources>

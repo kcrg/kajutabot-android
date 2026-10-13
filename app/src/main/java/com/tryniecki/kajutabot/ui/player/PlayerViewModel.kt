@@ -53,6 +53,7 @@ internal fun preferredVoiceChannelId(
     channels: List<DiscordVoiceChannelResponse>,
     savedChannelId: String?,
 ): String? = savedChannelId?.takeIf { id -> channels.any { it.id == id } }
+    ?: channels.firstOrNull { it.isConnected }?.id
     ?: channels.singleOrNull()?.id
 
 enum class PlayerControlAction {

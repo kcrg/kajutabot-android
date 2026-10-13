@@ -45,8 +45,9 @@ android {
 
     buildTypes {
         release {
-            proguardFiles("proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
+            // AGP 9.3+: release keep rules live in src/main/keepRules/*.keep.
+            // Do not sign production releases with the Android debug keystore.
             optimization {
                 enable = true
             }

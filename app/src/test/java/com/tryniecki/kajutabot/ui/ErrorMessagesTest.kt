@@ -12,6 +12,25 @@ import java.net.SocketTimeoutException
 
 class ErrorMessagesTest {
     @Test
+    fun `ownership and idempotency errors have specific localized messages`() {
+        val cases = listOf(
+            Triple(403, "voice_channel_access_denied", R.string.error_voice_channel_access),
+            Triple(409, "voice_channel_changed", R.string.error_voice_channel_changed),
+            Triple(503, "worker_ownership_lost", R.string.error_server_unavailable),
+            Triple(503, "worker_not_ready", R.string.error_server_unavailable),
+            Triple(409, "idempotency_in_progress", R.string.error_operation_in_progress),
+            Triple(409, "idempotency_key_conflict", R.string.error_operation_key_conflict),
+        )
+        cases.forEach { (status, code, message) ->
+            val error = HttpException(Response.error<Any>(
+                status,
+                """{"errorCode":"$code"}""".toResponseBody("application/problem+json".toMediaType()),
+            ))
+            assertEquals(code, UiText.Resource(message), userMessageForError(error))
+        }
+    }
+
+    @Test
     fun `queue full is distinct from queue version conflict`() {
         val error = HttpException(Response.error<Any>(
             409,

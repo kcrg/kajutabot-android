@@ -197,8 +197,8 @@
     <string name="onboarding_system_media_description">During playback, Android shows a system media card. Check the current track and use the main actions without opening the app.</string>
     <string name="onboarding_guest_description">Your phone is a remote for KajutaBot on the demo Discord server. See the current track and progress and use the same basic controls without typing commands.</string>
     <string name="onboarding_selection_title">Where do you want to control the bot?</string>
-    <string name="onboarding_selection_guest_description">The demo server is already selected. Choose a voice channel, you can change it later from the player screen.</string>
-    <string name="onboarding_selection_description">Choose a Discord server and then a voice channel. You can change this later from the player screen.</string>
+    <string name="onboarding_selection_guest_description">The demo server is selected. Your channel choice is where the bot joins; controls use its current channel when already connected.</string>
+    <string name="onboarding_selection_description">Choose a server and a channel to join. When the bot is already in voice, controls use its current channel. You need access to that channel, but do not need to join it.</string>
     <string name="onboarding_discord_connection">Discord connection</string>
     <string name="search_title">Search</string>
     <string name="search_hint">Paste a link or search for a track</string>
@@ -213,8 +213,8 @@
     <string name="shared_track_open_app">Go to app</string>
     <string name="search_source_database">Database</string>
     <string name="discord_selection_title">Server and channel</string>
-    <string name="discord_selection_guest_description">Choose a voice channel on the demo server.</string>
-    <string name="discord_selection_description">Choose a Discord server and then the voice channel used by the player.</string>
+    <string name="discord_selection_guest_description">Choose a channel to join on the demo server. When the bot is already in voice, controls use its current channel.</string>
+    <string name="discord_selection_description">Controls use the current voice channel of the bot. Your selection is only where it joins when disconnected. You need access to that channel, but do not need to join it.</string>
     <string name="player_nothing_playing">Nothing is playing</string>
     <string name="player_change_server_channel">Change server and voice channel</string>
     <string name="player_voice_channel_required">Select a voice channel</string>
@@ -251,4 +251,8 @@
     <string name="swipe_remove_success">Removed</string>
     <string name="swipe_remove_failure">Could not remove</string>
     <string name="action_failed">Action failed</string>
+    <string name="error_operation_in_progress">The operation is still running. Wait for the queue update.</string>
+    <string name="error_operation_key_conflict">A changed operation cannot be retried. Refresh the queue.</string>
+    <string name="error_voice_channel_access">You cannot access the current channel of the bot. View Channel and Connect permissions are required.</string>
+    <string name="error_voice_channel_changed">The voice channel changed during the request. Refresh and try again.</string>
 </resources>

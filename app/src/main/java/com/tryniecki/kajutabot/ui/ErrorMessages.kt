@@ -38,11 +38,16 @@ fun userMessageForError(e: Throwable?, parsedProblem: KajutaBotProblemDetails? =
         // translate or rewrite arbitrary response payload text from the API.
         val problem = parsedProblem ?: runCatching { KajutaBotApiErrors.problemDetailsOf(e) }.getOrNull()
         return when (problem?.errorCode) {
+            "worker_ownership_lost", "worker_not_ready" -> uiText(R.string.error_server_unavailable)
+            "idempotency_in_progress" -> uiText(R.string.error_operation_in_progress)
+            "idempotency_key_conflict" -> uiText(R.string.error_operation_key_conflict)
             "queue_version_conflict" -> uiText(R.string.error_queue_conflict)
             "queue_persistence_conflict" -> uiText(R.string.error_queue_persistence_conflict)
             "queue_full" -> uiText(R.string.error_queue_full)
             "content_unavailable" -> uiText(R.string.error_content_unavailable)
             "queue_bound_to_other_channel" -> uiText(R.string.error_queue_other_channel)
+            "voice_channel_access_denied" -> uiText(R.string.error_voice_channel_access)
+            "voice_channel_changed" -> uiText(R.string.error_voice_channel_changed)
             "guild_access_denied" -> uiText(R.string.error_guild_access)
             "discord_guild_access_denied" -> uiText(R.string.error_discord_guild_access)
             "guild_access_service_unavailable" -> uiText(R.string.error_discord_unavailable)

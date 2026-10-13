@@ -10,6 +10,12 @@ class VoiceChannelSelectionTest {
         id = id, name = id, position = 0, userCount = 0, isConnected = false,
     )
 
+    @Test fun connectedBotProvidesDefaultWithoutOverwritingSavedJoinPreference() {
+        val channels = listOf(channel("join"), channel("bot").copy(isConnected = true))
+        assertEquals("bot", preferredVoiceChannelId(channels, null))
+        assertEquals("bot", preferredVoiceChannelId(channels, "deleted"))
+        assertEquals("join", preferredVoiceChannelId(channels, "join"))
+    }
     @Test fun onlyChannelIsSelectedAutomatically() {
         assertEquals("voice", preferredVoiceChannelId(listOf(channel("voice")), null))
         assertEquals("voice", preferredVoiceChannelId(listOf(channel("voice")), "removed"))
