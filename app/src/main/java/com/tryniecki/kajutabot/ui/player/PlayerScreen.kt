@@ -229,7 +229,7 @@ fun SearchRoute(
     var savedQuery by rememberSaveable { mutableStateOf(ui.searchQuery) }
     var savedSourceName by rememberSaveable { mutableStateOf(ui.searchSource.name) }
     val savedSource = SearchSourceOption.entries.firstOrNull { it.name == savedSourceName }
-        ?: SearchSourceOption.YOUTUBE
+        ?: SearchSourceOption.SMART
 
     // Rehydrate ViewModel search input after process recreation. The route's
     // rememberSaveable state survives because Navigation 3 owns a saveable-state holder.

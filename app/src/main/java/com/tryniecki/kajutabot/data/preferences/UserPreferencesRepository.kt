@@ -1,9 +1,11 @@
 package com.tryniecki.kajutabot.data.preferences
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.SharedPreferencesMigration
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -13,6 +15,7 @@ import com.tryniecki.kajutabot.auth.UserSession
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
@@ -46,9 +49,8 @@ data class GuildSelection(
  * Sensitive OAuth/session material deliberately stays in SecureSessionStore.
  * Legacy SharedPreferences files are migrated by DataStore before first read.
  */
-class UserPreferencesRepository(context: Context) {
-    private val appContext = context.applicationContext
-    private val dataStore = appContext.userPreferencesDataStore
+class UserPreferencesRepository internal constructor(private val dataStore: DataStore<Preferences>) {
+    constructor(context: Context) : this(context.applicationContext.userPreferencesDataStore)
     private val preferences = dataStore.data.catch { error ->
         if (error is IOException) emit(emptyPreferences()) else throw error
     }
@@ -64,11 +66,12 @@ class UserPreferencesRepository(context: Context) {
             guildId = preferences[GUILD_ID],
             voiceChannelId = preferences[VOICE_CHANNEL_ID],
         )
-    }
+    }.distinctUntilChanged()
 
-    val searchHistory: Flow<List<String>> = preferences.map { preferences ->
-        decodeSearchHistory(preferences[SEARCH_HISTORY])
-    }
+    val searchHistory: Flow<List<String>> = preferences
+        .map { it[SEARCH_HISTORY] }
+        .distinctUntilChanged()
+        .map(::decodeSearchHistory)
 
     suspend fun currentGuildSelection(): GuildSelection = guildSelection.first()
 
@@ -125,9 +128,15 @@ class UserPreferencesRepository(context: Context) {
     }
 
     suspend fun addSearchHistory(query: String): List<String> {
-        val updated = updateSearchHistory(searchHistory.first(), query)
-        editSafely { preferences -> preferences[SEARCH_HISTORY] = Json.encodeToString(updated) }
-        return updated
+        var updated: List<String>? = null
+        editSafely { preferences ->
+            // Read and modify in the same transaction so overlapping submissions cannot lose entries.
+            val current = decodeSearchHistory(preferences[SEARCH_HISTORY])
+            val next = updateSearchHistory(current, query)
+            updated = next
+            if (next != current) preferences[SEARCH_HISTORY] = Json.encodeToString(next)
+        }
+        return updated ?: searchHistory.first()
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {

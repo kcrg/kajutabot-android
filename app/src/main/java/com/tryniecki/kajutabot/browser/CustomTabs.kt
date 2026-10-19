@@ -7,6 +7,7 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -36,11 +37,16 @@ fun openCustomTab(
 @Composable
 fun rememberCustomTabColors(): CustomTabColorSchemeParams {
     val scheme = MaterialTheme.colorScheme
-    return CustomTabColorSchemeParams.Builder()
-        .setToolbarColor(scheme.surfaceContainer.toArgb())
-        .setNavigationBarColor(scheme.surface.toArgb())
-        .setNavigationBarDividerColor(scheme.outlineVariant.toArgb())
-        .build()
+    val toolbarColor = scheme.surfaceContainer.toArgb()
+    val navigationBarColor = scheme.surface.toArgb()
+    val dividerColor = scheme.outlineVariant.toArgb()
+    return remember(toolbarColor, navigationBarColor, dividerColor) {
+        CustomTabColorSchemeParams.Builder()
+            .setToolbarColor(toolbarColor)
+            .setNavigationBarColor(navigationBarColor)
+            .setNavigationBarDividerColor(dividerColor)
+            .build()
+    }
 }
 
 @Composable
@@ -48,7 +54,7 @@ fun rememberOpenCustomTab(): (String) -> Unit {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val colors = rememberCustomTabColors()
-    return { url ->
-        openCustomTab(context, uriHandler, url, colors)
+    return remember(context, uriHandler, colors) {
+        { url -> openCustomTab(context, uriHandler, url, colors) }
     }
 }

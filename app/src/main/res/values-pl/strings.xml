@@ -46,6 +46,11 @@
     <string name="action_add_favorite">Dodaj do ulubionych</string>
     <string name="nav_player">Odtwarzacz</string>
     <string name="nav_favorites">Ulubione</string>
+    <string name="nav_history">History</string>
+    <string name="history_played_at">Odtworzono %1$s</string>
+    <string name="history_empty">Na tym serwerze nie odtworzono jeszcze żadnych utworów.</string>
+    <string name="history_select_guild">Wybierz serwer w odtwarzaczu, aby zobaczyć jego historię.</string>
+    <string name="history_retry">Spróbuj ponownie</string>
     <string name="nav_more">Więcej</string>
     <string name="theme_system">Systemowy</string>
     <string name="theme_light">Jasny</string>
@@ -210,7 +215,8 @@
     <string name="shared_track_failed">Nie udało się dodać udostępnionego utworu</string>
     <string name="shared_track_unconfirmed">Nie udało się potwierdzić dodania utworu. Sprawdź kolejkę w aplikacji.</string>
     <string name="shared_track_open_app">Przejdź do aplikacji</string>
-    <string name="search_source_database">Baza danych</string>
+    <string name="search_source_smart">Smart</string>
+    <string name="search_source_audius">Audius</string>
     <string name="discord_selection_title">Serwer i kanał</string>
     <string name="discord_selection_guest_description">Wybierz kanał dołączenia na serwerze demonstracyjnym. Gdy bot jest już na voice, sterujesz jego aktualnym kanałem.</string>
     <string name="discord_selection_description">Sterujesz muzyką na aktualnym kanale bota. Wybrany kanał to miejsce dołączenia, gdy bot jest rozłączony. Wymagany jest dostęp do kanału bota; nie musisz na nim przebywać.</string>

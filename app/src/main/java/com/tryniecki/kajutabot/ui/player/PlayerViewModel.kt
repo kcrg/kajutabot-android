@@ -81,9 +81,10 @@ enum class SearchSourceOption(
     val apiValue: String,
     @StringRes val displayNameResId: Int,
 ) {
-    YOUTUBE("YouTube", R.string.search_source_youtube),
-    SOUNDCLOUD("SoundCloud", R.string.search_source_soundcloud),
-    DATABASE("Database", R.string.search_source_database),
+    SMART("all", R.string.search_source_smart),
+    YOUTUBE("youtube", R.string.search_source_youtube),
+    SOUNDCLOUD("soundcloud", R.string.search_source_soundcloud),
+    AUDIUS("audius", R.string.search_source_audius),
 }
 
 data class PlayerUiState(
@@ -97,7 +98,7 @@ data class PlayerUiState(
     val transitionNowPlaying: NowPlayingPresentation? = null,
     val transitionStartedAtNanos: Long? = null,
     val searchQuery: String = "",
-    val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
+    val searchSource: SearchSourceOption = SearchSourceOption.SMART,
     val searchResults: List<SearchItemResponse> = emptyList(),
     val searchQueueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val searchHistory: List<String> = emptyList(),
@@ -180,7 +181,7 @@ data class PlayerEntryState(
 
 data class SearchUiState(
     val searchQuery: String = "",
-    val searchSource: SearchSourceOption = SearchSourceOption.YOUTUBE,
+    val searchSource: SearchSourceOption = SearchSourceOption.SMART,
     val searchResults: List<SearchItemResponse> = emptyList(),
     val searchQueueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val searchHistory: List<String> = emptyList(),
@@ -364,16 +365,19 @@ class PlayerViewModel(
 
     init {
         viewModelScope.launch {
+            preferencesRepository.searchHistory.collect { history ->
+                _ui.update { it.copy(searchHistory = history) }
+            }
+        }
+        viewModelScope.launch {
             repository.apiSnapshots.collect { applyQueueSnapshot(it) }
         }
         viewModelScope.launch {
             val selection = preferencesRepository.currentGuildSelection()
-            val history = preferencesRepository.searchHistory.first()
             _ui.update {
                 it.copy(
                     selectedGuildId = selection.guildId,
                     selectedVoiceChannelId = selection.voiceChannelId,
-                    searchHistory = history,
                 )
             }
             refreshGuilds()
@@ -723,8 +727,11 @@ class PlayerViewModel(
             return
         }
 
+        if (searchJob?.isActive == true && _ui.value.isSearching && _ui.value.searchQuery.trim() == trimmed) return
         searchJob?.cancel()
         val source = _ui.value.searchSource
+        // Persistence runs independently of the HTTP request and survives query edits.
+        viewModelScope.launch { preferencesRepository.addSearchHistory(trimmed) }
         searchJob = viewModelScope.launch {
             _ui.update {
                 it.copy(
@@ -735,14 +742,6 @@ class PlayerViewModel(
                 )
             }
             try {
-                val updatedHistory = preferencesRepository.addSearchHistory(trimmed)
-                _ui.update { current ->
-                    if (current.searchQuery.trim() == trimmed && current.searchSource == source) {
-                        current.copy(searchHistory = updatedHistory)
-                    } else {
-                        current
-                    }
-                }
                 val response = repository.search(
                     expectedIdentity = sessionIdentity,
                     query = trimmed,

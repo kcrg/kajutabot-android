@@ -13,6 +13,8 @@ import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
 import com.tryniecki.kajutabot.api.model.queue.SkipQueueRequest
 import com.tryniecki.kajutabot.api.model.queue.SwapQueueEntriesRequest
 import com.tryniecki.kajutabot.api.model.radio.EnableRadioRequest
+import com.tryniecki.kajutabot.api.model.history.PlaybackHistoryPageResponse
+import com.tryniecki.kajutabot.api.model.history.EnqueueJellyfinTrackRequest
 import com.tryniecki.kajutabot.api.model.search.SearchResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -45,6 +47,20 @@ interface KajutaBotApi {
     @GET("guilds/{guildId}/queue")
     suspend fun getQueue(
         @Path("guildId") guildId: String,
+    ): QueueSnapshotResponse
+
+    @GET("guilds/{guildId}/history")
+    suspend fun getHistory(
+        @Path("guildId") guildId: String,
+        @Query("cursor") cursor: Long? = null,
+        @Query("pageSize") pageSize: Int = 50,
+    ): PlaybackHistoryPageResponse
+
+    @POST("users/me/jellyfin/audio/{itemId}/enqueue")
+    suspend fun enqueueJellyfinTrack(
+        @Path("itemId") itemId: String,
+        @Body request: EnqueueJellyfinTrackRequest,
+        @Header("Idempotency-Key") idempotencyKey: String,
     ): QueueSnapshotResponse
 
     @POST("guilds/{guildId}/queue/items")

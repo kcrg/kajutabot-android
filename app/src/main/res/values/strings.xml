@@ -46,6 +46,11 @@
     <string name="action_add_favorite">Add to favorites</string>
     <string name="nav_player">Player</string>
     <string name="nav_favorites">Favorites</string>
+    <string name="nav_history">History</string>
+    <string name="history_played_at">Played %1$s</string>
+    <string name="history_empty">No tracks have been played on this server yet.</string>
+    <string name="history_select_guild">Select a server in the player to see its history.</string>
+    <string name="history_retry">Try again</string>
     <string name="nav_more">More</string>
     <string name="theme_system">System</string>
     <string name="theme_light">Light</string>
@@ -211,7 +216,8 @@
     <string name="shared_track_failed">Couldn’t add the shared track</string>
     <string name="shared_track_unconfirmed">Couldn’t confirm whether the track was added. Check the queue in the app.</string>
     <string name="shared_track_open_app">Go to app</string>
-    <string name="search_source_database">Database</string>
+    <string name="search_source_smart">Smart</string>
+    <string name="search_source_audius">Audius</string>
     <string name="discord_selection_title">Server and channel</string>
     <string name="discord_selection_guest_description">Choose a channel to join on the demo server. When the bot is already in voice, controls use its current channel.</string>
     <string name="discord_selection_description">Controls use the current voice channel of the bot. Your selection is only where it joins when disconnected. You need access to that channel, but do not need to join it.</string>

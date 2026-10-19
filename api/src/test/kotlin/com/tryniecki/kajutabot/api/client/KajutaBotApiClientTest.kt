@@ -76,6 +76,24 @@ class KajutaBotApiClientTest {
         server.start()
     }
 
+    @Test
+    fun `history uses guild endpoint and pages of 50 with long cursors`() {
+        val api = KajutaBotApiClientFactory.create(server.url("/").toString()) { "token" }
+        server.enqueue(MockResponse().setBody("""{"items":[{"id":9007199254740993,"contentType":"YouTube","contentId":"track","title":"Song","queueInput":"https://example.test/track","thumbnailUrl":null,"startedAtUtc":"2026-10-14T12:00:00+00:00","requestedBy":null,"fromRadio":false,"playCount":2}],"nextCursor":9007199254740993}"""))
+        server.enqueue(MockResponse().setBody("""{"items":[],"nextCursor":null}"""))
+        kotlinx.coroutines.runBlocking {
+            val first = api.getHistory("123")
+            assertEquals(9007199254740993L, first.items.single().id)
+            assertEquals(9007199254740993L, first.nextCursor)
+            assertEquals("2026-10-14T12:00:00+00:00", first.items.single().startedAtUtc)
+            assertNull(api.getHistory("123", first.nextCursor).nextCursor)
+        }
+        val firstRequest = server.takeRequest()
+        assertEquals("/api/v1/app/guilds/123/history?pageSize=50", firstRequest.path)
+        assertEquals("Bearer token", firstRequest.getHeader("Authorization"))
+        assertEquals("/api/v1/app/guilds/123/history?cursor=9007199254740993&pageSize=50", server.takeRequest().path)
+    }
+
     @After
     fun tearDown() {
         server.shutdown()

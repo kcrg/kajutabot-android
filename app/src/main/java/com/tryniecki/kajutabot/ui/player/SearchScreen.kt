@@ -176,7 +176,7 @@ fun SearchScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item {
+                item(key = "search-input", contentType = "search-input") {
                     OutlinedTextField(
                         value = ui.searchQuery,
                         onValueChange = onQueryChange,
@@ -206,7 +206,7 @@ fun SearchScreen(
                 }
 
                 if (trimmed.isBlank() && ui.searchHistory.isNotEmpty()) {
-                    item {
+                    item(key = "search-history", contentType = "search-history") {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -243,7 +243,7 @@ fun SearchScreen(
                 }
 
                 if (ui.error != null || ui.info != null) {
-                    item {
+                    item(key = "search-feedback", contentType = "search-feedback") {
                         Card(
                             colors = CardDefaults.cardColors(
                                 containerColor = if (ui.error != null) {
@@ -269,74 +269,25 @@ fun SearchScreen(
                 }
 
                 if (ui.isSearching && ui.searchResults.isEmpty() && !isUrlInput) {
-                    items(3, key = { "search-skeleton-$it" }) {
+                    items(3, key = { "search-skeleton-$it" }, contentType = { "search-skeleton" }) {
                         SearchResultSkeleton(
                             modifier = Modifier.animateItem(),
                         )
                     }
                 } else if (ui.searchResults.isNotEmpty()) {
-                    items(ui.searchResults, key = { it.input }) { item ->
-                        val favoriteTrack = item.track.asFavoriteTrack()
-                        SwipeActionCard(
-                            addLabel = stringResource(R.string.action_add_to_queue),
+                    items(ui.searchResults, key = { it.input }, contentType = { "search-result" }) { item ->
+                        SearchResultRow(
+                            item = item,
+                            locale = appLocale,
                             enabled = !ui.isMutating,
-                            addStatus = ui.searchQueueStatuses[item.input] ?: SwipeActionStatus.IDLE,
-                            onAdd = { onResultSwipe(item) },
+                            queueStatus = ui.searchQueueStatuses[item.input] ?: SwipeActionStatus.IDLE,
+                            onResultSwipe = onResultSwipe,
+                            isFavorite = isFavorite,
+                            favoriteStatus = favoriteStatus,
+                            onToggleFavorite = onToggleFavorite,
+                            favoritesBusy = favoritesBusy,
                             modifier = Modifier.animateItem(),
-                        ) { foregroundModifier ->
-                            Card(
-                                modifier = foregroundModifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                            ) {
-                                ListItem(
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    leadingContent = {
-                                        SearchResultArtwork(
-                                            imageUrl = item.track.artworkUrl,
-                                            modifier = Modifier.size(64.dp),
-                                        )
-                                    },
-                                    supportingContent = {
-                                        Column(
-                                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                                        ) {
-                                            searchResultUploadLabel(item)?.let { uploadLabel ->
-                                                Text(
-                                                    text = uploadLabel,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                            }
-                                            Text(
-                                                text = formatSearchResultMetric(item, appLocale),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                        }
-                                    },
-                                    trailingContent = {
-                                        FavoriteTrackButton(
-                                            track = favoriteTrack,
-                                            checked = isFavorite(favoriteTrack),
-                                            status = favoriteStatus(favoriteTrack),
-                                            enabled = !favoritesBusy,
-                                            onToggle = onToggleFavorite,
-                                        )
-                                    },
-                                ) {
-                                    Text(
-                                        item.track.title,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                        }
+                        )
                     }
                 }
             }
@@ -365,6 +316,76 @@ fun SearchScreen(
                     }
                 }
             }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResultRow(
+    item: SearchItemResponse,
+    locale: Locale,
+    enabled: Boolean,
+    queueStatus: SwipeActionStatus,
+    onResultSwipe: (SearchItemResponse) -> Unit,
+    isFavorite: (PlaybackTrackResponse) -> Boolean,
+    favoriteStatus: (PlaybackTrackResponse) -> SwipeActionStatus,
+    onToggleFavorite: (PlaybackTrackResponse) -> Unit,
+    favoritesBusy: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val favoriteTrack = remember(item.track) { item.track.asFavoriteTrack() }
+    val checked = isFavorite(favoriteTrack)
+    val status = favoriteStatus(favoriteTrack)
+    val metric = remember(item.metricCount, item.metricCaption, locale) { formatSearchResultMetric(item, locale) }
+    SwipeActionCard(
+        addLabel = stringResource(R.string.action_add_to_queue),
+        enabled = enabled,
+        addStatus = queueStatus,
+        onAdd = { onResultSwipe(item) },
+        modifier = modifier,
+    ) { foregroundModifier ->
+        Card(
+            modifier = foregroundModifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        ) {
+            ListItem(
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                verticalAlignment = Alignment.CenterVertically,
+                leadingContent = {
+                    SearchResultArtwork(imageUrl = item.track.artworkUrl, modifier = Modifier.size(64.dp))
+                },
+                supportingContent = {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        searchResultUploadLabel(item)?.let { uploadLabel ->
+                            Text(
+                                text = uploadLabel,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            text = metric,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                },
+                trailingContent = {
+                    FavoriteTrackButton(
+                        track = favoriteTrack,
+                        checked = checked,
+                        status = status,
+                        enabled = !favoritesBusy,
+                        onToggle = onToggleFavorite,
+                    )
+                },
+            ) {
+                Text(item.track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }

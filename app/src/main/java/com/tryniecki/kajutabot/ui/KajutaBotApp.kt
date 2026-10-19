@@ -78,6 +78,8 @@ import com.tryniecki.kajutabot.ui.components.BrandMark
 import com.tryniecki.kajutabot.ui.components.DelayedPendingSpinner
 import com.tryniecki.kajutabot.ui.favorites.FavoritesRoute
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
+import com.tryniecki.kajutabot.ui.history.HistoryRoute
+import com.tryniecki.kajutabot.ui.history.HistoryViewModel
 import com.tryniecki.kajutabot.ui.more.ContactScreen
 import com.tryniecki.kajutabot.ui.more.LibrariesScreen
 import com.tryniecki.kajutabot.ui.more.MoreRootScreen
@@ -363,12 +365,14 @@ private fun AuthenticatedContent(
 ) {
     val playerBackStack = rememberNavBackStack(AppRoute.Player)
     val favoritesBackStack = rememberNavBackStack(AppRoute.Favorites)
+    val historyBackStack = rememberNavBackStack(AppRoute.History)
     val moreBackStack = rememberNavBackStack(AppRoute.More)
     var currentDestination by rememberSaveable { mutableStateOf(AppDestination.PLAYER) }
 
     val activeBackStack = when (currentDestination) {
         AppDestination.PLAYER -> playerBackStack
         AppDestination.FAVORITES -> favoritesBackStack
+        AppDestination.HISTORY -> historyBackStack
         AppDestination.MORE -> moreBackStack
     }
     val currentRoute = activeBackStack.lastOrNull() as? AppRoute ?: AppRoute.Player
@@ -465,6 +469,10 @@ private fun AuthenticatedContent(
             entry<AppRoute.Favorites>(metadata = navigationMotionMetadata(AppDestination.FAVORITES)) {
                 FavoritesRoute(viewModel = favoritesViewModel)
             }
+            entry<AppRoute.History>(metadata = navigationMotionMetadata(AppDestination.HISTORY)) {
+                val historyViewModel: HistoryViewModel = viewModel(factory = HistoryViewModel.factory(container))
+                HistoryRoute(viewModel = historyViewModel)
+            }
             entry<AppRoute.More>(metadata = navigationMotionMetadata(AppDestination.MORE)) {
                 MoreRootScreen(
                     appViewModel = appViewModel,
@@ -538,12 +546,18 @@ private fun AuthenticatedContent(
             entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>()),
             entryProvider = appEntryProvider,
         )
+        val historyEntries = rememberDecoratedNavEntries(
+            backStack = historyBackStack,
+            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>()),
+            entryProvider = appEntryProvider,
+        )
         // Keep Player as the starting stack underneath the selected tab. Besides
         // matching the official "exit through home" pattern, this gives NavDisplay
         // the correct previous scene for Back / predictive Back.
         val activeEntries = when (currentDestination) {
             AppDestination.PLAYER -> playerEntries
             AppDestination.FAVORITES -> playerEntries + favoritesEntries
+            AppDestination.HISTORY -> playerEntries + historyEntries
             AppDestination.MORE -> playerEntries + moreEntries
         }
 

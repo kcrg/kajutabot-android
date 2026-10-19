@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
 sealed interface AppRoute : NavKey {
     @Serializable data object Player : AppRoute
     @Serializable data object Favorites : AppRoute
+    @Serializable data object History : AppRoute
     @Serializable data object More : AppRoute
     @Serializable data object Libraries : AppRoute
     @Serializable data object Contact : AppRoute
@@ -27,5 +28,6 @@ enum class AppDestination(
 ) {
     PLAYER(R.string.nav_player, com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_outline, AppRoute.Player),
     FAVORITES(R.string.nav_favorites, com.composables.icons.tabler.outline.R.drawable.tabler_ic_hearts_outline, AppRoute.Favorites),
+    HISTORY(R.string.nav_history, com.composables.icons.tabler.outline.R.drawable.tabler_ic_history_outline, AppRoute.History),
     MORE(R.string.nav_more, com.composables.icons.tabler.outline.R.drawable.tabler_ic_dots_outline, AppRoute.More),
 }

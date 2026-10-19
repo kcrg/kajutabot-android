@@ -734,6 +734,8 @@ class SessionManagerTest {
         override suspend fun getMyGuilds(): List<DiscordGuildResponse> = throw UnsupportedOperationException()
         override suspend fun getVoiceChannels(guildId: String): List<DiscordVoiceChannelResponse> = throw UnsupportedOperationException()
         override suspend fun getQueue(guildId: String): QueueSnapshotResponse = throw UnsupportedOperationException()
+        override suspend fun getHistory(guildId: String, cursor: Long?, pageSize: Int): com.tryniecki.kajutabot.api.model.history.PlaybackHistoryPageResponse = throw UnsupportedOperationException()
+        override suspend fun enqueueJellyfinTrack(itemId: String, request: com.tryniecki.kajutabot.api.model.history.EnqueueJellyfinTrackRequest, idempotencyKey: String): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun enqueue(guildId: String, request: EnqueueRequest, idempotencyKey: String): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun removeQueueEntry(guildId: String, entryId: String, expectedQueueVersion: Long?, idempotencyKey: String): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun moveQueueEntry(guildId: String, entryId: String, request: MoveQueueEntryRequest, idempotencyKey: String): QueueSnapshotResponse = throw UnsupportedOperationException()

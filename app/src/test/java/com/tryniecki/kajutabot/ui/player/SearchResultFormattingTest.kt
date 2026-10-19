@@ -107,10 +107,11 @@ class SearchResultFormattingTest {
     }
     @Test
     fun `search sources map to Control API values`() {
-        assertEquals("YouTube", SearchSourceOption.YOUTUBE.apiValue)
-        assertEquals("SoundCloud", SearchSourceOption.SOUNDCLOUD.apiValue)
-        assertEquals("Database", SearchSourceOption.DATABASE.apiValue)
-        assertEquals(R.string.search_source_database, SearchSourceOption.DATABASE.displayNameResId)
+        assertEquals(listOf("all", "youtube", "soundcloud", "audius"), SearchSourceOption.entries.map { it.apiValue })
+        assertEquals(R.string.search_source_smart, SearchSourceOption.SMART.displayNameResId)
+        assertEquals(R.string.search_source_audius, SearchSourceOption.AUDIUS.displayNameResId)
+        assertEquals(SearchSourceOption.SMART, PlayerUiState().searchSource)
+        assertEquals(SearchSourceOption.SMART, SearchUiState().searchSource)
     }
 
 }

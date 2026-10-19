@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
 
 @Composable
-fun SwipeActionHints(modifier: Modifier = Modifier) {
+fun SwipeActionHints(modifier: Modifier = Modifier, showRemove: Boolean = true) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -30,7 +30,7 @@ fun SwipeActionHints(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.labelSmall,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        if (showRemove) Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_trash_outline),
                 contentDescription = null,
