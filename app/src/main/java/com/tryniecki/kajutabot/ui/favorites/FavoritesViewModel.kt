@@ -1,6 +1,9 @@
 package com.tryniecki.kajutabot.ui.favorites
 
 import androidx.lifecycle.ViewModel
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
+import com.tryniecki.kajutabot.ui.feedback.UserFeedback
+import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -54,6 +57,8 @@ class FavoritesViewModel(
     private val preferencesRepository: UserPreferencesRepository,
 ) : ViewModel() {
     private val sessionIdentity = checkNotNull(repository.sessionIdentity.value)
+    private val feedback = UserFeedback()
+    val feedbackEvents = feedback.events
     private val preferenceOwnerKey = favoritesPreferenceOwnerKey(checkNotNull(repository.currentSession()))
 
     private val _ui = MutableStateFlow(FavoritesUiState(isLoading = true))
@@ -111,7 +116,9 @@ class FavoritesViewModel(
     }
 
     fun setShuffle(enabled: Boolean) {
+        if (_ui.value.shuffle == enabled) return
         _ui.update { it.copy(shuffle = enabled) }
+        feedback.toggle(enabled)
         viewModelScope.launch {
             shuffleWriteMutex.withLock {
                 preferencesRepository.setFavoritesShuffle(preferenceOwnerKey, enabled)
@@ -125,20 +132,20 @@ class FavoritesViewModel(
 
     fun toggle(track: PlaybackTrackResponse) = toggleFavorite(track)
 
-    fun toggleSilently(track: PlaybackTrackResponse) = toggleFavorite(track)
+    fun toggleSilently(track: PlaybackTrackResponse) = toggleFavorite(track, feedbackEnabled = false)
 
-    private fun toggleFavorite(track: PlaybackTrackResponse) {
+    private fun toggleFavorite(track: PlaybackTrackResponse, feedbackEnabled: Boolean = true) {
         if (_ui.value.isLoading || statusFor(track) == SwipeActionStatus.PENDING) return
         val identities = track.favoriteIdentities()
         val existing = _ui.value.favorites.firstOrNull { favoriteIdentity(it.contentUrl) in identities }
         if (isFavorite(track) && existing != null) {
-            delete(existing.contentUrl)
+            delete(existing.contentUrl, feedbackEnabled)
         } else {
-            add(track)
+            add(track, feedbackEnabled)
         }
     }
 
-    private fun add(track: PlaybackTrackResponse) {
+    private fun add(track: PlaybackTrackResponse, feedbackEnabled: Boolean) {
         val key = favoriteIdentity(track.url)
         if (_ui.value.favoriteStatuses[key] == SwipeActionStatus.PENDING) return
         val generation = nextFavoriteFeedbackGeneration(key)
@@ -157,6 +164,7 @@ class FavoritesViewModel(
                     contentId = track.contentId,
                 )
                 mutationRevision++
+                if (feedbackEnabled) feedback.emit(FeedbackEffect.Confirm)
                 val identity = favoriteIdentity(added.contentUrl)
                 _ui.update { current ->
                     val statuses = current.favoriteStatuses + (key to SwipeActionStatus.SUCCESS)
@@ -176,6 +184,8 @@ class FavoritesViewModel(
                     )
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                if (feedbackEnabled) feedback.emit(FeedbackEffect.Reject)
                 _ui.update { current ->
                     val statuses = current.favoriteStatuses + (key to SwipeActionStatus.FAILURE)
                     val otherPending = statuses.values.any { it == SwipeActionStatus.PENDING }
@@ -186,7 +196,9 @@ class FavoritesViewModel(
         }
     }
 
-    fun delete(contentUrl: String) {
+    fun delete(contentUrl: String) = delete(contentUrl, feedbackEnabled = true)
+
+    private fun delete(contentUrl: String, feedbackEnabled: Boolean) {
         val key = favoriteIdentity(contentUrl)
         if (_ui.value.favoriteStatuses[key] == SwipeActionStatus.PENDING) return
         val position = _ui.value.favorites.indexOfFirst { favoriteIdentity(it.contentUrl) == key }
@@ -203,6 +215,7 @@ class FavoritesViewModel(
             try {
                 repository.deleteFavorite(sessionIdentity, contentUrl)
                 mutationRevision++
+                if (feedbackEnabled) feedback.emit(FeedbackEffect.Confirm)
                 _ui.update { current ->
                     val statuses = current.favoriteStatuses + (key to SwipeActionStatus.SUCCESS)
                     val otherPending = statuses.any { (identity, status) ->
@@ -226,6 +239,8 @@ class FavoritesViewModel(
                     } else current
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                if (feedbackEnabled) feedback.emit(FeedbackEffect.Reject)
                 _ui.update { current ->
                     val statuses = current.favoriteStatuses + (key to SwipeActionStatus.FAILURE)
                     val otherPending = statuses.values.any { it == SwipeActionStatus.PENDING }
@@ -259,6 +274,7 @@ class FavoritesViewModel(
             val guildId = selection.guildId
             val channelId = selection.voiceChannelId
             if (guildId == null || channelId == null) {
+                feedback.emit(FeedbackEffect.Reject)
                 _ui.update { it.copy(isQueueMutating = false, queueAllStatus = SwipeActionStatus.FAILURE) }
                 clearQueueAllFeedbackLater()
                 return@launch
@@ -272,7 +288,10 @@ class FavoritesViewModel(
                 )
                 _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false) }
                 _ui.update { it.copy(queueAllStatus = SwipeActionStatus.SUCCESS) }
+                feedback.emit(FeedbackEffect.Confirm)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                feedback.emit(FeedbackEffect.Reject)
                 _ui.update { it.copy(isMutating = it.isFavoriteMutating, isQueueMutating = false, queueAllStatus = SwipeActionStatus.FAILURE) }
             }
             clearQueueAllFeedbackLater()
@@ -296,6 +315,7 @@ class FavoritesViewModel(
             val guildId = selection.guildId
             val channelId = selection.voiceChannelId
             if (guildId == null || channelId == null) {
+                feedback.emit(FeedbackEffect.Reject)
                 _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.FAILURE)) }
                 clearQueueFeedbackLater(contentUrl)
                 return@launch
@@ -310,7 +330,10 @@ class FavoritesViewModel(
                 )
                 _ui.update { it.copy(isMutating = it.isFavoriteMutating) }
                 _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.SUCCESS)) }
+                feedback.emit(FeedbackEffect.Confirm)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                feedback.emit(FeedbackEffect.Reject)
                 _ui.update { it.copy(isMutating = it.isFavoriteMutating) }
                 _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.FAILURE)) }
             }

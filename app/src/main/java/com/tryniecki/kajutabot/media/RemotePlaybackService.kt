@@ -75,7 +75,7 @@ class RemotePlaybackService : MediaSessionService() {
             val controlsBlocked = shouldBlockPlaybackControls(
                 state.isMutating, state.activeControlAction, state.isQueueReordering,
             )
-            if (!controlsBlocked) playerState.skip()
+            if (!controlsBlocked) playerState.skip(feedbackEnabled = false)
         }
         remotePlayer = player
         // Project only the current backend snapshot into the long-lived MediaSession.
@@ -227,10 +227,10 @@ class RemotePlaybackService : MediaSessionService() {
                 return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
             }
             when (customCommand.customAction) {
-                SKIP.customAction -> player.skip()
-                STOP.customAction -> player.stop()
-                REPEAT.customAction -> player.setRepeat(!queue.isRepeatEnabled)
-                RADIO.customAction -> player.toggleRadio()
+                SKIP.customAction -> player.skip(feedbackEnabled = false)
+                STOP.customAction -> player.stop(feedbackEnabled = false)
+                REPEAT.customAction -> player.setRepeat(!queue.isRepeatEnabled, feedbackEnabled = false)
+                RADIO.customAction -> player.toggleRadio(feedbackEnabled = false)
                 FAVORITE.customAction -> {
                     if (favorites.ui.value.isLoading || favorites.ui.value.isFavoriteMutating) {
                         return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))

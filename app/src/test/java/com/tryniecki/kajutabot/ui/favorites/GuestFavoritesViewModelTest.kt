@@ -1,6 +1,11 @@
 package com.tryniecki.kajutabot.ui.favorites
 
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import com.tryniecki.kajutabot.api.client.KajutaBotApiClientFactory
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
@@ -48,6 +53,8 @@ class GuestFavoritesViewModelTest {
         Dispatchers.setMain(Dispatchers.Unconfined)
         val server = MockWebServer()
         server.start()
+        val feedbackEvents = Channel<FeedbackEffect>(Channel.UNLIMITED)
+        var feedbackObserver: Job? = null
         try {
             val baseUrl = server.url("/").toString()
             val stored = FakeSessionStore(UserSession(
@@ -70,6 +77,9 @@ class GuestFavoritesViewModelTest {
                 repository = FavoritesRepository(manager),
                 preferencesRepository = preferences,
             )
+            feedbackObserver = launch(start = CoroutineStart.UNDISPATCHED) {
+                viewModel.feedbackEvents.collect { feedbackEvents.send(it) }
+            }
             withTimeout(5_000) { viewModel.ui.first { !it.isLoading } }
             assertEquals("/api/v1/app/users/me/favorites", server.takeRequest().path)
             server.enqueue(MockResponse().setBody("[]"))
@@ -81,6 +91,10 @@ class GuestFavoritesViewModelTest {
             viewModel.setShuffle(true)
             assertTrue(viewModel.ui.value.shuffle)
             assertTrue(withTimeout(5_000) { preferences.favoritesShuffle("guest").first { it } })
+            assertEquals(FeedbackEffect.ToggleOn, feedbackEvents.receive())
+            assertEquals(FeedbackEffect.ToggleOff, feedbackEvents.receive())
+            assertEquals(FeedbackEffect.ToggleOn, feedbackEvents.receive())
+            assertTrue(feedbackEvents.tryReceive().isFailure)
 
             server.enqueue(MockResponse().setBody(favoriteJson))
             viewModel.toggle(track)
@@ -90,6 +104,7 @@ class GuestFavoritesViewModelTest {
             assertEquals("/api/v1/app/users/me/favorites", add.path)
             assertEquals("Bearer guest-jwt", add.getHeader("Authorization"))
             assertTrue(viewModel.isFavorite(track))
+            assertEquals(FeedbackEffect.Confirm, feedbackEvents.receive())
 
             server.enqueue(MockResponse().setBody(queueResponseJson()))
             server.enqueue(MockResponse().setBody(queueResponseJson()))
@@ -101,6 +116,7 @@ class GuestFavoritesViewModelTest {
             val queue = server.takeRequest()
             assertEquals("/api/v1/app/users/me/favorites/queue", queue.path)
             assertTrue(queue.body.readUtf8().contains("\"shuffle\":true"))
+            assertEquals(FeedbackEffect.Confirm, feedbackEvents.receive()) // One event for the entire batch.
 
             server.enqueue(MockResponse().setResponseCode(204))
             viewModel.toggle(track)
@@ -109,7 +125,24 @@ class GuestFavoritesViewModelTest {
             assertEquals("DELETE", delete.method)
             assertTrue(delete.path!!.startsWith("/api/v1/app/users/me/favorites?"))
             assertFalse(viewModel.isFavorite(track))
+            assertEquals(FeedbackEffect.Confirm, feedbackEvents.receive())
+            assertTrue(feedbackEvents.tryReceive().isFailure)
+
+            server.enqueue(MockResponse().setBody(favoriteJson))
+            viewModel.toggleSilently(track)
+            withTimeout(5_000) { viewModel.ui.first { it.favorites.size == 1 && !it.isMutating } }
+            server.takeRequest()
+            assertTrue(feedbackEvents.tryReceive().isFailure) // MediaSession origin.
+
+            server.enqueue(MockResponse().setResponseCode(503))
+            viewModel.toggle(track)
+            withTimeout(5_000) { viewModel.ui.first { it.favoriteStatuses.values.contains(SwipeActionStatus.FAILURE) } }
+            server.takeRequest()
+            assertEquals(FeedbackEffect.Reject, feedbackEvents.receive())
+            assertTrue(feedbackEvents.tryReceive().isFailure)
         } finally {
+            feedbackObserver?.cancel()
+            feedbackEvents.close()
             server.shutdown()
             Dispatchers.resetMain()
         }

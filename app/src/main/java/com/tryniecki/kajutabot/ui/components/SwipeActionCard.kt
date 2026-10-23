@@ -39,6 +39,10 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
+import com.tryniecki.kajutabot.ui.feedback.rememberFeedbackPerformer
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlin.math.abs
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -64,6 +68,7 @@ fun SwipeActionCard(
     content: @Composable (Modifier) -> Unit,
 ) {
     val revealWidth = with(LocalDensity.current) { (48.dp + 32.dp).toPx() }
+    val performFeedback = rememberFeedbackPerformer()
     val canRemove = onRemove != null
     val swipeState = remember(revealWidth, canRemove) {
         AnchoredDraggableState(
@@ -86,6 +91,14 @@ fun SwipeActionCard(
     val currentRemoveStatus = rememberUpdatedState(removeStatus)
     var addTriggered by remember { mutableStateOf(false) }
     var removeTriggered by remember { mutableStateOf(false) }
+    LaunchedEffect(swipeState, revealWidth, performFeedback) {
+        snapshotFlow {
+            currentEnabled.value && !addTriggered && !removeTriggered &&
+                abs(swipeState.offset) >= revealWidth / 2f
+        }.distinctUntilChanged().collect { crossed ->
+            if (crossed) performFeedback(FeedbackEffect.SwipeThreshold)
+        }
+    }
     val operationDescription = when {
         addTriggered && addStatus == SwipeActionStatus.SUCCESS -> stringResource(R.string.swipe_add_success)
         addTriggered && addStatus == SwipeActionStatus.FAILURE -> stringResource(R.string.swipe_add_failure)

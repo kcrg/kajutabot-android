@@ -1,6 +1,10 @@
 package com.tryniecki.kajutabot.ui.app
 
 import androidx.lifecycle.ViewModel
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
+import com.tryniecki.kajutabot.ui.feedback.UserFeedback
+import com.tryniecki.kajutabot.auth.GuestLoginResult
+import com.tryniecki.kajutabot.auth.OAuthCallbackResult
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -45,6 +49,8 @@ class AppViewModel(
     val sessionIdentity: StateFlow<Long?> = sessionRepository.sessionIdentity
 
     private val _ui = MutableStateFlow(AppUiState())
+    private val feedback = UserFeedback()
+    val feedbackEvents = feedback.events
     val ui: StateFlow<AppUiState> = _ui.asStateFlow()
     private val sharedUrls = ShareEventInbox()
     val sharedUrlEvents = sharedUrls.events
@@ -102,7 +108,10 @@ class AppViewModel(
         if (_ui.value.isSigningIn) return
         when (val result = sessionRepository.startLogin()) {
             is OAuthStartResult.Ready -> _ui.update { it.copy(loginUrl = result.url, accountError = null) }
-            is OAuthStartResult.Misconfigured -> _ui.update { it.copy(accountError = result.message) }
+            is OAuthStartResult.Misconfigured -> {
+                _ui.update { it.copy(accountError = result.message) }
+                feedback.emit(FeedbackEffect.Reject)
+            }
         }
     }
 
@@ -111,7 +120,11 @@ class AppViewModel(
         _ui.update { it.copy(isSigningIn = true, isGuestSigningIn = true, accountError = null) }
         viewModelScope.launch {
             try {
-                sessionRepository.continueAsGuest()
+                when (sessionRepository.continueAsGuest()) {
+                    GuestLoginResult.SignedIn -> feedback.emit(FeedbackEffect.Confirm)
+                    is GuestLoginResult.Failed -> feedback.emit(FeedbackEffect.Reject)
+                    GuestLoginResult.Superseded -> Unit
+                }
             } finally {
                 _ui.update { it.copy(isSigningIn = false, isGuestSigningIn = false) }
             }
@@ -124,13 +137,19 @@ class AppViewModel(
         viewModelScope.launch {
             try {
                 when (val result = sessionRepository.logout()) {
-                    is LogoutResult.NeedsRetry -> _ui.update { it.copy(accountError = result.message) }
+                    is LogoutResult.NeedsRetry -> {
+                        _ui.update { it.copy(accountError = result.message) }
+                        feedback.emit(FeedbackEffect.Reject)
+                    }
                     else -> {
                         preferencesRepository.clearGuildSelection()
                         resetSessionUi()
                         when (val start = sessionRepository.startLogin()) {
                             is OAuthStartResult.Ready -> _ui.update { it.copy(loginUrl = start.url) }
-                            is OAuthStartResult.Misconfigured -> _ui.update { it.copy(accountError = start.message) }
+                            is OAuthStartResult.Misconfigured -> {
+                                _ui.update { it.copy(accountError = start.message) }
+                                feedback.emit(FeedbackEffect.Reject)
+                            }
                         }
                     }
                 }
@@ -144,7 +163,11 @@ class AppViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(isSigningIn = true, accountError = null) }
             try {
-                sessionRepository.handleOAuthCallback(code, state, error)
+                when (sessionRepository.handleOAuthCallback(code, state, error)) {
+                    OAuthCallbackResult.Exchanged -> feedback.emit(FeedbackEffect.Confirm)
+                    is OAuthCallbackResult.Failed -> feedback.emit(FeedbackEffect.Reject)
+                    is OAuthCallbackResult.Ignored -> Unit
+                }
             } finally {
                 _ui.update { it.copy(isSigningIn = false) }
             }
@@ -157,11 +180,15 @@ class AppViewModel(
         viewModelScope.launch {
             try {
                 when (val result = sessionRepository.logout()) {
-                    is LogoutResult.NeedsRetry -> _ui.update { it.copy(accountError = result.message) }
+                    is LogoutResult.NeedsRetry -> {
+                        _ui.update { it.copy(accountError = result.message) }
+                        feedback.emit(FeedbackEffect.Reject)
+                    }
                     is LogoutResult.SignedOut,
                     is LogoutResult.LocalOnly -> {
                         preferencesRepository.clearGuildSelection()
                         resetSessionUi()
+                        feedback.emit(FeedbackEffect.Confirm)
                     }
                 }
             } finally {
@@ -180,12 +207,14 @@ class AppViewModel(
     fun completeOnboarding(sessionType: SessionType, discordUserId: String) {
         viewModelScope.launch {
             preferencesRepository.setOnboardingCompleted(sessionType, discordUserId)
+            feedback.emit(FeedbackEffect.Confirm)
         }
     }
 
     fun setThemeMode(mode: ThemeMode) {
         if (_ui.value.themeMode == mode) return
         _ui.update { it.copy(themeMode = mode) }
+        feedback.emit(FeedbackEffect.Selection)
         platformThemeController.apply(mode)
         viewModelScope.launch { preferencesRepository.setThemeMode(mode) }
     }

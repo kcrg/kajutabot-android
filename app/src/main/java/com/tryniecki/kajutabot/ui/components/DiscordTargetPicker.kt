@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
+import com.tryniecki.kajutabot.ui.feedback.rememberFeedbackPerformer
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 
@@ -52,6 +54,7 @@ fun DiscordTargetPicker(
     modifier: Modifier = Modifier,
     showGuildPicker: Boolean = true,
 ) {
+    val performFeedback = rememberFeedbackPerformer()
     Column(modifier = modifier) {
         if (showGuildPicker) {
             Text(
@@ -70,7 +73,10 @@ fun DiscordTargetPicker(
                         guild = guild,
                         selected = guild.id == selectedGuildId,
                         onClick = {
-                            if (guild.id != selectedGuildId) onGuildSelect(guild.id)
+                            if (guild.id != selectedGuildId) {
+                                performFeedback(FeedbackEffect.Selection)
+                                onGuildSelect(guild.id)
+                            }
                         },
                     )
                 }
@@ -119,7 +125,12 @@ fun DiscordTargetPicker(
                     ChannelChoiceCard(
                         channel = channel,
                         selected = channel.id == selectedChannelId,
-                        onClick = { onChannelSelect(channel.id) },
+                        onClick = {
+                            if (channel.id != selectedChannelId) {
+                                performFeedback(FeedbackEffect.Selection)
+                            }
+                            onChannelSelect(channel.id)
+                        },
                     )
                 }
             }

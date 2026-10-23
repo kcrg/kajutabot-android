@@ -1,6 +1,8 @@
 package com.tryniecki.kajutabot.ui.history
 
 import androidx.lifecycle.ViewModelStore
+import app.cash.turbine.test
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
 import com.tryniecki.kajutabot.api.model.history.PlaybackHistoryEntryResponse
 import com.tryniecki.kajutabot.api.model.history.PlaybackHistoryPageResponse
 import com.tryniecki.kajutabot.data.preferences.GuildSelection
@@ -41,6 +43,51 @@ class HistoryViewModelTest {
     }
 
     private fun model() = HistoryViewModel(repository, selection).also { store.put("history", it) }
+
+    @Test fun `only completed local enqueue emits feedback and refresh stays silent`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        repository.queue = { gate.await() }
+        val model = model()
+        model.feedbackEvents.test {
+            runCurrent()
+            expectNoEvents()
+            model.enqueue(1)
+            model.enqueue(1)
+            runCurrent()
+            expectNoEvents()
+            gate.complete(Unit)
+            runCurrent()
+            assertEquals(FeedbackEffect.Confirm, awaitItem())
+            model.refresh()
+            runCurrent()
+            expectNoEvents()
+            repository.queue = { throw IOException("offline") }
+            model.enqueue(1)
+            runCurrent()
+            assertEquals(FeedbackEffect.Reject, awaitItem())
+            expectNoEvents()
+        }
+    }
+
+    @Test fun `cancelled and obsolete enqueue outcomes do not emit feedback`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        repository.queue = { gate.await() }
+        val model = model()
+        runCurrent()
+        model.feedbackEvents.test {
+            model.enqueue(1)
+            runCurrent()
+            selection.value = GuildSelection("guild-b", "voice-b")
+            runCurrent()
+            gate.complete(Unit)
+            runCurrent()
+            expectNoEvents()
+            repository.queue = { throw kotlinx.coroutines.CancellationException() }
+            model.enqueue(1)
+            runCurrent()
+            expectNoEvents()
+        }
+    }
 
     @Test fun `paginates by cursor and retains repeated tracks as separate plays`() = runTest(dispatcher) {
         repository.load = { _, cursor ->

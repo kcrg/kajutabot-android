@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.ui.player
 
 import com.tryniecki.kajutabot.api.client.KajutaBotRealtimeClient
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
 import com.tryniecki.kajutabot.api.model.playback.LocalVolumeStateDto
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +63,7 @@ internal class LocalVolumeController(
     private val sessionIdentity: StateFlow<Long?>,
     private val discordSession: Boolean,
     private val timeoutMs: Long = 10_000L,
+    private val onFeedback: (FeedbackEffect) -> Unit = {},
 ) {
     private val _state = MutableStateFlow(LocalVolumeUiState(isDiscordSession = discordSession))
     val state: StateFlow<LocalVolumeUiState> = _state.asStateFlow()
@@ -152,6 +154,10 @@ internal class LocalVolumeController(
     fun finishGesture() {
         val volume = _state.value.draft ?: return
         _state.value = _state.value.copy(dragging = false)
+        if (!_state.value.sending && volume == _state.value.observed?.volume) {
+            _state.value = _state.value.copy(draft = null)
+            return
+        }
         submit(volume)
     }
 
@@ -188,6 +194,7 @@ internal class LocalVolumeController(
                     indicatorJob.cancel()
                     if (error is CancellationException && error !is TimeoutCancellationException) throw error
                     if (!current(epoch)) return@launch
+                    onFeedback(FeedbackEffect.Reject)
                     pending = null
                     val reason = localVolumeError(error)
                     _state.value = _state.value.copy(sending = false, showSendingIndicator = false,
@@ -206,6 +213,7 @@ internal class LocalVolumeController(
                 else {
                     _state.value = _state.value.copy(sending = false,
                         draft = if (_state.value.dragging) _state.value.draft else null)
+                    onFeedback(FeedbackEffect.GestureEnd)
                     return@launch
                 }
             }

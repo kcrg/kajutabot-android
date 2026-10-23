@@ -68,7 +68,8 @@ class LocalVolumeSheetTest {
         assertTrue(percentage.top >= slider.bottom)
         compose.onNodeWithText(compose.activity.getString(R.string.local_volume_title)).assertDoesNotExist()
         compose.onNodeWithTag("local-volume-status").assertDoesNotExist()
-        compose.onNodeWithText(compose.activity.getString(R.string.local_volume_percent, 100)).assertIsDisplayed()
+        compose.onNodeWithTag("local-volume-percentage").assertIsDisplayed()
+        compose.onNodeWithTag("local-volume-reference").assertIsDisplayed()
     }
 
     @Test fun installedHelperButtonOpensSheetAndSwipeDismissesIt() {
@@ -169,5 +170,29 @@ class LocalVolumeSheetTest {
             assertTrue(drafts.last() > 100)
             assertEquals(1, finished)
         }
+    }
+
+    @Test fun touchDetentHoldsAtReferenceAndReleasesBeyondItsRange() {
+        val state = mutableStateOf(ready().copy(observed = LocalVolumeStateDto(true, true, true, 60)))
+        var draft: Int? = null
+        compose.setContent {
+            MaterialTheme {
+                LocalVolumeSheetContent(state.value, {
+                    draft = it
+                    state.value = state.value.copy(draft = it, dragging = true)
+                }, {}, {})
+            }
+        }
+        compose.onNodeWithTag("local-volume-reference").assertIsDisplayed()
+        compose.onNodeWithTag("local-volume-slider").performTouchInput {
+            swipe(Offset(width * 0.3f, center.y), Offset(width * 0.505f, center.y), durationMillis = 500)
+        }
+        compose.runOnIdle { assertEquals(100, draft) }
+        compose.onNodeWithTag("local-volume-slider").performTouchInput {
+            swipe(Offset(width * 0.5f, center.y), Offset(width * 0.65f, center.y), durationMillis = 500)
+        }
+        compose.runOnIdle { assertTrue(requireNotNull(draft) > 103) }
+        compose.onNodeWithTag("local-volume-slider").performSemanticsAction(SemanticsActions.SetProgress) { it(99f) }
+        compose.runOnIdle { assertEquals(99, draft) }
     }
 }

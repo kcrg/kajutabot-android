@@ -1,6 +1,8 @@
 package com.tryniecki.kajutabot.ui.history
 
 import androidx.lifecycle.ViewModel
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
+import com.tryniecki.kajutabot.ui.feedback.UserFeedback
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -38,6 +40,8 @@ class HistoryViewModel(
     guildSelection: Flow<GuildSelection>,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(HistoryUiState())
+    private val feedback = UserFeedback()
+    val feedbackEvents = feedback.events
     val ui = _ui.asStateFlow()
     private var selection = GuildSelection()
     private var generation = 0L
@@ -141,6 +145,7 @@ class HistoryViewModel(
                 SwipeActionStatus.FAILURE
             }
             if (current != targetGeneration) return@launch
+            feedback.emit(if (status == SwipeActionStatus.SUCCESS) FeedbackEffect.Confirm else FeedbackEffect.Reject)
             _ui.update { it.copy(queueStatuses = it.queueStatuses + (entryId to status)) }
             feedbackJobs[entryId] = viewModelScope.launch {
                 delay(1_200)

@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.ui.player
 
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
 import com.tryniecki.kajutabot.api.client.KajutaBotRealtimeClient
 import com.tryniecki.kajutabot.api.client.RealtimeDisconnect
 import com.tryniecki.kajutabot.api.model.playback.LocalVolumeStateDto
@@ -62,10 +63,34 @@ class LocalVolumeControllerTest {
         client: FakeClient,
         identity: MutableStateFlow<Long?> = MutableStateFlow(7L),
         discord: Boolean = true,
-    ): LocalVolumeController = LocalVolumeController(backgroundScope, 7, identity, discord).also {
+        onFeedback: (FeedbackEffect) -> Unit = {},
+    ): LocalVolumeController = LocalVolumeController(backgroundScope, 7, identity, discord, onFeedback = onFeedback).also {
         it.bind(client)
         it.connected()
         runCurrent()
+    }
+
+    @Test fun `only acknowledged final local volume command ends gesture and external updates stay silent`() = runTest {
+        val effects = mutableListOf<FeedbackEffect>()
+        val client = FakeClient(ready(87))
+        val controller = controller(client, onFeedback = effects::add)
+        client.event(ready(90)); runCurrent()
+        assertTrue(effects.isEmpty())
+        controller.changeDraft(100)
+        controller.cancelGesture()
+        controller.finishGesture()
+        runCurrent()
+        assertTrue(effects.isEmpty())
+        controller.submit(120); runCurrent()
+        controller.submit(130)
+        client.completions[0].complete(Unit); runCurrent()
+        assertTrue(effects.isEmpty())
+        client.completions[1].complete(Unit); runCurrent()
+        assertEquals(listOf(FeedbackEffect.GestureEnd), effects)
+        controller.submit(140); runCurrent()
+        client.completions[2].completeExceptionally(IllegalStateException("helper_busy")); runCurrent()
+        assertEquals(listOf(FeedbackEffect.GestureEnd, FeedbackEffect.Reject), effects)
+        controller.close()
     }
 
     @Test fun `initial snapshot and events from desktop or another client are authoritative`() = runTest {

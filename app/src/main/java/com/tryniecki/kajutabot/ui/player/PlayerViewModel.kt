@@ -3,6 +3,8 @@ package com.tryniecki.kajutabot.ui.player
 import android.os.SystemClock
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
+import com.tryniecki.kajutabot.ui.feedback.UserFeedback
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -281,9 +283,12 @@ class PlayerViewModel(
     private val preferencesRepository: UserPreferencesRepository,
 ) : ViewModel() {
     private val sessionIdentity = checkNotNull(repository.sessionIdentity.value)
+    private val feedback = UserFeedback()
+    val feedbackEvents = feedback.events
     private val localVolume = LocalVolumeController(
         viewModelScope, sessionIdentity, repository.sessionIdentity,
         repository.isDiscordSession(sessionIdentity),
+        onFeedback = feedback::emit,
     )
     val localVolumeState: StateFlow<LocalVolumeUiState> = localVolume.state
     fun changeLocalVolumeDraft(volume: Int) = localVolume.changeDraft(volume)
@@ -767,6 +772,7 @@ class PlayerViewModel(
                         error = userMessageForError(e),
                     )
                 }
+                feedback.emit(FeedbackEffect.Reject)
             }
         }
     }
@@ -800,6 +806,7 @@ class PlayerViewModel(
             val guildId = state.selectedGuildId
             val channelId = state.selectedVoiceChannelId
             if (guildId == null || channelId == null) {
+                feedback.emit(FeedbackEffect.Reject)
                 _sharedEnqueue.update { current ->
                     if (current.requestId == requestId) {
                         current.copy(status = SharedEnqueueStatus.Failed(uiText(R.string.player_select_target_to_add)))
@@ -816,6 +823,7 @@ class PlayerViewModel(
                 )
                 applyQueueSnapshot(response)
                 val addedTracks = response.addedTracks.orEmpty()
+                feedback.emit(FeedbackEffect.Confirm)
                 _sharedEnqueue.update { current ->
                     if (current.requestId == requestId) {
                         current.copy(status = SharedEnqueueStatus.Added(addedTracks))
@@ -824,6 +832,7 @@ class PlayerViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
+                feedback.emit(FeedbackEffect.Reject)
                 _sharedEnqueue.update { current ->
                     if (current.requestId == requestId) {
                         current.copy(status = SharedEnqueueStatus.Failed(userMessageForError(e)))
@@ -851,6 +860,7 @@ class PlayerViewModel(
         if (guildId == null || channelId == null) {
             _ui.update { it.copy(error = uiText(R.string.player_select_target_to_add)) }
             updateSearchStatus(SwipeActionStatus.FAILURE)
+            feedback.emit(FeedbackEffect.Reject)
             return
         }
         updateSearchStatus(SwipeActionStatus.PENDING)
@@ -867,6 +877,7 @@ class PlayerViewModel(
                 // content; the shell clears them after the Search route closes.
                 _ui.update { it.copy(isEnqueuing = false) }
                 updateSearchStatus(SwipeActionStatus.SUCCESS)
+                feedback.emit(FeedbackEffect.Confirm)
                 if (closeSearch) _ui.update { it.copy(searchEnqueueCompleted = true) }
             } catch (e: Exception) {
                 _ui.update { it.copy(isEnqueuing = false) }
@@ -880,8 +891,10 @@ class PlayerViewModel(
         }
     }
 
-    fun skip() {
-        mutate(controlAction = PlayerControlAction.SKIP) {
+    fun skip() = skip(feedbackEnabled = true)
+
+    fun skip(feedbackEnabled: Boolean) {
+        mutate(controlAction = PlayerControlAction.SKIP, feedbackEnabled = feedbackEnabled) {
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             repository.skip(sessionIdentity, guildId)
         }
@@ -914,6 +927,7 @@ class PlayerViewModel(
             try {
                 applyQueueSnapshot(repository.enqueue(sessionIdentity, guildId, EnqueueRequest(channelId, listOf(trackUrl))))
                 _ui.update { it.copy(requeueStatuses = it.requeueStatuses + (entryId to SwipeActionStatus.SUCCESS)) }
+                feedback.emit(FeedbackEffect.Confirm)
             } catch (e: Exception) {
                 handleMutationError(e)
                 _ui.update { it.copy(requeueStatuses = it.requeueStatuses + (entryId to SwipeActionStatus.FAILURE)) }
@@ -923,15 +937,18 @@ class PlayerViewModel(
         }
     }
 
-    fun stop() {
-        mutate(controlAction = PlayerControlAction.STOP) {
+    fun stop() = stop(feedbackEnabled = true)
+
+    fun stop(feedbackEnabled: Boolean) {
+        mutate(controlAction = PlayerControlAction.STOP, feedbackEnabled = feedbackEnabled) {
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             repository.stop(sessionIdentity, guildId)
         }
     }
 
-    fun setRepeat(enabled: Boolean) {
-        mutate(controlAction = PlayerControlAction.REPEAT) {
+    fun setRepeat(enabled: Boolean, feedbackEnabled: Boolean = true) {
+        mutate(controlAction = PlayerControlAction.REPEAT, feedbackEnabled = feedbackEnabled,
+            successFeedback = { if (it.isRepeatEnabled) FeedbackEffect.ToggleOn else FeedbackEffect.ToggleOff }) {
             val guildId = _ui.value.selectedGuildId ?: return@mutate null
             repository.setRepeat(sessionIdentity, guildId, enabled)
         }
@@ -942,9 +959,11 @@ class PlayerViewModel(
         if (state.isMutating) return
         if (state.queue?.radio?.isEnabled != true) {
             _ui.update { it.copy(favoritesRadioSelected = !it.favoritesRadioSelected) }
+            feedback.toggle(_ui.value.favoritesRadioSelected)
             return
         }
-        mutate(controlAction = PlayerControlAction.RADIO) {
+        mutate(controlAction = PlayerControlAction.RADIO,
+            successFeedback = { if (it.radio.mode == "favorites") FeedbackEffect.ToggleOn else FeedbackEffect.ToggleOff }) {
             val current = _ui.value
             val guildId = current.selectedGuildId ?: return@mutate null
             val queue = current.queue ?: return@mutate null
@@ -952,6 +971,7 @@ class PlayerViewModel(
                 is RadioToggleAction.Enable -> repository.enableRadio(sessionIdentity, guildId, action.request)
                 RadioToggleAction.MissingVoiceChannel -> {
                     _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }
+                    feedback.emit(FeedbackEffect.Reject)
                     null
                 }
                 is RadioToggleAction.Disable -> null
@@ -959,17 +979,22 @@ class PlayerViewModel(
         }
     }
 
-    fun toggleRadio() {
-        mutate(controlAction = PlayerControlAction.RADIO) {
+    fun toggleRadio() = toggleRadio(feedbackEnabled = true)
+
+    fun toggleRadio(feedbackEnabled: Boolean) {
+        mutate(controlAction = PlayerControlAction.RADIO, feedbackEnabled = feedbackEnabled,
+            successFeedback = { if (it.radio.isEnabled) FeedbackEffect.ToggleOn else FeedbackEffect.ToggleOff }) {
             val guildId = _ui.value.selectedGuildId
             val queue = _ui.value.queue
             if (guildId == null || queue == null) {
                 _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }
+                if (feedbackEnabled) feedback.emit(FeedbackEffect.Reject)
                 return@mutate null
             }
             when (val action = decideRadioToggle(queue, _ui.value.selectedVoiceChannelId, _ui.value.favoritesRadioSelected)) {
                 RadioToggleAction.MissingVoiceChannel -> {
                     _ui.update { it.copy(error = uiText(R.string.player_select_target_first)) }
+                    if (feedbackEnabled) feedback.emit(FeedbackEffect.Reject)
                     null
                 }
                 is RadioToggleAction.Disable ->
@@ -1005,6 +1030,7 @@ class PlayerViewModel(
                     mutatingEntryIds = it.mutatingEntryIds - entryId,
                     removeStatuses = it.removeStatuses + (entryId to SwipeActionStatus.SUCCESS),
                 ) }
+                feedback.emit(FeedbackEffect.Confirm)
             } catch (e: Exception) {
                 handleMutationError(e)
                 _ui.update { it.copy(
@@ -1023,8 +1049,13 @@ class PlayerViewModel(
         val state = _ui.value
         val snapshot = state.queue ?: return false
         val guildId = state.selectedGuildId ?: return false
-        if (snapshot.version != expectedSnapshotVersion || snapshot.guildId != guildId) return false
-        if (swappedQueueEntries(snapshot.pendingEntries, sourceEntryId, targetEntryId) == null) return false
+        if (sourceEntryId == targetEntryId) return false
+        if (state.isQueueReordering) return false
+        if (snapshot.version != expectedSnapshotVersion || snapshot.guildId != guildId ||
+            swappedQueueEntries(snapshot.pendingEntries, sourceEntryId, targetEntryId) == null) {
+            feedback.emit(FeedbackEffect.Reject)
+            return false
+        }
 
         _ui.update { it.copy(isMutating = true, isQueueReordering = true, error = null) }
         viewModelScope.launch {
@@ -1037,6 +1068,7 @@ class PlayerViewModel(
                     )
                 applyQueueSnapshot(response)
                 _ui.update { it.copy(isMutating = false, isQueueReordering = false) }
+                feedback.emit(FeedbackEffect.Confirm)
             } catch (e: Exception) {
                 handleMutationError(e)
             }
@@ -1053,6 +1085,8 @@ class PlayerViewModel(
 
     private fun mutate(
         controlAction: PlayerControlAction? = null,
+        feedbackEnabled: Boolean = true,
+        successFeedback: (QueueSnapshotResponse) -> FeedbackEffect = { FeedbackEffect.Confirm },
         call: suspend () -> QueueSnapshotResponse?,
     ) {
         if (controlAction != null) {
@@ -1064,7 +1098,7 @@ class PlayerViewModel(
 
         viewModelScope.launch {
             try {
-                performMutation(controlAction, call)
+                performMutation(controlAction, feedbackEnabled, successFeedback, call)
             } finally {
                 if (controlAction != null) {
                     synchronized(pendingControlActions) {
@@ -1077,6 +1111,8 @@ class PlayerViewModel(
 
     private suspend fun performMutation(
         controlAction: PlayerControlAction?,
+        feedbackEnabled: Boolean,
+        successFeedback: (QueueSnapshotResponse) -> FeedbackEffect,
         call: suspend () -> QueueSnapshotResponse?,
     ) {
         _ui.update {
@@ -1092,6 +1128,7 @@ class PlayerViewModel(
                 return
             }
             applyQueueSnapshot(response)
+            if (feedbackEnabled) feedback.emit(successFeedback(response))
             _ui.update { current ->
                 current.copy(
                     isMutating = false,
@@ -1099,11 +1136,13 @@ class PlayerViewModel(
                 )
             }
         } catch (e: Exception) {
-            handleMutationError(e)
+            handleMutationError(e, feedbackEnabled)
         }
     }
 
-    private suspend fun handleMutationError(e: Exception) {
+    private suspend fun handleMutationError(e: Exception, feedbackEnabled: Boolean = true) {
+        if (e is CancellationException) throw e
+        if (feedbackEnabled) feedback.emit(FeedbackEffect.Reject)
         var parsedProblem: com.tryniecki.kajutabot.api.model.error.KajutaBotProblemDetails? = null
         if (e is HttpException) {
             val problem = try {

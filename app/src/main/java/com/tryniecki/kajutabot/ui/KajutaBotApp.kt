@@ -103,6 +103,7 @@ import com.tryniecki.kajutabot.ui.player.SharedTrackRoute
 import com.tryniecki.kajutabot.ui.player.DiscordSelectionRoute
 import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
 import com.tryniecki.kajutabot.ui.text.UiText
+import com.tryniecki.kajutabot.ui.feedback.ObserveUserFeedback
 import com.tryniecki.kajutabot.ui.text.asString
 import com.tryniecki.kajutabot.ui.text.resolve
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
@@ -121,6 +122,7 @@ fun KajutaBotApp(
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
     val sessionIdentity by appViewModel.sessionIdentity.collectAsStateWithLifecycle()
     val appUi by appViewModel.ui.collectAsStateWithLifecycle()
+    ObserveUserFeedback(appViewModel.feedbackEvents)
     val openCustomTab = rememberOpenCustomTab()
 
     LaunchedEffect(appUi.loginUrl) {
@@ -248,6 +250,7 @@ private fun AuthenticatedShell(
         factory = PlayerViewModel.factory(container),
     )
     val entryState by playerViewModel.entryState.collectAsStateWithLifecycle()
+    ObserveUserFeedback(playerViewModel.feedbackEvents)
     val onboardingCompletedFlow = remember(appViewModel, discordUserId, sessionType) {
         appViewModel.onboardingCompleted(sessionType, discordUserId)
     }
@@ -404,6 +407,7 @@ private fun AuthenticatedContent(
     val favoritesViewModel: FavoritesViewModel = viewModel(
         factory = FavoritesViewModel.factory(container),
     )
+    ObserveUserFeedback(favoritesViewModel.feedbackEvents)
     // Narrow slices: the shell only needs the mini-player state, the error
     // line and the polling keys — typing on the Search screen must not
     // recompose the shell or the MiniPlayer.

@@ -113,6 +113,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
+import com.tryniecki.kajutabot.ui.feedback.ReorderFeedback
+import com.tryniecki.kajutabot.ui.feedback.rememberFeedbackPerformer
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
@@ -302,6 +305,8 @@ fun PlayerScreen(
     showLocalVolumeButton: Boolean = false,
 ) {
     val motion = MaterialTheme.motionScheme
+    val performFeedback = rememberFeedbackPerformer()
+    val reorderFeedback = remember(performFeedback) { ReorderFeedback(performFeedback) }
     var confirmStop by rememberSaveable { mutableStateOf(false) }
     var confirmClear by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -352,14 +357,24 @@ fun PlayerScreen(
     val maxScrollPerFramePx = with(density) { 18.dp.toPx() }
     val favoriteTouchAreaPx = with(density) { 56.dp.toPx() }
     fun updateDragTarget() {
-        val closest = listState.layoutInfo.visibleItemsInfo
-            .filter { it.key in pendingEntryIds }
-            .minByOrNull { info ->
-                kotlin.math.abs(dragPointerY - (info.offset + info.size / 2f))
+        var target = dragTargetIndex
+        var nearestDistance = Float.POSITIVE_INFINITY
+        for (info in listState.layoutInfo.visibleItemsInfo) {
+            val id = info.key as? String ?: continue
+            val index = pendingIndexById[id] ?: continue
+            val distance = kotlin.math.abs(dragPointerY - (info.offset + info.size / 2f))
+            if (distance < nearestDistance) {
+                nearestDistance = distance
+                target = index
             }
-        dragTargetIndex = (closest?.key as? String)?.let(pendingIndexById::get) ?: dragTargetIndex
+        }
+        if (target != dragTargetIndex) {
+            dragTargetIndex = target
+            reorderFeedback.target(target)
+        }
     }
     fun resetDrag() {
+        reorderFeedback.end()
         draggingEntryId = null
         dragOffsetPx = 0f
         dragTargetIndex = -1
@@ -486,6 +501,7 @@ fun PlayerScreen(
                         dragPointerY = longPress.position.y
                         dragTargetIndex = pendingIndexById[sourceId] ?: -1
                         dragSnapshotVersion = ui.queue?.version
+                        reorderFeedback.start(dragTargetIndex)
                         try {
                             val completed = drag(longPress.id) { change ->
                                 dragOffsetPx += change.position.y - change.previousPosition.y
@@ -501,6 +517,8 @@ fun PlayerScreen(
                                     if (swapped != null && onSwapEntries(sourceId, targetId, version)) {
                                         previewOrder = swapped
                                     }
+                                } else {
+                                    performFeedback(FeedbackEffect.Reject)
                                 }
                             }
                         } finally {

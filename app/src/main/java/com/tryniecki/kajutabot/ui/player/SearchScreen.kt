@@ -66,6 +66,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.tryniecki.kajutabot.BuildConfig
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
+import com.tryniecki.kajutabot.ui.feedback.rememberFeedbackPerformer
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.common.SearchTrackResponse
 import com.tryniecki.kajutabot.api.model.search.SearchItemResponse
@@ -396,6 +398,7 @@ private fun SearchSourceDropdown(
     selected: SearchSourceOption,
     onSelected: (SearchSourceOption) -> Unit,
 ) {
+    val performFeedback = rememberFeedbackPerformer()
     var expanded by remember { mutableStateOf(false) }
 
     val chevronRotation by animateFloatAsState(
@@ -434,6 +437,7 @@ private fun SearchSourceDropdown(
                     text = { Text(stringResource(source.displayNameResId)) },
                     onClick = {
                         expanded = false
+                        if (source != selected) performFeedback(FeedbackEffect.Selection)
                         onSelected(source)
                     },
                 )
