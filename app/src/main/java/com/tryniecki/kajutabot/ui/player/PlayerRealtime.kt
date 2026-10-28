@@ -49,14 +49,14 @@ data class RealtimeDiagnostics(
     val lastDisconnectReason: String? = null,
 )
 
-/** One physical connection loop shared by the UI and MediaSession owners. */
+/** One connection shared by UI/MediaSession; native recovery owns transport retries. */
 internal class PlayerRealtime(
     private val scope: CoroutineScope,
     private val expectedIdentity: Long,
     private val sessionIdentity: StateFlow<Long?>,
     private val guildId: StateFlow<String?>,
     private val token: suspend () -> String,
-    private val connect: (String) -> KajutaBotRealtimeClient,
+    private val connect: (suspend () -> String) -> KajutaBotRealtimeClient,
     private val onSnapshot: (QueueSnapshotResponse) -> Unit,
     private val recoverQueue: suspend (String) -> Unit,
     private val elapsedRealtimeMs: () -> Long = { System.nanoTime() / 1_000_000L },
@@ -110,10 +110,12 @@ internal class PlayerRealtime(
                             reconnectAttempts = attempts,
                         )
                     }
-                    client = connect(token())
+                    // The provider checks this login's identity and refreshes credentials
+                    // on every native connection attempt, without capturing an old JWT.
+                    client = connect(token)
                     localVolume?.bind(client)
                     coroutineScope {
-                        // One serial consumer. The bounded transport flow conflates bursts.
+                        // One serial consumer preserves hub snapshot ordering.
                         val snapshots = launch(start = CoroutineStart.UNDISPATCHED) {
                             client.updates.collect { snapshot ->
                                 if (sessionIdentity.value == expectedIdentity) {
@@ -134,56 +136,65 @@ internal class PlayerRealtime(
                         }
                         val closed = async(start = CoroutineStart.UNDISPATCHED) { client.closed.first() }
                         client.start()
-                        localVolume?.connected()
-                        connectedAt = elapsedRealtimeMs()
-                        _diagnostics.update {
-                            it.copy(
-                                state = if (guildId.value == null) RealtimeConnectionState.CONNECTED_NO_GUILD
-                                else RealtimeConnectionState.SUBSCRIBING,
-                                connectedAtMs = connectedAt,
-                            )
-                        }
-                        val subscriptions = launch(start = CoroutineStart.UNDISPATCHED) {
-                            var recoveryJob: Job? = null
-                            try {
-                                // Sequential invocations avoid an old SubscribeGuild completing after a new one.
-                                guildId.collect { selected ->
-                                    recoveryJob?.cancel()
-                                    if (selected == null) {
-                                        _diagnostics.update { it.copy(state = RealtimeConnectionState.CONNECTED_NO_GUILD) }
-                                        return@collect
-                                    }
-                                    _diagnostics.update { it.copy(state = RealtimeConnectionState.SUBSCRIBING) }
-                                    val firstSnapshot = async(start = CoroutineStart.UNDISPATCHED) {
-                                        client.updates.filter { it.guildId == selected }.first()
-                                    }
-                                    var handedToRecovery = false
-                                    try {
-                                        val initialSnapshotAvailable = client.subscribeGuild(selected)
-                                        if (guildId.value == selected) {
-                                            subscribed = true
-                                            _diagnostics.update {
-                                                it.copy(state = RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED)
-                                            }
-                                            recoveryJob = launch {
-                                                try {
-                                                    if (!initialSnapshotAvailable ||
-                                                        withTimeoutOrNull(INITIAL_SNAPSHOT_TIMEOUT_MS) {
-                                                            firstSnapshot.await()
-                                                        } == null
-                                                    ) recoverOnce(selected)
-                                                } finally {
-                                                    firstSnapshot.cancel()
-                                                }
-                                            }
-                                            handedToRecovery = true
-                                        }
-                                    } finally {
-                                        if (!handedToRecovery) firstSnapshot.cancel()
-                                    }
+                        val availability = launch(start = CoroutineStart.UNDISPATCHED) {
+                            client.connected.collectLatest { connected ->
+                                if (!connected) {
+                                    // Rebind immediately so events during the next handshake are observed.
+                                    localVolume?.bind(client)
+                                    _diagnostics.update { it.copy(state = RealtimeConnectionState.RECONNECTING, connectedAtMs = null) }
+                                    guildId.value?.let { recoverOnce(it) }
+                                    return@collectLatest
                                 }
-                            } finally {
-                                recoveryJob?.cancel()
+                                localVolume?.connected()
+                                connectedAt = elapsedRealtimeMs()
+                                _diagnostics.update {
+                                    it.copy(
+                                        state = if (guildId.value == null) RealtimeConnectionState.CONNECTED_NO_GUILD
+                                        else RealtimeConnectionState.SUBSCRIBING,
+                                        connectedAtMs = connectedAt,
+                                    )
+                                }
+                                var recoveryJob: Job? = null
+                                try {
+                                    // Sequential invocations avoid an old SubscribeGuild completing after a new one.
+                                    guildId.collect { selected ->
+                                        recoveryJob?.cancel()
+                                        if (selected == null) {
+                                            _diagnostics.update { it.copy(state = RealtimeConnectionState.CONNECTED_NO_GUILD) }
+                                            return@collect
+                                        }
+                                        _diagnostics.update { it.copy(state = RealtimeConnectionState.SUBSCRIBING) }
+                                        val firstSnapshot = async(start = CoroutineStart.UNDISPATCHED) {
+                                            client.updates.filter { it.guildId == selected }.first()
+                                        }
+                                        var handedToRecovery = false
+                                        try {
+                                            val initialSnapshotAvailable = client.subscribeGuild(selected)
+                                            if (guildId.value == selected) {
+                                                subscribed = true
+                                                _diagnostics.update {
+                                                    it.copy(state = RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED)
+                                                }
+                                                recoveryJob = launch {
+                                                    try {
+                                                        if (!initialSnapshotAvailable ||
+                                                            withTimeoutOrNull(INITIAL_SNAPSHOT_TIMEOUT_MS) {
+                                                                firstSnapshot.await()
+                                                            } == null
+                                                        ) recoverOnce(selected)
+                                                    } finally {
+                                                        firstSnapshot.cancel()
+                                                    }
+                                                }
+                                                handedToRecovery = true
+                                            }
+                                        } finally {
+                                            if (!handedToRecovery) firstSnapshot.cancel()
+                                        }
+                                    }
+                                } finally {
+                                    recoveryJob?.cancel()
+                                }
                             }
                         }
                         try {
@@ -191,7 +202,7 @@ internal class PlayerRealtime(
                             localVolume?.disconnect()
                             _diagnostics.update { it.copy(lastDisconnectReason = disconnect.reason) }
                         } finally {
-                            subscriptions.cancelAndJoin()
+                            availability.cancelAndJoin()
                             snapshots.cancelAndJoin()
                             heartbeats.cancelAndJoin()
                         }
@@ -210,6 +221,8 @@ internal class PlayerRealtime(
                         withContext(NonCancellable) {
                             try {
                                 withTimeoutOrNull(STOP_TIMEOUT_MS) { connection.stop() }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
                             } catch (_: Exception) {
                                 // Shutdown is best effort; the reconnect loop owns the next attempt.
                             }

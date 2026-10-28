@@ -48,7 +48,7 @@ class LocalVolumeSignalRTest {
     @Test fun `real SignalR sends bearer on negotiate and transport and waits for command completion`() = runBlocking {
         val server = MockWebServer()
         val setInvocation = CompletableDeferred<Pair<WebSocket, String>>()
-        server.enqueue(MockResponse().setBody("""{"connectionId":"id","connectionToken":"token","negotiateVersion":1,"availableTransports":[{"transport":"WebSockets","transferFormats":["Text","Binary"]}]}"""))
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"connectionId":"id","connectionToken":"token","negotiateVersion":1,"availableTransports":[{"transport":"WebSockets","transferFormats":["Text","Binary"]}]}"""))
         server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                 onMessage(webSocket, bytes.utf8())
@@ -78,8 +78,8 @@ class LocalVolumeSignalRTest {
             }
         }))
         server.start()
-        val client = SignalRRealtimeClient(buildPlaybackConnection(
-            server.url("/api/v1/app/hubs/playback").toString(), "session-jwt"))
+        val client = buildPlaybackConnection(
+            server.url("/api/v1/app/hubs/playback").toString(), { "session-jwt" })
         try {
             withTimeout(10_000) {
                 val event = async(start = CoroutineStart.UNDISPATCHED) { client.localVolumeUpdates.first() }

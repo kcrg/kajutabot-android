@@ -30,8 +30,8 @@ class PlayerRepository(
     suspend fun accessToken(expectedIdentity: Long): String =
         sessionManager.accessTokenForSession(expectedIdentity)
 
-    fun createRealtimeClient(token: String): KajutaBotRealtimeClient =
-        KajutaBotRealtimeClientFactory.create(apiBaseUrl, token)
+    fun createRealtimeClient(accessTokenProvider: suspend () -> String): KajutaBotRealtimeClient =
+        KajutaBotRealtimeClientFactory.create(apiBaseUrl, accessTokenProvider = accessTokenProvider)
 
     suspend fun getGuilds(expectedIdentity: Long): List<DiscordGuildResponse> =
         sessionManager.withApiForSession(expectedIdentity) { it.getMyGuilds() }

@@ -42,6 +42,7 @@ class PlayerRealtimeTest {
         )
         private val _heartbeats = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         private val _closed = MutableSharedFlow<RealtimeDisconnect>(extraBufferCapacity = 1)
+        override val connected = MutableStateFlow(true)
         override val updates: Flow<QueueSnapshotResponse> = _updates
         override val heartbeats: Flow<Unit> = _heartbeats
         override val closed: Flow<RealtimeDisconnect> = _closed
@@ -49,7 +50,7 @@ class PlayerRealtimeTest {
         var localVolumeReads = 0
         var localVolumeSnapshot = LocalVolumeStateDto(true, true, true, 87)
         var localVolumeSnapshotGate: CompletableDeferred<LocalVolumeStateDto>? = null
-        var onStart: () -> Unit = {}
+        var onStart: suspend () -> Unit = {}
         override suspend fun getLocalVolumeState(): LocalVolumeStateDto {
             localVolumeReads++
             return localVolumeSnapshotGate?.await() ?: localVolumeSnapshot
@@ -78,7 +79,8 @@ class PlayerRealtimeTest {
         var currentToken = "discord-jwt-1"
         val volume = LocalVolumeController(backgroundScope, 7, identity, true)
         val realtime = PlayerRealtime(backgroundScope, 7, identity, guild, { currentToken },
-            { token -> tokens += token; FakeConnection().also(connections::add) }, {}, {}, localVolume = volume)
+            { provider -> FakeConnection().also { it.onStart = { tokens += provider() }; connections += it } },
+            {}, {}, localVolume = volume)
         realtime.setOwner(RealtimeOwner.UI, true)
         runCurrent()
         assertEquals(87, volume.state.value.observed?.volume)
@@ -119,6 +121,41 @@ class PlayerRealtimeTest {
         connection.localVolumeSnapshotGate!!.complete(connection.localVolumeSnapshot)
         runCurrent()
         realtime.close(); volume.close()
+    }
+
+    @Test
+    fun `native recovery reuses connection refreshes volume and restores latest guild once`() = runTest {
+        val identity = MutableStateFlow<Long?>(7)
+        val guild = MutableStateFlow<String?>("g1")
+        val connection = FakeConnection()
+        val volume = LocalVolumeController(backgroundScope, 7, identity, true)
+        var creations = 0
+        val realtime = PlayerRealtime(backgroundScope, 7, identity, guild, { "jwt" },
+            { creations++; connection }, {}, {}, localVolume = volume)
+        realtime.setOwner(RealtimeOwner.UI, true)
+        runCurrent()
+        connection.connected.value = false
+        runCurrent()
+        assertEquals(RealtimeConnectionState.RECONNECTING, realtime.diagnostics.value.state)
+        assertEquals(false, volume.state.value.enabled)
+        guild.value = "g2"
+        runCurrent()
+        connection.connected.value = true
+        runCurrent()
+        assertEquals(1, creations)
+        assertEquals(listOf("g1", "g2"), connection.subscriptions)
+        assertEquals(2, connection.localVolumeReads)
+        assertEquals(1, connection.localVolumeUpdates.subscriptionCount.value)
+        assertEquals(RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED, realtime.diagnostics.value.state)
+        identity.value = 8
+        runCurrent()
+        assertEquals(true, connection.stopped)
+        assertEquals(0, connection.localVolumeUpdates.subscriptionCount.value)
+        connection.connected.value = true
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(1, creations)
+        volume.close()
     }
 
     @Test
@@ -173,7 +210,7 @@ class PlayerRealtimeTest {
         val tokens = mutableListOf<String>()
         val connections = mutableListOf<FakeConnection>()
         val realtime = PlayerRealtime(backgroundScope, 42, identity, guild, { currentGuestToken },
-            { token -> tokens += token; FakeConnection().also(connections::add) }, {}, {})
+            { provider -> FakeConnection().also { it.onStart = { tokens += provider() }; connections += it } }, {}, {})
         realtime.setOwner(RealtimeOwner.UI, true)
         runCurrent()
         assertEquals(listOf("guest-jwt-1"), tokens)

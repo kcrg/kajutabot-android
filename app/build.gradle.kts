@@ -23,6 +23,8 @@ val discordScheme =
     if (kajutaDiscordClientId.isNotBlank()) "discord-$kajutaDiscordClientId" else "discord-unconfigured"
 
 android {
+    // Opt in to exercising the actual optimized APK on a connected device.
+    testBuildType = providers.gradleProperty("androidTestBuildType").getOrElse("debug")
     namespace = "com.tryniecki.kajutabot"
     compileSdk {
         version = release(37)
@@ -111,6 +113,8 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.junit)
+    // AndroidX Test references these annotations when the test APK is optimized by R8.
+    androidTestImplementation(libs.errorprone.annotations)
     "baselineProfile"(project(":baselineprofile"))
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
