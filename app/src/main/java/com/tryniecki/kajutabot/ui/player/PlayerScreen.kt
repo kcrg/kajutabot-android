@@ -92,6 +92,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
@@ -331,7 +332,6 @@ fun PlayerScreen(
     var messageHeightPx by remember { mutableIntStateOf(0) }
     var nowPlayingHeightPx by remember { mutableIntStateOf(0) }
     var queueHeaderHeightPx by remember { mutableIntStateOf(0) }
-    val dragItemBounds = remember { mutableMapOf<String, Rect>() }
     var previewOrder by remember(ui.queue?.guildId) {
         mutableStateOf<List<QueueEntryResponse>?>(null)
     }
@@ -485,11 +485,14 @@ fun PlayerScreen(
                     if (ui.isMutating || ui.retainedRemovalEntries.isNotEmpty() || pending.size < 2) return@pointerInput
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        val totalWidth = listCoordinates?.size?.width?.toFloat() ?: 1000f
                         val sourceInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
                             val id = info.key as? String
-                            val bounds = id?.let(dragItemBounds::get)
-                            id != null && id in pendingEntryIds && bounds?.contains(down.position) == true &&
-                                down.position.x < bounds.right - favoriteTouchAreaPx
+                            if (id == null || id !in pendingEntryIds) return@firstOrNull false
+                            val itemTop = info.offset.toFloat()
+                            val itemBottom = itemTop + info.size
+                            down.position.y >= itemTop && down.position.y <= itemBottom &&
+                                down.position.x < totalWidth - favoriteTouchAreaPx
                         } ?: return@awaitEachGesture
                         val sourceId = sourceInfo.key as String
                         val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
@@ -540,6 +543,10 @@ fun PlayerScreen(
                     if (delta != 0f && listState.scrollBy(delta) != 0f) updateDragTarget()
                 }
             }
+        val moveUpDescription = stringResource(R.string.action_move_up)
+        val moveDownDescription = stringResource(R.string.action_move_down)
+        val requeueLabel = stringResource(R.string.player_requeue_now_playing)
+        val removeLabel = stringResource(R.string.action_remove_from_queue)
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
@@ -713,11 +720,9 @@ fun PlayerScreen(
                     val entryIndex = pendingIndexById[entry.entryId] ?: -1
                     val dragged = draggingEntryId == entry.entryId
                     val target = dragTargetIndex == entryIndex
-                    val moveUpDescription = stringResource(R.string.action_move_up)
-                    val moveDownDescription = stringResource(R.string.action_move_down)
                     SwipeActionCard(
-                        addLabel = stringResource(R.string.player_requeue_now_playing),
-                        removeLabel = stringResource(R.string.action_remove_from_queue),
+                        addLabel = requeueLabel,
+                        removeLabel = removeLabel,
                         enabled = !ui.isMutating && entry.entryId !in ui.retainedRemovalEntries &&
                             entry.entryId !in ui.mutatingEntryIds && draggingEntryId == null,
                         addStatus = ui.requeueStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
@@ -734,17 +739,7 @@ fun PlayerScreen(
                     ) { foregroundModifier ->
                         Card(
                             modifier = foregroundModifier.fillMaxWidth()
-                                .testTag("queue-drag-${entry.entryId}")
-                                .onGloballyPositioned { coordinates ->
-                                    val origin = listCoordinates?.boundsInRoot()?.topLeft ?: return@onGloballyPositioned
-                                    val bounds = coordinates.boundsInRoot()
-                                    dragItemBounds[entry.entryId] = Rect(
-                                        bounds.left - origin.x,
-                                        bounds.top - origin.y,
-                                        bounds.right - origin.x,
-                                        bounds.bottom - origin.y,
-                                    )
-                                },
+                                .testTag("queue-drag-${entry.entryId}"),
                             colors = CardDefaults.cardColors(
                                 containerColor = if (target && !dragged) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surfaceContainer,
@@ -1152,7 +1147,7 @@ private fun SmoothArtworkGlow(
                 label = "nowPlayingGlowAccent",
             )
             AccentArtworkGlow(
-                accent = animatedAccent,
+                colorProvider = { animatedAccent },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -1201,9 +1196,13 @@ private fun NowPlayingArtwork(
 
 @Composable
 private fun AccentArtworkGlow(
-    accent: Color,
+    colorProvider: () -> Color,
     modifier: Modifier = Modifier,
 ) {
+    val density = LocalDensity.current
+    val cornerRadiusPx = remember(density) { with(density) { 14.dp.toPx() } }
+    val cornerRadius = remember(cornerRadiusPx) { androidx.compose.ui.geometry.CornerRadius(cornerRadiusPx) }
+
     Box(modifier = modifier) {
         Box(
             modifier = Modifier
@@ -1218,10 +1217,12 @@ private fun AccentArtworkGlow(
                     radius = 40.dp,
                     edgeTreatment = BlurredEdgeTreatment.Unbounded,
                 )
-                .background(
-                    color = accent.copy(alpha = 0.24f),
-                    shape = RoundedCornerShape(14.dp),
-                ),
+                .drawBehind {
+                    drawRoundRect(
+                        color = colorProvider().copy(alpha = 0.24f),
+                        cornerRadius = cornerRadius,
+                    )
+                },
         )
     }
 }

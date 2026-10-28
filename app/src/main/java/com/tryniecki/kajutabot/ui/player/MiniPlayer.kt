@@ -24,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -170,9 +171,15 @@ fun MiniPlayer(
                                 overflow = TextOverflow.Ellipsis,
                             )
 
+                            val elapsedText = remember(progress.positionMs?.let { it / 1000 }) {
+                                formatPlaybackElapsed(progress.positionMs)
+                            }
+                            val totalText = remember(current.durationMs) {
+                                formatPlaybackTotal(current.durationMs)
+                            }
+
                             Text(
-                                text = "${formatPlaybackElapsed(progress.positionMs)} / " +
-                                        formatPlaybackTotal(current.durationMs),
+                                text = "$elapsedText / $totalText",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,

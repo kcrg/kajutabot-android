@@ -254,9 +254,7 @@ private fun AuthenticatedShell(
     val onboardingCompletedFlow = remember(appViewModel, discordUserId, sessionType) {
         appViewModel.onboardingCompleted(sessionType, discordUserId)
     }
-    val onboardingCompleted by remember(onboardingCompletedFlow) {
-        onboardingCompletedFlow.map<Boolean, Boolean?> { it }
-    }.collectAsStateWithLifecycle(initialValue = null)
+    val onboardingCompleted by onboardingCompletedFlow.collectAsStateWithLifecycle(initialValue = null)
     var manualOnboardingRequested by rememberSaveable(discordUserId, sessionType) { mutableStateOf(false) }
     val adaptiveInfo = currentWindowAdaptiveInfoV2()
     val constrainWideContent = adaptiveInfo.windowSizeClass

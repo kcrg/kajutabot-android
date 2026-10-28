@@ -102,19 +102,26 @@ fun PlaybackProgressIndicator(
     )
     val animatedFraction = rememberSmoothPlaybackFraction(playbackKey, progress.fraction)
 
+    val elapsedText = remember(progress.positionMs?.let { it / 1000 }) {
+        formatPlaybackElapsed(progress.positionMs)
+    }
+    val totalText = remember(durationMs) {
+        formatPlaybackTotal(durationMs)
+    }
+
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         LinearWavyProgressIndicator(
             progress = { animatedFraction },
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
-                text = formatPlaybackElapsed(progress.positionMs),
+                text = elapsedText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = formatPlaybackTotal(durationMs),
+                text = totalText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

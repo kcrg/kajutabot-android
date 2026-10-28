@@ -424,7 +424,7 @@ private fun OdometerDigit(
             style = MaterialTheme.typography.bodySmall.copy(
                 fontFeatureSettings = "tnum",
             ),
-            color = if (character == slot.glyph.character) {
+            color = if (flash.value > 0f && character == slot.glyph.character) {
                 lerp(
                     start = normalColor,
                     stop = highlightColor,

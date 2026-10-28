@@ -15,12 +15,16 @@ sealed interface ArtworkSource {
     data object Missing : ArtworkSource
 }
 
+private val defaultApiRoot = BuildConfig.KAJUTABOT_API_BASE_URL.trim().trimEnd('/').toHttpUrlOrNull()
+
 fun resolveArtworkUrl(
     imageUrl: String?,
     apiBaseUrl: String = BuildConfig.KAJUTABOT_API_BASE_URL,
 ): String? {
     val value = imageUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    val apiRoot = apiBaseUrl.trim().trimEnd('/').toHttpUrlOrNull() ?: return null
+    val apiRoot = if (apiBaseUrl == BuildConfig.KAJUTABOT_API_BASE_URL) defaultApiRoot
+        else apiBaseUrl.trim().trimEnd('/').toHttpUrlOrNull() ?: return null
+    if (apiRoot == null) return null
 
     // OkHttp normalizes https:///path into a host; reject the malformed authority first.
     if (value.startsWith("http://") || value.startsWith("https://")) {
