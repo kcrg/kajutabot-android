@@ -6,6 +6,8 @@ import eu.lepicekmichal.signalrkore.AutomaticReconnect
 import eu.lepicekmichal.signalrkore.HubConnection
 import eu.lepicekmichal.signalrkore.HubConnectionBuilder
 import eu.lepicekmichal.signalrkore.HubConnectionState
+import eu.lepicekmichal.signalrkore.HubValue
+import eu.lepicekmichal.signalrkore.JsonHubProtocol
 import eu.lepicekmichal.signalrkore.TransportEnum
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -34,7 +36,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.OkHttpClient
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -89,7 +90,12 @@ internal fun buildPlaybackConnection(
 ): PlaybackRealtimeClient {
     val stopped = AtomicBoolean(false)
     val httpClient = HttpClient(OkHttp) {
-        engine { preconfigured = baseHttpClient }
+        engine {
+            preconfigured = baseHttpClient
+            config {
+                dispatcher(okhttp3.Dispatcher())
+            }
+        }
         install(WebSockets)
         install(SSE)
         install(HttpTimeout) { requestTimeoutMillis = 30_000 }
@@ -97,7 +103,7 @@ internal fun buildPlaybackConnection(
     }
     val connection = HubConnectionBuilder.create(hubUrl) {
         this.httpClient = httpClient
-        transportEnum = TransportEnum.WebSockets
+        transports = setOf(TransportEnum.WebSockets)
         this.accessTokenProvider = {
             check(!stopped.get()) { "Connection has been disposed." }
             accessTokenProvider().also {
@@ -113,7 +119,7 @@ internal fun buildPlaybackConnection(
                 AutomaticReconnect.Inactive -> null
             }
         }
-        json = KajutaBotJson
+        protocol = JsonHubProtocol(KajutaBotJson)
         // Leave the library's payload logger disabled. PlayerRealtime exposes safe
         // lifecycle diagnostics without URLs, credentials or hub payloads.
     }
@@ -140,7 +146,7 @@ internal class PlaybackRealtimeClient(
     override val heartbeats = event("RealtimeHeartbeat", Long.serializer()).map { Unit }
     override val localVolumeUpdates = event("LocalVolumeStateChanged", LocalVolumeStateDto.serializer())
 
-    // 0.9.16 emits DISCONNECTED while closing the old transport, before RECONNECTING.
+    // Emits DISCONNECTED while closing the old transport, before RECONNECTING.
     // This watchdog reports a terminal close only if native recovery never takes over.
     // Ordinary network retries remain entirely inside the library.
     override val closed: Flow<RealtimeDisconnect> = connection.connectionState
@@ -156,7 +162,7 @@ internal class PlaybackRealtimeClient(
         connection.on(method, hasResult = false).map { invocation ->
             // The convenience overload silently catches malformed contracts. Propagate
             // failures and cancellation to the owner instead.
-            KajutaBotJson.decodeFromJsonElement(serializer, invocation.arguments.single())
+            (invocation.arguments.single() as HubValue.Decodable).decode(serializer)
         }
 
     override suspend fun start() = lifecycle.withLock {
@@ -167,14 +173,14 @@ internal class PlaybackRealtimeClient(
     }
 
     override suspend fun subscribeGuild(guildId: String): Boolean =
-        whileConnected { connection.invoke("SubscribeGuild", Boolean.serializer(), listOf(JsonPrimitive(guildId))) }
+        whileConnected { connection.invoke("SubscribeGuild", guildId, String.serializer(), Boolean.serializer()) }
 
     override suspend fun getLocalVolumeState(): LocalVolumeStateDto =
         whileConnected { connection.invoke("GetLocalVolumeState", LocalVolumeStateDto.serializer()) }
 
     override suspend fun setLocalVolume(volume: Int) {
         require(volume in 0..200) { "invalid_volume" }
-        whileConnected { connection.invoke("SetLocalVolume", listOf(JsonPrimitive(volume))) }
+        whileConnected { connection.invoke("SetLocalVolume", volume, Int.serializer()) }
     }
 
     // Native invoke() otherwise waits indefinitely for completions lost on disconnect.

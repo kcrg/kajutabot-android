@@ -1,6 +1,6 @@
 # Realtime client migration
 
-The Android client uses SignalRKore 0.9.16 (latest Maven Central release verified on 2026-10-24), Ktor 3.2.3 with its OkHttp engine, and generated kotlinx.serialization serializers. Kotlin 2.4.21, minimum SDK 29, Retrofit, and the existing application architecture are unchanged.
+The Android client uses SignalRKore 1.0.0, Ktor 3.2.3 with its OkHttp engine, and generated kotlinx.serialization serializers. Kotlin 2.4.21, minimum SDK 29, Retrofit, and the existing application architecture are unchanged.
 
 ## Contracts and ownership
 
@@ -14,7 +14,7 @@ The Android client uses SignalRKore 0.9.16 (latest Maven Central release verifie
 
 `PlayerRealtime` retains the existing UI/MediaSession owner arbitration, login identity checks, guild selection, diagnostics StateFlow, and REST recovery for missing snapshots. Native reconnect owns ordinary transport retries, using the previous bounded delay sequence (0, 1, 2, 5, 8 seconds, then at most 8 seconds plus 250 ms jitter) through prolonged outages. Successful reconnect restores the selected guild and refreshes local volume on the same client instance.
 
-A connection-ID key prevents fast StateFlow transitions from losing resubscription. The existing outer lifecycle loop only handles startup/authentication failures or terminal closes; a five-second terminal-close watchdog distinguishes native 0.9.16's transient DISCONNECTED state from a close that does not enter native recovery. Mutations are never automatically replayed. Startup and outstanding invocations have 30-second bounds; disconnection cancels completion waits.
+A connection-ID key prevents fast StateFlow transitions from losing resubscription. The existing outer lifecycle loop only handles startup/authentication failures or terminal closes; a five-second terminal-close watchdog distinguishes native transient DISCONNECTED state from a close that does not enter native recovery. Mutations are never automatically replayed. Startup and outstanding invocations have 30-second bounds; disconnection cancels completion waits.
 
 The suspend access-token provider calls the existing identity-bound `SessionManager` on every native attempt. An atomic shutdown guard fences both token retrieval and reconnect policy, including logout during refresh. Explicit stop is idempotent; coroutine cancellation is propagated. No credentials or hub payloads are logged. The repository has no Sentry SDK/telemetry abstraction to integrate; existing safe lifecycle diagnostics remain in place, without introducing another SDK.
 

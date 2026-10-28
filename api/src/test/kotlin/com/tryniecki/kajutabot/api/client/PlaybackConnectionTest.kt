@@ -142,21 +142,18 @@ class PlaybackConnectionTest {
         }
     }
 
-    @Test fun `initial negotiate failure is recovered by native reconnect`() = runBlocking {
+    @Test fun `initial negotiate failure throws and leaves client disconnected`() = runBlocking {
         val server = MockWebServer()
-        val connectedSocket = CompletableDeferred<WebSocket>()
         server.enqueue(MockResponse().setResponseCode(503))
-        server.enqueueConnection(connectedSocket)
         server.start()
         val client = buildPlaybackConnection(server.url("/hub").toString(), { "jwt" },
             AutomaticReconnect.Custom { count, _ -> if (count < 2) 0L else null })
         try {
-            withTimeout(10_000) {
-                client.start()
-                client.connected.first { it }
-                connectedSocket.await()
-                assertEquals(3, server.requestCount)
+            assertThrows(Exception::class.java) {
+                runBlocking { client.start() }
             }
+            assertFalse(client.connected.first())
+            assertEquals(1, server.requestCount)
         } finally { client.stop(); server.shutdown() }
     }
 
