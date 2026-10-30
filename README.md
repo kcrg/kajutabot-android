@@ -1,13 +1,13 @@
-# KajutaBot Android
+# Qumi Android
 
-Native Android client for controlling KajutaBot, a Discord music bot, through its existing Control API. The phone controls playback on Discord; it does not play the audio locally.
+Native Android client for controlling Qumi, a Discord music bot, through its existing Control API. The phone controls playback on Discord; it does not play the audio locally.
 
 ## Features
 
 - Discord OAuth login or credential-free guest access to a demo server
 - Discord server and voice channel selection
 - Live player state, playback controls and queue management
-- Per-user local KajutaBot volume in Discord Desktop through the Windows helper ([details and validation](docs/local-volume.md))
+- Per-user local Qumi volume in Discord Desktop through the Windows helper ([details and validation](docs/local-volume.md))
 - Track search, URL sharing and favorites
 - Material 3 UI with system dynamic colors on Android 12+
 - Android media controls through Media3
@@ -55,7 +55,7 @@ cd kajutabot-android
 
 The repository already contains the public Control API URL and Discord application client ID in `gradle.properties`. No private credentials, keystore, custom environment variables or additional `local.properties` values are needed for the default debug build or guest flow. Android Studio normally creates `local.properties` with the local `sdk.dir`; it is ignored by Git.
 
-To use another backend or Discord application, override `KAJUTABOT_API_BASE_URL` and `KAJUTABOT_DISCORD_CLIENT_ID` in your user-level Gradle properties (`~/.gradle/gradle.properties`) or pass them with `-P` when building. These are public identifiers embedded in `BuildConfig`, not secrets. The backend must allow the OAuth redirect URI `discord-<CLIENT_ID>:/authorize/callback`, and the same URI must be registered for the Discord application. The default guest flow does not require configuring OAuth.
+To use another backend or Discord application, override `API_BASE_URL` and `DISCORD_CLIENT_ID` in your user-level Gradle properties (`~/.gradle/gradle.properties`) or pass them with `-P` when building. These are public identifiers embedded in `BuildConfig`, not secrets. The backend must allow the OAuth redirect URI `discord-<CLIENT_ID>:/authorize/callback`, and the same URI must be registered for the Discord application. The default guest flow does not require configuring OAuth.
 
 ### Build and run
 
@@ -87,4 +87,4 @@ On Windows, use `.\gradlew.bat` in place of `./gradlew`. `assembleRelease` is an
 
 ## Project status
 
-This is an actively developed Android client for the existing KajutaBot Control API.
+This is an actively developed Android client for the existing Qumi Control API.

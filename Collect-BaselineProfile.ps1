@@ -1,5 +1,5 @@
 param(
-    [string]$PackageName = "com.tryniecki.kajutabot"
+    [string]$PackageName = "com.tryniecki.qumi"
 )
 
 Set-StrictMode -Version Latest

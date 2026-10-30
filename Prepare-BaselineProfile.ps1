@@ -1,5 +1,5 @@
 param(
-    [string]$PackageName = "com.tryniecki.kajutabot",
+    [string]$PackageName = "com.tryniecki.qumi",
     [string]$ActivityName = ".MainActivity"
 )
 
@@ -125,7 +125,7 @@ Invoke-Checked $Adb @(
 )
 
 Write-Host ""
-Write-Host "=== Start KajutaBot ==="
+Write-Host "=== Start Qumi ==="
 Invoke-Checked $Adb @(
     "-s", $Serial,
     "shell", "am", "start", "-W",

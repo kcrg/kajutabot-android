@@ -1,4 +1,4 @@
-# Lokalna głośność KajutaBota
+# Lokalna głośność Qumi
 
 Okrągły przycisk Tabler Volume obok odtwarzacza otwiera Material 3 ModalBottomSheet z poziomym suwakiem 0–200%, krok 1. Przycisk jest widoczny wyłącznie dla sesji Discord z potwierdzoną rejestracją helpera (`installed=true`); stan nieznany, brak instalacji i gość ukrywają przycisk. Offline nie oznacza braku instalacji.
 
@@ -8,7 +8,7 @@ Arkusz używa standardowych animacji i gestów ModalBottomSheet: przeciągnięci
 
 Suwak steruje odsłuchem zalogowanego użytkownika w Discord Desktop na komputerze z Windows 11 i helperem. Jest niezależny od wybranego serwera oraz globalnej głośności odtwarzania.
 
-Android korzysta z istniejącego połączenia PlaybackHub i konfiguracji `KAJUTABOT_API_BASE_URL`. `GetLocalVolumeState()` pobiera snapshot przy każdym połączeniu; `LocalVolumeStateChanged(state)` dostarcza dalsze aktualizacje, bez pollingu. `SetLocalVolume(Int)` czeka na completion, z timeoutem klienta 10 s. Samo completion nie aktualizuje obserwowanej wartości. Token sesji KajutaBota trafia do nagłówka Bearer przy negotiate i WebSocket; reconnect pobiera aktualny token przez SessionManager.
+Android korzysta z istniejącego połączenia PlaybackHub i konfiguracji `API_BASE_URL`. `GetLocalVolumeState()` pobiera snapshot przy każdym połączeniu; `LocalVolumeStateChanged(state)` dostarcza dalsze aktualizacje, bez pollingu. `SetLocalVolume(Int)` czeka na completion, z timeoutem klienta 10 s. Samo completion nie aktualizuje obserwowanej wartości. Token sesji Qumi trafia do nagłówka Bearer przy negotiate i WebSocket; reconnect pobiera aktualny token przez SessionManager.
 
 LocalVolumeController należy do ViewModelu sesji i nie tworzy połączeń. Lokalny licznik eventów chroni snapshot przed nadpisaniem nowszego eventu, a generacja połączenia i tożsamość sesji odrzucają stare wyniki. Draft nie zmienia się pod wpływem eventów podczas gestu. Po zakończeniu gestu wysyłana jest jedna komenda; w czasie jej trwania przechowywana jest najwyżej ostatnia zatwierdzona intencja. Po błędzie następuje pojedynczy odczyt stanu bez retry komendy. Reconnect, utrata dostępności i logout usuwają oczekujące intencje. Rozłączenie zachowuje ostatnią obserwację jako nieaktualną, bez udawania braku instalacji.
 
@@ -25,14 +25,14 @@ Testy jednostkowe obejmują stany helpera, gościa, granice wartości, coalescin
 Na urządzeniu lub emulatorze:
 
 ```powershell
-.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.tryniecki.kajutabot.LocalVolumeSheetTest'
+.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.tryniecki.qumi.LocalVolumeSheetTest'
 ```
 
 Testy UI sprawdzają otwarcie arkusza z przycisku, zamknięcie gestem i Wstecz, poziomy suwak bez nagłówka, procent pod suwakiem oraz stabilną pozycję elementów przy włączaniu i wyłączaniu wskaźnika. Pozostałe scenariusze obejmują brak sztucznej wartości dla gościa, blokadę nieaktualnego stanu, gest poziomy oraz dostępnościowe SetProgress i końcowe zatwierdzenie gestu. Testy kontrolera z czasem wirtualnym sprawdzają brak wskaźnika przy completion przed 100 ms, dokładny próg 100 ms, odrębne opóźnienia kolejnych komend oraz anulowanie wskaźnika przy błędzie i rozłączeniu.
 
 ## Sprawdzenie ręczne z API, Windows helperem i Discord Desktop
 
-1. Zaloguj Androida, helper i Discord tym samym kontem. Uruchom helper i Discord Desktop, dołącz do kanału z KajutaBotem. Sprawdź snapshot oraz ustawienia 0%, 100%, 200% i wartości pośredniej; procent powinien odpowiadać obserwacji Discorda.
+1. Zaloguj Androida, helper i Discord tym samym kontem. Uruchom helper i Discord Desktop, dołącz do kanału z Qumi. Sprawdź snapshot oraz ustawienia 0%, 100%, 200% i wartości pośredniej; procent powinien odpowiadać obserwacji Discorda.
 2. Zmień głośność w Discord Desktop i na drugim kliencie tego konta. Android powinien się zaktualizować. W trakcie przeciągania event powinien zmieniać obserwację bez przestawiania uchwytu; po completion ma być widoczna rzeczywista wartość.
 3. Zmień serwer w Androidzie. Stan lokalnej głośności powinien pozostać przypisany do konta. Drugie konto nie powinno otrzymać jego eventów.
 4. Wyłącz helper, zamknij Discord i sprawdź przypadek helpera online bez dostępnego sterowania, także przy niezgodnym koncie/kanałach. UI powinno rozróżniać rejestrację, offline i niedostępność oraz pokazywać „—” przy null.

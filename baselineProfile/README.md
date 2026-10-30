@@ -27,7 +27,7 @@ the property below:
 
 ```powershell
 .\gradlew.bat :app:generateReleaseBaselineProfile "-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true"
-adb shell cmd locale set-app-locales com.tryniecki.kajutabot --user current --locales '""'
+adb shell cmd locale set-app-locales com.tryniecki.qumi --user current --locales '""'
 adb uninstall com.tryniecki.baselineprofile
 ```
 

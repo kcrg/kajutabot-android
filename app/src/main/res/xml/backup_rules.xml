@@ -2,11 +2,11 @@
 <full-backup-content>
     <exclude
         domain="sharedpref"
-        path="kajutabot_secure_session.xml" />
+        path="secure_session.xml" />
     <exclude
         domain="sharedpref"
-        path="kajutabot_secure_session_meta.xml" />
+        path="secure_session_meta.xml" />
     <exclude
         domain="sharedpref"
-        path="kajutabot_oauth_pending.xml" />
+        path="oauth_pending.xml" />
 </full-backup-content>

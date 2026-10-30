@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "KajutaBot"
+rootProject.name = "Qumi"
 include(":app", ":api")
 include(":baselineprofile")
 // The directory name differs in case, which only resolves on case-insensitive file systems.

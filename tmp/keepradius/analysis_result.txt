@@ -111,9 +111,9 @@ Shrinking Score:    99.18%
       "example_classes": [
         "Landroidx/navigation3/runtime/NavBackStack;",
         "Landroidx/savedstate/serialization/serializers/SparseArraySerializer$SparseArraySurrogate;",
-        "Lcom/tryniecki/kajutabot/api/model/auth/AuthSessionResponse;",
-        "Lcom/tryniecki/kajutabot/api/model/auth/AuthUserResponse;",
-        "Lcom/tryniecki/kajutabot/api/model/auth/DiscordOAuthExchangeRequest;"
+        "Lcom/tryniecki/qumi/api/model/auth/AuthSessionResponse;",
+        "Lcom/tryniecki/qumi/api/model/auth/AuthUserResponse;",
+        "Lcom/tryniecki/qumi/api/model/auth/DiscordOAuthExchangeRequest;"
       ],
       "subsumed_by": []
     },

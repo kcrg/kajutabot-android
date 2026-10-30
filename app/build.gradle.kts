@@ -16,25 +16,25 @@ tasks.withType<Test>().configureEach {
     jvmArgs("-Dkotlinx.coroutines.stacktrace.recovery=false")
 }
 
-val kajutaApiBaseUrl: String =
-    providers.gradleProperty("KAJUTABOT_API_BASE_URL")
+val apiBaseUrl: String =
+    providers.gradleProperty("API_BASE_URL")
         .getOrElse("https://api.kajuta.tryniecki.eu")
-val kajutaDiscordClientId: String =
-    providers.gradleProperty("KAJUTABOT_DISCORD_CLIENT_ID")
+val discordClientId: String =
+    providers.gradleProperty("DISCORD_CLIENT_ID")
         .getOrElse("")
 val discordScheme =
-    if (kajutaDiscordClientId.isNotBlank()) "discord-$kajutaDiscordClientId" else "discord-unconfigured"
+    if (discordClientId.isNotBlank()) "discord-$discordClientId" else "discord-unconfigured"
 
 android {
     // Opt in to exercising the actual optimized APK on a connected device.
     testBuildType = providers.gradleProperty("androidTestBuildType").getOrElse("debug")
-    namespace = "com.tryniecki.kajutabot"
+    namespace = "com.tryniecki.qumi"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.tryniecki.kajutabot"
+        applicationId = "com.tryniecki.qumi"
         minSdk = 29
         targetSdk = 37
         versionCode = 1
@@ -42,8 +42,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "KAJUTABOT_API_BASE_URL", "\"$kajutaApiBaseUrl\"")
-        buildConfigField("String", "KAJUTABOT_DISCORD_CLIENT_ID", "\"$kajutaDiscordClientId\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "DISCORD_CLIENT_ID", "\"$discordClientId\"")
 
         manifestPlaceholders["discordScheme"] = discordScheme
     }

@@ -1,0 +1,144 @@
+package com.tryniecki.qumi
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.view.KeyEvent
+import android.view.KeyboardShortcutGroup
+import android.view.Menu
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.ViewModelProvider
+import com.tryniecki.qumi.auth.DiscordOAuth
+import com.tryniecki.qumi.ui.AppRoot
+import com.tryniecki.qumi.ui.app.AppViewModel
+import com.tryniecki.qumi.ui.navigation.AppKeyboardShortcuts
+import com.tryniecki.qumi.ui.theme.AppTheme
+
+class MainActivity : ComponentActivity() {
+
+    private lateinit var container: AppContainer
+    private lateinit var appViewModel: AppViewModel
+    private val keyboardShortcuts = AppKeyboardShortcuts()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
+        super.onCreate(savedInstanceState)
+
+        splashScreen.setOnExitAnimationListener { provider ->
+            provider.view.animate()
+                .alpha(0f)
+                .scaleX(1.025f)
+                .scaleY(1.025f)
+                .setDuration(180L)
+                .withEndAction { provider.remove() }
+                .start()
+        }
+
+        enableEdgeToEdge()
+
+        container = (application as MainApplication).container
+        appViewModel = ViewModelProvider(
+            this,
+            AppViewModel.factory(container),
+        )[AppViewModel::class.java]
+        splashScreen.setKeepOnScreenCondition { !appViewModel.ui.value.isThemeInitialized }
+
+        // A restored Activity already consumed its launch intent. Replaying ACTION_SEND
+        // would enqueue the same shared track a second time.
+        if (savedInstanceState == null) handleIntent(intent)
+
+        setContent {
+            val appUi by appViewModel.ui.collectAsStateWithLifecycle()
+            AppTheme(themeMode = appUi.themeMode) {
+                AppRoot(
+                    container = container,
+                    appViewModel = appViewModel,
+                    keyboardShortcuts = keyboardShortcuts,
+                    themeMode = appUi.themeMode,
+                    onThemeModeChange = appViewModel::setThemeMode,
+                )
+            }
+        }
+    }
+
+    // Unhandled keys land here, which leaves a focused text field its own use of Ctrl+Right.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        keyboardShortcuts.dispatch(event) || super.onKeyDown(keyCode, event)
+
+    override fun onProvideKeyboardShortcuts(
+        data: MutableList<KeyboardShortcutGroup>,
+        menu: Menu?,
+        deviceId: Int,
+    ) {
+        super.onProvideKeyboardShortcuts(data, menu, deviceId)
+        data.add(keyboardShortcuts.describe(this))
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent == null) return
+        if (!::appViewModel.isInitialized) return
+
+        when (intent.action) {
+            Intent.ACTION_SEND -> handleShareIntent(intent)
+            Intent.ACTION_VIEW -> handleViewIntent(intent.data)
+            else -> {
+                // OAuth callback can also arrive as VIEW without explicit action on some devices.
+                if (intent.data != null) handleViewIntent(intent.data)
+            }
+        }
+    }
+
+    private fun handleShareIntent(intent: Intent) {
+        if (intent.type != "text/plain") return
+        val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+        val url = extractUrl(sharedText) ?: return
+        appViewModel.onSharedUrl(url)
+        // Consume the launch intent as well as the ViewModel event. Android can
+        // recreate this Activity while retaining its most recent Intent.
+        intent.removeExtra(Intent.EXTRA_TEXT)
+        intent.action = Intent.ACTION_MAIN
+    }
+
+    private fun handleViewIntent(uri: Uri?) {
+        if (uri == null) return
+        if (!isOAuthCallbackUri(uri)) return
+
+        val code = uri.getQueryParameter("code")
+        val state = uri.getQueryParameter("state")
+        val error = uri.getQueryParameter("error")
+        // error_description is intentionally ignored for UI (not logged, not displayed raw).
+        appViewModel.handleOAuthCallback(code, state, error)
+    }
+
+    private fun isOAuthCallbackUri(uri: Uri): Boolean {
+        val clientId = try {
+            container.appConfig.discordClientId
+        } catch (_: Exception) {
+            ""
+        }
+        if (clientId.isNotBlank()) {
+            return DiscordOAuth.isOAuthCallback(uri, clientId)
+        }
+        // Fallback for misconfigured builds: still recognize the custom scheme shape.
+        val scheme = uri.scheme.orEmpty()
+        return scheme.startsWith("discord-") && uri.path == "/authorize/callback"
+    }
+
+    private fun extractUrl(text: String): String? =
+        URL_REGEX.find(text)?.value
+
+    private companion object {
+        val URL_REGEX = Regex("""https?://\S+""")
+    }
+}

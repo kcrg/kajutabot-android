@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="kajuta_accent">#6541CC</color>
+    <color name="app_accent">#6541CC</color>
     <color name="app_window_background">#FAF8FC</color>
     <color name="splash_background">#FAF8FC</color>
     <color name="splash_mark">#6541CC</color>

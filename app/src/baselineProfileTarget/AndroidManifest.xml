@@ -4,10 +4,10 @@
         <activity
             android:name=".BaselineProfileSetupActivity"
             android:exported="true"
-            android:theme="@style/Theme.KajutaBot" />
+            android:theme="@style/Theme.App" />
         <activity
             android:name=".BaselineProfileScreensActivity"
             android:exported="true"
-            android:theme="@style/Theme.KajutaBot" />
+            android:theme="@style/Theme.App" />
     </application>
 </manifest>

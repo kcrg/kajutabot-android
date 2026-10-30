@@ -17,47 +17,47 @@
         },
         {
             "id": 3,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$Contact.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$Contact.class",
             "provided_by_build_system": false
         },
         {
             "id": 4,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$DiscordSelection.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$DiscordSelection.class",
             "provided_by_build_system": false
         },
         {
             "id": 5,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$Favorites.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$Favorites.class",
             "provided_by_build_system": false
         },
         {
             "id": 6,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$History.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$History.class",
             "provided_by_build_system": false
         },
         {
             "id": 7,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$Libraries.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$Libraries.class",
             "provided_by_build_system": false
         },
         {
             "id": 8,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$More.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$More.class",
             "provided_by_build_system": false
         },
         {
             "id": 9,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$Player.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$Player.class",
             "provided_by_build_system": false
         },
         {
             "id": 10,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$Search.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$Search.class",
             "provided_by_build_system": false
         },
         {
             "id": 11,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$SharedTrack.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$SharedTrack.class",
             "provided_by_build_system": false
         },
         {
@@ -104,7 +104,7 @@
         },
         {
             "id": 18,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$SharedTrack$Companion.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$SharedTrack$Companion.class",
             "provided_by_build_system": false
         },
         {
@@ -545,72 +545,72 @@
         },
         {
             "id": 81,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\app\\AuthenticatedGate.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\app\\AuthenticatedGate.class",
             "provided_by_build_system": false
         },
         {
             "id": 82,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\components\\SwipeActionStatus.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\components\\SwipeActionStatus.class",
             "provided_by_build_system": false
         },
         {
             "id": 83,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\feedback\\FeedbackEffect.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\feedback\\FeedbackEffect.class",
             "provided_by_build_system": false
         },
         {
             "id": 84,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppDestination.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppDestination.class",
             "provided_by_build_system": false
         },
         {
             "id": 85,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\onboarding\\OnboardingVisual.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\onboarding\\OnboardingVisual.class",
             "provided_by_build_system": false
         },
         {
             "id": 86,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\player\\GuildAccessState.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\player\\GuildAccessState.class",
             "provided_by_build_system": false
         },
         {
             "id": 87,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\player\\LocalVolumeError.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\player\\LocalVolumeError.class",
             "provided_by_build_system": false
         },
         {
             "id": 88,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\player\\PlayerControlAction.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\player\\PlayerControlAction.class",
             "provided_by_build_system": false
         },
         {
             "id": 89,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\player\\PlayerSurfaceState.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\player\\PlayerSurfaceState.class",
             "provided_by_build_system": false
         },
         {
             "id": 90,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\player\\QueueLoadState.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\player\\QueueLoadState.class",
             "provided_by_build_system": false
         },
         {
             "id": 91,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\player\\RealtimeConnectionState.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\player\\RealtimeConnectionState.class",
             "provided_by_build_system": false
         },
         {
             "id": 92,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\player\\RealtimeOwner.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\player\\RealtimeOwner.class",
             "provided_by_build_system": false
         },
         {
             "id": 93,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\player\\SearchSourceOption.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\player\\SearchSourceOption.class",
             "provided_by_build_system": false
         },
         {
             "id": 94,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\theme\\ThemeMode.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\theme\\ThemeMode.class",
             "provided_by_build_system": false
         },
         {
@@ -625,7 +625,7 @@
         },
         {
             "id": 97,
-            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\kajutabot\\ui\\navigation\\AppRoute$SharedTrack$$serializer.class",
+            "filename": "D:\\Repos\\kajutabot-android\\app\\build\\intermediates\\built_in_kotlinc\\release\\compileReleaseKotlin\\classes\\com\\tryniecki\\qumi\\ui\\navigation\\AppRoute$SharedTrack$$serializer.class",
             "provided_by_build_system": false
         },
         {
@@ -9792,155 +9792,155 @@
         },
         {
             "id": 2,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/AuthSessionResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/AuthSessionResponse;"
         },
         {
             "id": 3,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/AuthUserResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/AuthUserResponse;"
         },
         {
             "id": 4,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/DiscordOAuthExchangeRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/DiscordOAuthExchangeRequest;"
         },
         {
             "id": 5,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/RefreshUserSessionRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/RefreshUserSessionRequest;"
         },
         {
             "id": 6,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/SessionType;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/SessionType;"
         },
         {
             "id": 7,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/common/PlaybackTrackResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/common/PlaybackTrackResponse;"
         },
         {
             "id": 8,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/common/SearchTrackResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/common/SearchTrackResponse;"
         },
         {
             "id": 9,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/discord/DiscordGuildResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/discord/DiscordGuildResponse;"
         },
         {
             "id": 10,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/discord/DiscordVoiceChannelResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/discord/DiscordVoiceChannelResponse;"
         },
         {
             "id": 11,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/error/KajutaBotProblemDetails;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/error/ProblemDetails;"
         },
         {
             "id": 12,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/favorites/AddFavoriteRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/favorites/AddFavoriteRequest;"
         },
         {
             "id": 13,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/favorites/FavoriteResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/favorites/FavoriteResponse;"
         },
         {
             "id": 14,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/favorites/QueueFavoritesRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/favorites/QueueFavoritesRequest;"
         },
         {
             "id": 15,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/history/EnqueueJellyfinTrackRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/history/EnqueueJellyfinTrackRequest;"
         },
         {
             "id": 16,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/history/PlaybackHistoryEntryResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/history/PlaybackHistoryEntryResponse;"
         },
         {
             "id": 17,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/history/PlaybackHistoryPageResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/history/PlaybackHistoryPageResponse;"
         },
         {
             "id": 18,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/playback/LocalVolumeStateDto;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/playback/LocalVolumeStateDto;"
         },
         {
             "id": 19,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/EnqueueRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/EnqueueRequest;"
         },
         {
             "id": 20,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/QueueEntryResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/QueueEntryResponse;"
         },
         {
             "id": 21,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/QueueMutationRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/QueueMutationRequest;"
         },
         {
             "id": 22,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/QueueSnapshotResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/QueueSnapshotResponse;"
         },
         {
             "id": 23,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SetQueueRepeatRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SetQueueRepeatRequest;"
         },
         {
             "id": 24,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SkipOutcome;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SkipOutcome;"
         },
         {
             "id": 25,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SkipQueueRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SkipQueueRequest;"
         },
         {
             "id": 26,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SwapQueueEntriesRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SwapQueueEntriesRequest;"
         },
         {
             "id": 27,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/radio/EnableRadioRequest;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/radio/EnableRadioRequest;"
         },
         {
             "id": 28,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/radio/RadioStateResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/radio/RadioStateResponse;"
         },
         {
             "id": 29,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/search/SearchItemResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/search/SearchItemResponse;"
         },
         {
             "id": 30,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/search/SearchResponse;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/search/SearchResponse;"
         },
         {
             "id": 31,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$Contact;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$Contact;"
         },
         {
             "id": 32,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$DiscordSelection;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$DiscordSelection;"
         },
         {
             "id": 33,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$Favorites;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$Favorites;"
         },
         {
             "id": 34,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$History;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$History;"
         },
         {
             "id": 35,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$Libraries;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$Libraries;"
         },
         {
             "id": 36,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$More;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$More;"
         },
         {
             "id": 37,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$Player;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$Player;"
         },
         {
             "id": 38,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$Search;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$Search;"
         },
         {
             "id": 39,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$SharedTrack;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$SharedTrack;"
         },
         {
             "id": 40,
@@ -10064,123 +10064,123 @@
         },
         {
             "id": 70,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/AuthSessionResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/AuthSessionResponse$Companion;"
         },
         {
             "id": 71,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/AuthUserResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/AuthUserResponse$Companion;"
         },
         {
             "id": 72,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/DiscordOAuthExchangeRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/DiscordOAuthExchangeRequest$Companion;"
         },
         {
             "id": 73,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/RefreshUserSessionRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/RefreshUserSessionRequest$Companion;"
         },
         {
             "id": 74,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/SessionType$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/SessionType$Companion;"
         },
         {
             "id": 75,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/common/PlaybackTrackResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/common/PlaybackTrackResponse$Companion;"
         },
         {
             "id": 76,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/common/SearchTrackResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/common/SearchTrackResponse$Companion;"
         },
         {
             "id": 77,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/discord/DiscordGuildResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/discord/DiscordGuildResponse$Companion;"
         },
         {
             "id": 78,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/discord/DiscordVoiceChannelResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/discord/DiscordVoiceChannelResponse$Companion;"
         },
         {
             "id": 79,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/error/KajutaBotProblemDetails$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/error/ProblemDetails$Companion;"
         },
         {
             "id": 80,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/favorites/AddFavoriteRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/favorites/AddFavoriteRequest$Companion;"
         },
         {
             "id": 81,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/favorites/FavoriteResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/favorites/FavoriteResponse$Companion;"
         },
         {
             "id": 82,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/favorites/QueueFavoritesRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/favorites/QueueFavoritesRequest$Companion;"
         },
         {
             "id": 83,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/history/EnqueueJellyfinTrackRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/history/EnqueueJellyfinTrackRequest$Companion;"
         },
         {
             "id": 84,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/history/PlaybackHistoryEntryResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/history/PlaybackHistoryEntryResponse$Companion;"
         },
         {
             "id": 85,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/history/PlaybackHistoryPageResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/history/PlaybackHistoryPageResponse$Companion;"
         },
         {
             "id": 86,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/playback/LocalVolumeStateDto$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/playback/LocalVolumeStateDto$Companion;"
         },
         {
             "id": 87,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/EnqueueRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/EnqueueRequest$Companion;"
         },
         {
             "id": 88,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/QueueEntryResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/QueueEntryResponse$Companion;"
         },
         {
             "id": 89,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/QueueMutationRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/QueueMutationRequest$Companion;"
         },
         {
             "id": 90,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/QueueSnapshotResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/QueueSnapshotResponse$Companion;"
         },
         {
             "id": 91,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SetQueueRepeatRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SetQueueRepeatRequest$Companion;"
         },
         {
             "id": 92,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SkipOutcome$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SkipOutcome$Companion;"
         },
         {
             "id": 93,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SkipQueueRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SkipQueueRequest$Companion;"
         },
         {
             "id": 94,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SwapQueueEntriesRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SwapQueueEntriesRequest$Companion;"
         },
         {
             "id": 95,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/radio/EnableRadioRequest$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/radio/EnableRadioRequest$Companion;"
         },
         {
             "id": 96,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/radio/RadioStateResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/radio/RadioStateResponse$Companion;"
         },
         {
             "id": 97,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/search/SearchItemResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/search/SearchItemResponse$Companion;"
         },
         {
             "id": 98,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/search/SearchResponse$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/search/SearchResponse$Companion;"
         },
         {
             "id": 99,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$SharedTrack$Companion;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$SharedTrack$Companion;"
         },
         {
             "id": 100,
@@ -10312,11 +10312,11 @@
         },
         {
             "id": 132,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/client/KajutaBotApi;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/client/ControlApi;"
         },
         {
             "id": 133,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/client/KajutaBotAuthApi;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/client/AuthApi;"
         },
         {
             "id": 134,
@@ -12160,123 +12160,123 @@
         },
         {
             "id": 594,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/api/model/auth/SessionType;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/api/model/auth/SessionType;"
         },
         {
             "id": 595,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/api/model/queue/SkipOutcome;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/api/model/queue/SkipOutcome;"
         },
         {
             "id": 596,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/app/AuthenticatedGate;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/app/AuthenticatedGate;"
         },
         {
             "id": 597,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/app/AuthenticatedGate;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/app/AuthenticatedGate;"
         },
         {
             "id": 598,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/components/SwipeActionStatus;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/components/SwipeActionStatus;"
         },
         {
             "id": 599,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/components/SwipeActionStatus;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/components/SwipeActionStatus;"
         },
         {
             "id": 600,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/feedback/FeedbackEffect;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/feedback/FeedbackEffect;"
         },
         {
             "id": 601,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/feedback/FeedbackEffect;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/feedback/FeedbackEffect;"
         },
         {
             "id": 602,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppDestination;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppDestination;"
         },
         {
             "id": 603,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/navigation/AppDestination;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/navigation/AppDestination;"
         },
         {
             "id": 604,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/onboarding/OnboardingVisual;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/onboarding/OnboardingVisual;"
         },
         {
             "id": 605,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/onboarding/OnboardingVisual;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/onboarding/OnboardingVisual;"
         },
         {
             "id": 606,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/player/GuildAccessState;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/player/GuildAccessState;"
         },
         {
             "id": 607,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/player/GuildAccessState;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/player/GuildAccessState;"
         },
         {
             "id": 608,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/player/LocalVolumeError;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/player/LocalVolumeError;"
         },
         {
             "id": 609,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/player/LocalVolumeError;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/player/LocalVolumeError;"
         },
         {
             "id": 610,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/player/PlayerControlAction;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/player/PlayerControlAction;"
         },
         {
             "id": 611,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/player/PlayerControlAction;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/player/PlayerControlAction;"
         },
         {
             "id": 612,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/player/PlayerSurfaceState;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/player/PlayerSurfaceState;"
         },
         {
             "id": 613,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/player/PlayerSurfaceState;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/player/PlayerSurfaceState;"
         },
         {
             "id": 614,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/player/QueueLoadState;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/player/QueueLoadState;"
         },
         {
             "id": 615,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/player/QueueLoadState;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/player/QueueLoadState;"
         },
         {
             "id": 616,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/player/RealtimeConnectionState;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/player/RealtimeConnectionState;"
         },
         {
             "id": 617,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/player/RealtimeConnectionState;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/player/RealtimeConnectionState;"
         },
         {
             "id": 618,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/player/RealtimeOwner;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/player/RealtimeOwner;"
         },
         {
             "id": 619,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/player/RealtimeOwner;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/player/RealtimeOwner;"
         },
         {
             "id": 620,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/player/SearchSourceOption;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/player/SearchSourceOption;"
         },
         {
             "id": 621,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/player/SearchSourceOption;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/player/SearchSourceOption;"
         },
         {
             "id": 622,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/theme/ThemeMode;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/theme/ThemeMode;"
         },
         {
             "id": 623,
-            "java_descriptor": "[Lcom/tryniecki/kajutabot/ui/theme/ThemeMode;"
+            "java_descriptor": "[Lcom/tryniecki/qumi/ui/theme/ThemeMode;"
         },
         {
             "id": 624,
@@ -12824,115 +12824,115 @@
         },
         {
             "id": 760,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/AuthSessionResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/AuthSessionResponse$$serializer;"
         },
         {
             "id": 761,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/AuthUserResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/AuthUserResponse$$serializer;"
         },
         {
             "id": 762,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/DiscordOAuthExchangeRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/DiscordOAuthExchangeRequest$$serializer;"
         },
         {
             "id": 763,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/auth/RefreshUserSessionRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/auth/RefreshUserSessionRequest$$serializer;"
         },
         {
             "id": 764,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/common/PlaybackTrackResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/common/PlaybackTrackResponse$$serializer;"
         },
         {
             "id": 765,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/common/SearchTrackResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/common/SearchTrackResponse$$serializer;"
         },
         {
             "id": 766,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/discord/DiscordGuildResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/discord/DiscordGuildResponse$$serializer;"
         },
         {
             "id": 767,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/discord/DiscordVoiceChannelResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/discord/DiscordVoiceChannelResponse$$serializer;"
         },
         {
             "id": 768,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/error/KajutaBotProblemDetails$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/error/ProblemDetails$$serializer;"
         },
         {
             "id": 769,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/favorites/AddFavoriteRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/favorites/AddFavoriteRequest$$serializer;"
         },
         {
             "id": 770,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/favorites/FavoriteResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/favorites/FavoriteResponse$$serializer;"
         },
         {
             "id": 771,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/favorites/QueueFavoritesRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/favorites/QueueFavoritesRequest$$serializer;"
         },
         {
             "id": 772,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/history/EnqueueJellyfinTrackRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/history/EnqueueJellyfinTrackRequest$$serializer;"
         },
         {
             "id": 773,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/history/PlaybackHistoryEntryResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/history/PlaybackHistoryEntryResponse$$serializer;"
         },
         {
             "id": 774,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/history/PlaybackHistoryPageResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/history/PlaybackHistoryPageResponse$$serializer;"
         },
         {
             "id": 775,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/playback/LocalVolumeStateDto$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/playback/LocalVolumeStateDto$$serializer;"
         },
         {
             "id": 776,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/EnqueueRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/EnqueueRequest$$serializer;"
         },
         {
             "id": 777,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/QueueEntryResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/QueueEntryResponse$$serializer;"
         },
         {
             "id": 778,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/QueueMutationRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/QueueMutationRequest$$serializer;"
         },
         {
             "id": 779,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/QueueSnapshotResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/QueueSnapshotResponse$$serializer;"
         },
         {
             "id": 780,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SetQueueRepeatRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SetQueueRepeatRequest$$serializer;"
         },
         {
             "id": 781,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SkipQueueRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SkipQueueRequest$$serializer;"
         },
         {
             "id": 782,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/queue/SwapQueueEntriesRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/queue/SwapQueueEntriesRequest$$serializer;"
         },
         {
             "id": 783,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/radio/EnableRadioRequest$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/radio/EnableRadioRequest$$serializer;"
         },
         {
             "id": 784,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/radio/RadioStateResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/radio/RadioStateResponse$$serializer;"
         },
         {
             "id": 785,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/search/SearchItemResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/search/SearchItemResponse$$serializer;"
         },
         {
             "id": 786,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/api/model/search/SearchResponse$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/api/model/search/SearchResponse$$serializer;"
         },
         {
             "id": 787,
-            "java_descriptor": "Lcom/tryniecki/kajutabot/ui/navigation/AppRoute$SharedTrack$$serializer;"
+            "java_descriptor": "Lcom/tryniecki/qumi/ui/navigation/AppRoute$SharedTrack$$serializer;"
         },
         {
             "id": 788,

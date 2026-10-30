@@ -9,7 +9,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Baseline + Startup Profile generator tailored to KajutaBot.
+ * Baseline + Startup Profile generator tailored to Qumi.
  *
  * Startup and post-startup CUJs are intentionally captured separately. Only the returning-user
  * launcher path is included in the Startup Profile, keeping DEX layout optimization focused on
@@ -27,7 +27,7 @@ class BaselineProfileGenerator {
 
     @Before
     fun prepareAppState() {
-        KajutaBotJourneys.prepareAuthenticatedSession(packageName)
+        AppJourneys.prepareAuthenticatedSession(packageName)
     }
 
     @Test
@@ -39,7 +39,7 @@ class BaselineProfileGenerator {
             stableIterations = 3,
             outputFilePrefix = "startup",
         ) {
-            KajutaBotJourneys.run { launchAuthenticatedApp(packageName) }
+            AppJourneys.run { launchAuthenticatedApp(packageName) }
         }
     }
 
@@ -52,7 +52,7 @@ class BaselineProfileGenerator {
             stableIterations = 3,
             outputFilePrefix = "critical-user-journeys",
         ) {
-            KajutaBotJourneys.run {
+            AppJourneys.run {
                 launchAuthenticatedApp(packageName)
                 runCriticalUserJourneys()
             }
@@ -68,7 +68,7 @@ class BaselineProfileGenerator {
             stableIterations = 3,
             outputFilePrefix = "isolated-screens",
         ) {
-            KajutaBotJourneys.run { runIsolatedScreens(packageName) }
+            AppJourneys.run { runIsolatedScreens(packageName) }
         }
     }
 }

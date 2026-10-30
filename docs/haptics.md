@@ -97,7 +97,7 @@ Run local checks:
 Run focused UI checks on a device that permits installing test APKs:
 
 ```powershell
-.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.tryniecki.kajutabot.HapticFeedbackTest,com.tryniecki.kajutabot.LocalVolumeSheetTest'
+.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.tryniecki.qumi.HapticFeedbackTest,com.tryniecki.qumi.LocalVolumeSheetTest'
 ```
 
 Physical effect strength and feel require a manual device check with system touch
