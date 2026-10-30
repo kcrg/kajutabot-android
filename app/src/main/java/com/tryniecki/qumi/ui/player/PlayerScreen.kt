@@ -35,6 +35,7 @@ import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
@@ -52,8 +53,6 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
@@ -72,6 +71,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -353,18 +353,27 @@ fun PlayerScreen(
             }
         }
     }
-    val pendingEntryIds = pendingIndexById.keys
+    // A queue update during a drag must not restart the gesture, so it reads these instead.
+    val currentPending by rememberUpdatedState(pending)
+    val currentIndexById by rememberUpdatedState(pendingIndexById)
+    val currentQueueVersion by rememberUpdatedState(ui.queue?.version)
+    val currentOnSwapEntries by rememberUpdatedState(onSwapEntries)
+    val canReorder by rememberUpdatedState(
+        !ui.isMutating && ui.retainedRemovalEntries.isEmpty() && pending.size >= 2,
+    )
     val density = LocalDensity.current
     val scrollEdgePx = with(density) { 72.dp.toPx() }
     val maxScrollPerFramePx = with(density) { 18.dp.toPx() }
     val favoriteTouchAreaPx = with(density) { 56.dp.toPx() }
+    // Lazy offsets start below the content padding, pointer positions at the top of the container.
+    fun LazyListItemInfo.topInContainer(): Int = offset + listState.layoutInfo.beforeContentPadding
     fun updateDragTarget() {
         var target = dragTargetIndex
         var nearestDistance = Float.POSITIVE_INFINITY
         for (info in listState.layoutInfo.visibleItemsInfo) {
             val id = info.key as? String ?: continue
-            val index = pendingIndexById[id] ?: continue
-            val distance = kotlin.math.abs(dragPointerY - (info.offset + info.size / 2f))
+            val index = currentIndexById[id] ?: continue
+            val distance = kotlin.math.abs(dragPointerY - (info.topInContainer() + info.size / 2f))
             if (distance < nearestDistance) {
                 nearestDistance = distance
                 target = index
@@ -547,15 +556,15 @@ fun PlayerScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .onSizeChanged { viewportHeightPx = it.height }
-                        .pointerInput(pendingIndexById, ui.queue?.version, ui.isMutating, ui.retainedRemovalEntries) {
-                            if (ui.isMutating || ui.retainedRemovalEntries.isNotEmpty() || pending.size < 2) return@pointerInput
+                        .pointerInput(favoriteTouchAreaPx) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
+                                if (!canReorder) return@awaitEachGesture
                                 val totalWidth = size.width.toFloat()
                                 val sourceInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
                                     val id = info.key as? String
-                                    if (id == null || id !in pendingEntryIds) return@firstOrNull false
-                                    val itemTop = info.offset.toFloat()
+                                    if (id == null || id !in currentIndexById) return@firstOrNull false
+                                    val itemTop = info.topInContainer().toFloat()
                                     val itemBottom = itemTop + info.size
                                     down.position.y >= itemTop && down.position.y <= itemBottom &&
                                         down.position.x < totalWidth - favoriteTouchAreaPx
@@ -564,12 +573,12 @@ fun PlayerScreen(
                                 val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
                                 longPress.consume()
                                 draggingEntryId = sourceId
-                                dragStartTopPx = sourceInfo.offset.toFloat()
+                                dragStartTopPx = sourceInfo.topInContainer().toFloat()
                                 dragHeightPx = sourceInfo.size
                                 dragOffsetPx = 0f
                                 dragPointerY = longPress.position.y
-                                dragTargetIndex = pendingIndexById[sourceId] ?: -1
-                                dragSnapshotVersion = ui.queue?.version
+                                dragTargetIndex = currentIndexById[sourceId] ?: -1
+                                dragSnapshotVersion = currentQueueVersion
                                 reorderFeedback.start(dragTargetIndex)
                                 try {
                                     val completed = drag(longPress.id) { change ->
@@ -579,11 +588,11 @@ fun PlayerScreen(
                                         updateDragTarget()
                                     }
                                     if (completed) {
-                                        val targetId = pending.getOrNull(dragTargetIndex)?.entryId
+                                        val targetId = currentPending.getOrNull(dragTargetIndex)?.entryId
                                         val version = dragSnapshotVersion
                                         if (targetId != null && version != null) {
-                                            val swapped = swappedQueueEntries(pending, sourceId, targetId)
-                                            if (swapped != null && onSwapEntries(sourceId, targetId, version)) {
+                                            val swapped = swappedQueueEntries(currentPending, sourceId, targetId)
+                                            if (swapped != null && currentOnSwapEntries(sourceId, targetId, version)) {
                                                 previewOrder = swapped
                                             }
                                         } else {
@@ -602,7 +611,7 @@ fun PlayerScreen(
                             withFrameNanos { }
                             val delta = queueDragAutoScrollDelta(
                                 dragPointerY,
-                                listState.layoutInfo.viewportEndOffset.toFloat(),
+                                viewportHeightPx.toFloat(),
                                 scrollEdgePx,
                                 maxScrollPerFramePx,
                             )
@@ -824,35 +833,23 @@ fun PlayerScreen(
                                 .fillMaxWidth()
                                 .height(with(density) { dragHeightPx.toDp() })
                                 .pointerHoverIcon(PointerIcon(android.view.PointerIcon.TYPE_GRABBING))
+                                .testTag("queue-drag-preview")
                                 .shadow(8.dp, RoundedCornerShape(12.dp)),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                         ) {
-                            Box {
-                                ListItem(
-                                    modifier = Modifier.fillMaxSize(),
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                    contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
-                                    leadingContent = {
-                                        TrackArtwork(draggedEntry.track.artworkUrl, modifier = Modifier.size(64.dp))
-                                    },
-                                    supportingContent = { Text(formatDuration(draggedEntry.track.durationMilliseconds)) },
-                                    trailingContent = {
-                                        FavoriteTrackButton(
-                                            track = draggedEntry.track,
-                                            checked = isFavorite(draggedEntry.track),
-                                            status = favoriteStatus(draggedEntry.track),
-                                            enabled = false,
-                                            onToggle = onToggleFavorite,
-                                        )
-                                    },
-                                ) {
-                                    Text(draggedEntry.track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                }
-                                QueuePositionIndicator(
-                                    pendingIndexById.getValue(draggedEntry.entryId) + 1,
-                                    Modifier.align(Alignment.TopEnd),
-                                )
-                            }
+                            QueueTrackCardContent(
+                                track = draggedEntry.track,
+                                position = pendingIndexById.getValue(draggedEntry.entryId) + 1,
+                                trailingContent = {
+                                    FavoriteTrackButton(
+                                        track = draggedEntry.track,
+                                        checked = isFavorite(draggedEntry.track),
+                                        status = favoriteStatus(draggedEntry.track),
+                                        enabled = !favoritesBusy,
+                                        onToggle = {},
+                                    )
+                                },
+                            )
                         }
                     }
                 }

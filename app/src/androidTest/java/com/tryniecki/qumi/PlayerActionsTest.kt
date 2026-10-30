@@ -1,9 +1,10 @@
 package com.tryniecki.qumi
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.Composable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -17,6 +18,10 @@ import androidx.compose.ui.test.down
 import androidx.compose.ui.test.moveBy
 import androidx.compose.ui.test.up
 import androidx.compose.ui.test.advanceEventTime
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.bottomCenter
+import androidx.compose.ui.test.center
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tryniecki.qumi.api.model.common.PlaybackTrackResponse
 import com.tryniecki.qumi.api.model.discord.DiscordGuildResponse
@@ -148,5 +153,80 @@ class PlayerActionsTest {
         }
         compose.waitForIdle()
         assertEquals(Triple("first", "second", 7L), moved)
+    }
+
+    @Test
+    fun longPressAnywhereOnARowLiftsThatRowInPlace() {
+        compose.setContent { MaterialTheme { screen(state()) } }
+        val row = compose.onNodeWithTag("queue-drag-first", useUnmergedTree = true)
+        row.performScrollTo()
+        val rowBounds = row.getUnclippedBoundsInRoot()
+        // The auto-scroll loop keeps Compose busy for a whole drag, so the clock is driven by hand.
+        compose.mainClock.autoAdvance = false
+        row.performTouchInput {
+            down(bottomCenter - Offset(0f, 4f))
+            advanceEventTime(700)
+            moveBy(Offset(0f, 1f))
+        }
+        compose.mainClock.advanceTimeBy(100)
+        val preview = compose.onNodeWithTag("queue-drag-preview", useUnmergedTree = true)
+            .getUnclippedBoundsInRoot()
+        assertEquals(rowBounds.top.value, preview.top.value, 1f)
+        assertEquals(rowBounds.bottom.value, preview.bottom.value, 1f)
+        row.performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test
+    fun queueUpdateDuringADragDoesNotDropIt() {
+        var moved: Triple<String, String, Long>? = null
+        val ui = mutableStateOf(state())
+        compose.setContent {
+            MaterialTheme {
+                screen(ui.value, onSwap = { first, second, version ->
+                    moved = Triple(first, second, version)
+                    true
+                })
+            }
+        }
+        val row = compose.onNodeWithTag("queue-drag-first", useUnmergedTree = true)
+        row.performScrollTo()
+        compose.mainClock.autoAdvance = false
+        row.performTouchInput {
+            down(center)
+            advanceEventTime(700)
+            moveBy(Offset(0f, 1f))
+        }
+        compose.mainClock.advanceTimeBy(100)
+        compose.runOnUiThread {
+            ui.value = ui.value.copy(queue = ui.value.queue?.copy(version = 8, queueVersion = 8))
+        }
+        compose.mainClock.advanceTimeBy(100)
+        compose.onNodeWithTag("queue-drag-preview", useUnmergedTree = true).assertExists()
+        row.performTouchInput {
+            repeat(6) {
+                moveBy(Offset(0f, 100f))
+                advanceEventTime(32)
+            }
+            up()
+        }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        assertEquals(Triple("first", "second", 7L), moved)
+    }
+
+    @Composable
+    private fun screen(
+        ui: PlayerScreenState,
+        onSwap: (String, String, Long) -> Boolean = { _, _, _ -> true },
+    ) {
+        PlayerScreen(
+            ui = ui,
+            onDiscordSelectionOpen = {},
+            onSkip = {}, onStop = {}, onRepeatToggle = {}, onRadioToggle = {},
+            onRemoveEntry = {}, onSwapEntries = onSwap, onClearQueue = {},
+            isFavorite = { false }, onToggleFavorite = {},
+            favoritesBusy = false, onDismissMessage = {}, onSearchOpen = {},
+        )
     }
 }
