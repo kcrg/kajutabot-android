@@ -1,25 +1,24 @@
 package com.tryniecki.kajutabot.ui.player
 
 import android.os.SystemClock
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
@@ -27,12 +26,28 @@ import kotlinx.coroutines.delay
  * Shared local playback-progress state.
  *
  * Anchored to the latest backend position and playback instance, then advanced
- * on the monotonic clock between snapshots. Only the reading subtree recomposes.
+ * on the monotonic clock between snapshots. Read [fraction] in the draw phase so
+ * a tick redraws the bar without recomposing its parent.
  */
-data class PlaybackProgress(
-    val positionMs: Long?,
-    val fraction: Float,
-)
+@Stable
+class PlaybackProgressState(
+    private val reportedPositionMs: Long?,
+    private val anchorElapsedRealtimeMs: Long,
+    private val durationMs: Long,
+    private val isPlaying: Boolean,
+    nowElapsedRealtimeMs: Long,
+) {
+    var nowElapsedRealtimeMs by mutableLongStateOf(nowElapsedRealtimeMs)
+        internal set
+
+    val positionMs: Long?
+        get() = playbackPositionAt(
+            reportedPositionMs, anchorElapsedRealtimeMs, nowElapsedRealtimeMs, durationMs, isPlaying,
+        )
+
+    val fraction: Float
+        get() = positionMs?.let { progressFraction(it, durationMs) } ?: 0f
+}
 
 @Composable
 fun rememberPlaybackProgress(
@@ -42,46 +57,39 @@ fun rememberPlaybackProgress(
     durationMs: Long,
     isPlaying: Boolean,
     tickMs: Long = PROGRESS_TICK_MS,
-): PlaybackProgress {
-    val anchorElapsedRealtimeMs = remember(
-        playbackKey, reportedPositionMs, observedAtElapsedRealtimeMs, durationMs, isPlaying,
-    ) {
-        observedAtElapsedRealtimeMs ?: SystemClock.elapsedRealtime()
-    }
-    var nowElapsedRealtime by remember(
+): PlaybackProgressState {
+    val progress = remember(
         playbackKey, reportedPositionMs, observedAtElapsedRealtimeMs, durationMs, isPlaying,
     ) {
         // A newly mounted screen must show the time elapsed since the snapshot
-        // immediately, before the first 200 ms tick.
-        mutableLongStateOf(SystemClock.elapsedRealtime())
+        // immediately, before the first tick.
+        val now = SystemClock.elapsedRealtime()
+        PlaybackProgressState(
+            reportedPositionMs = reportedPositionMs,
+            anchorElapsedRealtimeMs = observedAtElapsedRealtimeMs ?: now,
+            durationMs = durationMs,
+            isPlaying = isPlaying,
+            nowElapsedRealtimeMs = now,
+        )
     }
-    LaunchedEffect(playbackKey, reportedPositionMs, observedAtElapsedRealtimeMs, durationMs, isPlaying, tickMs) {
+    LaunchedEffect(progress, tickMs) {
         if (!isPlaying) return@LaunchedEffect
         while (true) {
             delay(tickMs)
-            nowElapsedRealtime = SystemClock.elapsedRealtime()
+            // The frame clock pauses while the app is stopped, which also pauses this ticker.
+            withFrameMillis { progress.nowElapsedRealtimeMs = SystemClock.elapsedRealtime() }
         }
     }
-    val positionMs = playbackPositionAt(
-        reportedPositionMs, anchorElapsedRealtimeMs, nowElapsedRealtime, durationMs, isPlaying,
-    )
-    return PlaybackProgress(
-        positionMs = positionMs,
-        fraction = if (positionMs == null) 0f else progressFraction(positionMs, durationMs),
-    )
+    return progress
 }
 
-/** Progress represents elapsed time, so its interpolation stays linear. */
+/** Elapsed label that changes once per second, however often [progress] ticks. */
 @Composable
-fun rememberSmoothPlaybackFraction(playbackKey: String, fraction: Float): Float {
-    return key(playbackKey) {
-        val animatedFraction by animateFloatAsState(
-            targetValue = fraction,
-            animationSpec = tween(durationMillis = PROGRESS_TICK_MS.toInt(), easing = LinearEasing),
-            label = "playbackProgress",
-        )
-        animatedFraction
+fun rememberPlaybackElapsedText(progress: PlaybackProgressState): String {
+    val elapsedSeconds by remember(progress) {
+        derivedStateOf { progress.positionMs?.let { it / 1000 } }
     }
+    return remember(elapsedSeconds) { formatPlaybackElapsed(elapsedSeconds?.let { it * 1000 }) }
 }
 
 /**
@@ -100,19 +108,17 @@ fun PlaybackProgressIndicator(
     val progress = rememberPlaybackProgress(
         playbackKey, reportedPositionMs, observedAtElapsedRealtimeMs, durationMs, isPlaying,
     )
-    val animatedFraction = rememberSmoothPlaybackFraction(playbackKey, progress.fraction)
-
-    val elapsedText = remember(progress.positionMs?.let { it / 1000 }) {
-        formatPlaybackElapsed(progress.positionMs)
-    }
+    val elapsedText = rememberPlaybackElapsedText(progress)
     val totalText = remember(durationMs) {
         formatPlaybackTotal(durationMs)
     }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         LinearWavyProgressIndicator(
-            progress = { animatedFraction },
-            modifier = Modifier.fillMaxWidth(),
+            progress = { progress.fraction },
+            // The wave redraws every frame. Its own layer limits the recording, and on devices
+            // with partial updates also the damage, to the bar. Some devices always redraw the window.
+            modifier = Modifier.fillMaxWidth().graphicsLayer(),
         )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(

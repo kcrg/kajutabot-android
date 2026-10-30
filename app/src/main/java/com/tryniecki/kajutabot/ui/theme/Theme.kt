@@ -11,7 +11,9 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 
@@ -82,19 +84,22 @@ fun KajutaBotTheme(
     }
 
     val context = LocalContext.current
-    val colorScheme = when (themeMode) {
-        ThemeMode.LIGHT -> LightColorScheme
-        ThemeMode.DARK -> DarkColorScheme
-        ThemeMode.NATIVE -> {
-            // Dynamic Material You colors are available from Android 12 (API 31).
-            // On Android 10/11, Systemowy still follows the system night mode,
-            // but uses KajutaBot's own light/dark color schemes.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (systemDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            } else if (systemDarkTheme) {
-                DarkColorScheme
-            } else {
-                LightColorScheme
+    // A new dynamic scheme instance would invalidate every color reader in the app.
+    val colorScheme = remember(themeMode, systemDarkTheme, context, LocalConfiguration.current) {
+        when (themeMode) {
+            ThemeMode.LIGHT -> LightColorScheme
+            ThemeMode.DARK -> DarkColorScheme
+            ThemeMode.NATIVE -> {
+                // Dynamic Material You colors are available from Android 12 (API 31).
+                // On Android 10/11, Systemowy still follows the system night mode,
+                // but uses KajutaBot's own light/dark color schemes.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (systemDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                } else if (systemDarkTheme) {
+                    DarkColorScheme
+                } else {
+                    LightColorScheme
+                }
             }
         }
     }

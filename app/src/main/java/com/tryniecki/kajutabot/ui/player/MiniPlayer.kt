@@ -14,11 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -98,8 +96,6 @@ fun MiniPlayer(
         isPlaying = slide.isPlaying,
     )
 
-    val animatedFraction = rememberSmoothPlaybackFraction(slide.identity, progress.fraction)
-
     Surface(
         tonalElevation = 2.dp,
         modifier = modifier
@@ -171,9 +167,7 @@ fun MiniPlayer(
                                 overflow = TextOverflow.Ellipsis,
                             )
 
-                            val elapsedText = remember(progress.positionMs?.let { it / 1000 }) {
-                                formatPlaybackElapsed(progress.positionMs)
-                            }
+                            val elapsedText = rememberPlaybackElapsedText(progress)
                             val totalText = remember(current.durationMs) {
                                 formatPlaybackTotal(current.durationMs)
                             }
@@ -209,7 +203,7 @@ fun MiniPlayer(
             }
 
             LinearProgressIndicator(
-                progress = { animatedFraction },
+                progress = { progress.fraction },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(3.dp),

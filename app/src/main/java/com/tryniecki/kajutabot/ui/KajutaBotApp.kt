@@ -105,12 +105,10 @@ import com.tryniecki.kajutabot.ui.player.shouldShowMiniPlayer
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.feedback.ObserveUserFeedback
 import com.tryniecki.kajutabot.ui.text.asString
-import com.tryniecki.kajutabot.ui.text.resolve
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import com.tryniecki.kajutabot.ui.theme.KbMotion
 import com.tryniecki.kajutabot.ui.theme.directionalSharedAxisXMotion
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.flow.map
 
 @Composable
 fun KajutaBotApp(
@@ -414,7 +412,6 @@ private fun AuthenticatedContent(
     val mediaServiceActive by container.mediaServiceActive.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
-    val appUi by appViewModel.ui.collectAsStateWithLifecycle()
     val motion = MaterialTheme.motionScheme
     val density = LocalDensity.current
     val hierarchySlideDistancePx = with(density) { KbMotion.HIERARCHY_SLIDE_DISTANCE.roundToPx() }

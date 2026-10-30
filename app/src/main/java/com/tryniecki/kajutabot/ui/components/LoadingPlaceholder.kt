@@ -6,16 +6,16 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
@@ -23,11 +23,12 @@ import androidx.compose.ui.unit.dp
 /**
  * One subtle pulse shared by a whole skeleton section. Keeping the animation at
  * section level avoids running a separate infinite transition for every placeholder.
+ * The returned provider is read while drawing, so the pulse does not recompose the section.
  */
 @Composable
-fun rememberSkeletonPulse(): Float {
+fun rememberSkeletonPulse(): () -> Float {
     val transition = rememberInfiniteTransition(label = "skeletonPulse")
-    val alpha by transition.animateFloat(
+    val alpha = transition.animateFloat(
         initialValue = 0.48f,
         targetValue = 0.78f,
         animationSpec = infiniteRepeatable(
@@ -36,19 +37,20 @@ fun rememberSkeletonPulse(): Float {
         ),
         label = "skeletonAlpha",
     )
-    return alpha
+    return remember(alpha) { { alpha.value } }
 }
 
 @Composable
 fun SkeletonBlock(
-    pulse: Float,
+    pulse: () -> Float,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(10.dp),
 ) {
+    val color = MaterialTheme.colorScheme.surfaceContainerHighest
     Box(
         modifier = modifier
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = pulse)),
+            .drawBehind { drawRect(color.copy(alpha = pulse())) },
     )
 }
 

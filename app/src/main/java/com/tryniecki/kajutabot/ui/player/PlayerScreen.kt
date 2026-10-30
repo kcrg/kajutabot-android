@@ -23,11 +23,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,7 +41,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButtonDefaults
@@ -51,7 +48,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,7 +61,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -81,10 +76,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -93,13 +85,10 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -117,8 +106,6 @@ import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
 import com.tryniecki.kajutabot.ui.feedback.ReorderFeedback
 import com.tryniecki.kajutabot.ui.feedback.rememberFeedbackPerformer
-import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
-import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.QueueEntryResponse
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
@@ -327,7 +314,6 @@ fun PlayerScreen(
     var dragPointerY by remember { mutableFloatStateOf(0f) }
     var dragTargetIndex by remember { mutableIntStateOf(-1) }
     var dragSnapshotVersion by remember { mutableStateOf<Long?>(null) }
-    var listCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var viewportHeightPx by remember { mutableIntStateOf(0) }
     var messageHeightPx by remember { mutableIntStateOf(0) }
     var nowPlayingHeightPx by remember { mutableIntStateOf(0) }
@@ -466,26 +452,15 @@ fun PlayerScreen(
     ) { innerPadding ->
         val hasMessage = ui.error != null || ui.info != null
         val queueBottomClearance = 128.dp
-        val emptyQueueMinHeight = with(density) {
-            val gaps = (if (hasMessage) 3 else 2) * 16.dp.toPx()
-            (viewportHeightPx - nowPlayingHeightPx - queueHeaderHeightPx -
-                (if (hasMessage) messageHeightPx else 0) - gaps -
-                (innerPadding.calculateTopPadding() + 8.dp).toPx() -
-                (innerPadding.calculateBottomPadding() + queueBottomClearance).toPx())
-                .coerceAtLeast(0f).toDp()
-        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .onGloballyPositioned {
-                    listCoordinates = it
-                    viewportHeightPx = it.size.height
-                }
+                .onSizeChanged { viewportHeightPx = it.height }
                 .pointerInput(pendingIndexById, ui.queue?.version, ui.isMutating, ui.retainedRemovalEntries) {
                     if (ui.isMutating || ui.retainedRemovalEntries.isNotEmpty() || pending.size < 2) return@pointerInput
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        val totalWidth = listCoordinates?.size?.width?.toFloat() ?: 1000f
+                        val totalWidth = size.width.toFloat()
                         val sourceInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
                             val id = info.key as? String
                             if (id == null || id !in pendingEntryIds) return@firstOrNull false
@@ -560,7 +535,7 @@ fun PlayerScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (ui.error != null || ui.info != null) {
-                item {
+                item(key = "message", contentType = "message") {
                     Card(
                         modifier = Modifier.onSizeChanged { messageHeightPx = it.height },
                         colors = CardDefaults.cardColors(
@@ -586,7 +561,7 @@ fun PlayerScreen(
                 }
             }
 
-            item {
+            item(key = "now-playing", contentType = "now-playing") {
                 val surfaceState = when {
                     ui.queue == null && ui.queueLoadState == QueueLoadState.ERROR -> PlayerSurfaceState.ERROR
                     ui.isInitialContentLoading -> PlayerSurfaceState.LOADING
@@ -637,7 +612,7 @@ fun PlayerScreen(
                 }
             }
 
-            item(key = "queue-header") {
+            item(key = "queue-header", contentType = "queue-header") {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.fillMaxWidth().onSizeChanged { queueHeaderHeightPx = it.height },
@@ -696,7 +671,20 @@ fun PlayerScreen(
                         Box(
                             modifier = Modifier.fillMaxWidth()
                                 .padding(top = 16.dp)
-                                .heightIn(min = emptyQueueMinHeight),
+                                // Sibling heights change on every frame of a size animation.
+                                // Reading them here keeps that work out of composition.
+                                .layout { measurable, constraints ->
+                                    val gaps = (if (hasMessage) 3 else 2) * 16.dp.toPx()
+                                    val minHeight = (viewportHeightPx - nowPlayingHeightPx - queueHeaderHeightPx -
+                                        (if (hasMessage) messageHeightPx else 0) - gaps -
+                                        (innerPadding.calculateTopPadding() + 8.dp).toPx() -
+                                        (innerPadding.calculateBottomPadding() + queueBottomClearance).toPx())
+                                        .coerceAtLeast(0f).roundToInt()
+                                    val placeable = measurable.measure(
+                                        constraints.copy(minHeight = minHeight.coerceAtMost(constraints.maxHeight)),
+                                    )
+                                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                                },
                             contentAlignment = Alignment.Center,
                         ) {
                             EmptyQueueCard(onSearchOpen = onSearchOpen)
@@ -706,7 +694,7 @@ fun PlayerScreen(
             }
 
             if (ui.isInitialContentLoading) {
-                item(key = "queue-loading") {
+                item(key = "queue-loading", contentType = "queue-loading") {
                     QueueSkeleton(
                         modifier = Modifier.animateItem(
                             fadeInSpec = motion.fastEffectsSpec(),
@@ -716,7 +704,7 @@ fun PlayerScreen(
                     )
                 }
             } else if (pending.isNotEmpty()) {
-                items(pending, key = { it.entryId }) { entry ->
+                items(pending, key = { it.entryId }, contentType = { "queue-entry" }) { entry ->
                     val entryIndex = pendingIndexById[entry.entryId] ?: -1
                     val dragged = draggingEntryId == entry.entryId
                     val target = dragTargetIndex == entryIndex

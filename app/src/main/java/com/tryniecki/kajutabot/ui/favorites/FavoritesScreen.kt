@@ -188,16 +188,16 @@ fun FavoritesScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
+            item(key = "header", contentType = "header") {
                 FavoritesHeader(ui, onRefresh, hasVisibleItems = visibleItems.isNotEmpty())
             }
             if (ui.error != null) {
-                item {
+                item(key = "error", contentType = "error") {
                     FavoritesErrorCard(ui.error, onDismiss)
                 }
             }
             if (ui.isLoading && visibleItems.isEmpty()) {
-                items(4, key = { "favorite-skeleton-$it" }) {
+                items(4, key = { "favorite-skeleton-$it" }, contentType = { "favorite-skeleton" }) {
                     FavoriteSkeletonCard(
                         modifier = Modifier.animateItem(
                             fadeInSpec = motion.fastEffectsSpec(),
@@ -207,16 +207,17 @@ fun FavoritesScreen(
                     )
                 }
             } else {
-                items(visibleItems, key = { it.contentUrl }) { fav ->
+                items(visibleItems, key = { it.contentUrl }, contentType = { "favorite" }) { fav ->
                     val addLabel = stringResource(R.string.action_add_to_queue)
                     val removeLabel = stringResource(R.string.action_remove_favorite)
+                    val identity = remember(fav.contentUrl) { favoriteIdentity(fav.contentUrl) }
                     SwipeActionCard(
                         addLabel = addLabel,
                         removeLabel = removeLabel,
-                        enabled = ui.favoriteStatuses[favoriteIdentity(fav.contentUrl)] != SwipeActionStatus.PENDING &&
-                            favoriteIdentity(fav.contentUrl) !in ui.retainedDeletedFavorites,
+                        enabled = ui.favoriteStatuses[identity] != SwipeActionStatus.PENDING &&
+                            identity !in ui.retainedDeletedFavorites,
                         addStatus = ui.queueStatuses[fav.contentUrl] ?: SwipeActionStatus.IDLE,
-                        removeStatus = ui.favoriteStatuses[favoriteIdentity(fav.contentUrl)] ?: SwipeActionStatus.IDLE,
+                        removeStatus = ui.favoriteStatuses[identity] ?: SwipeActionStatus.IDLE,
                         onAdd = { onPlaySingle(fav.contentUrl) },
                         onRemove = { onDelete(fav.contentUrl) },
                         modifier = Modifier.animateItem(
