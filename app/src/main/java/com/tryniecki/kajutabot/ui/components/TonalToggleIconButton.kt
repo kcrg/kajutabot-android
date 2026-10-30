@@ -22,19 +22,24 @@ fun TonalToggleIconButton(
     failure: Boolean = false,
     colors: IconToggleButtonColors = IconButtonDefaults.filledTonalIconToggleButtonColors(),
 ) {
-    FilledTonalIconToggleButton(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
+    ActionTooltip(
+        text = if (checked) checkedContentDescription else uncheckedContentDescription,
         modifier = modifier,
         enabled = enabled,
-        colors = colors,
     ) {
-        ActionFeedbackIcon(
-            status = if (failure) SwipeActionStatus.FAILURE else SwipeActionStatus.IDLE,
-            idleIconRes = iconRes,
-            contentDescription = if (failure) stringResource(R.string.action_failed)
-                else if (checked) checkedContentDescription else uncheckedContentDescription,
-            tint = LocalContentColor.current,
-        )
+        FilledTonalIconToggleButton(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            colors = colors,
+        ) {
+            ActionFeedbackIcon(
+                status = if (failure) SwipeActionStatus.FAILURE else SwipeActionStatus.IDLE,
+                idleIconRes = iconRes,
+                contentDescription = if (failure) stringResource(R.string.action_failed)
+                    else if (checked) checkedContentDescription else uncheckedContentDescription,
+                tint = LocalContentColor.current,
+            )
+        }
     }
 }

@@ -7,13 +7,18 @@ import kotlinx.coroutines.flow.map
 
 /** Handles navigation events by updating [NavigationState]. */
 class Navigator(private val state: NavigationState) {
-    private val reselectEvents = MutableSharedFlow<AppDestination>(extraBufferCapacity = 1)
-    private val reselectedByDestination = AppDestination.entries.associateWith { destination ->
-        reselectEvents.filter { it == destination }.map { }
+    private val commandEvents = MutableSharedFlow<Pair<AppDestination, ScreenCommand>>(extraBufferCapacity = 1)
+    private val commandsByDestination = AppDestination.entries.associateWith { destination ->
+        commandEvents.filter { (target, _) -> target == destination }.map { (_, command) -> command }
     }
 
-    /** Emits when the selected tab is tapped again. */
-    fun reselected(destination: AppDestination): Flow<Unit> = reselectedByDestination.getValue(destination)
+    /** Requests addressed to the screen at the root of [destination]. */
+    fun commands(destination: AppDestination): Flow<ScreenCommand> = commandsByDestination.getValue(destination)
+
+    /** Sends [command] to the screen of the selected tab. */
+    fun send(command: ScreenCommand) {
+        commandEvents.tryEmit(state.currentDestination to command)
+    }
 
     fun navigate(route: AppRoute) {
         val backStack = state.activeBackStack
@@ -22,10 +27,15 @@ class Navigator(private val state: NavigationState) {
 
     fun selectTopLevel(destination: AppDestination) {
         if (state.currentDestination == destination) {
-            reselectEvents.tryEmit(destination)
+            send(ScreenCommand.SCROLL_TO_TOP)
         } else {
             state.currentDestination = destination
         }
+    }
+
+    fun openSearch() {
+        state.currentDestination = AppDestination.PLAYER
+        navigate(AppRoute.Search)
     }
 
     fun goBack() {

@@ -47,20 +47,29 @@ class NavigatorTest {
     }
 
     @Test fun `tapping the selected tab reports a reselect only for that tab`() = runTest(UnconfinedTestDispatcher()) {
-        val favorites = mutableListOf<Unit>()
-        val history = mutableListOf<Unit>()
+        val favorites = mutableListOf<ScreenCommand>()
+        val history = mutableListOf<ScreenCommand>()
         val jobs = listOf(
-            launch { navigator.reselected(AppDestination.FAVORITES).toList(favorites) },
-            launch { navigator.reselected(AppDestination.HISTORY).toList(history) },
+            launch { navigator.commands(AppDestination.FAVORITES).toList(favorites) },
+            launch { navigator.commands(AppDestination.HISTORY).toList(history) },
         )
 
         navigator.selectTopLevel(AppDestination.FAVORITES)
         assertEquals(0, favorites.size)
 
         navigator.selectTopLevel(AppDestination.FAVORITES)
-        assertEquals(1, favorites.size)
+        assertEquals(listOf(ScreenCommand.SCROLL_TO_TOP), favorites)
         assertEquals(0, history.size)
         jobs.forEach { it.cancel() }
+    }
+
+    @Test fun `search opens over Player from any tab`() {
+        navigator.selectTopLevel(AppDestination.MORE)
+
+        navigator.openSearch()
+
+        assertEquals(AppDestination.PLAYER, state.currentDestination)
+        assertEquals(AppRoute.Search, state.currentRoute)
     }
 
     @Test fun `leaving falls back to Player only from that tab`() {

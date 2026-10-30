@@ -1,7 +1,9 @@
 package com.tryniecki.kajutabot.ui.theme
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.os.Build
+import android.view.WindowInsetsController
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
@@ -13,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
@@ -105,6 +108,10 @@ fun KajutaBotTheme(
     }
 
     val activity = context as? Activity
+    val windowBackground = colorScheme.background.toArgb()
+    SideEffect(activity, useDarkTheme, windowBackground) {
+        activity?.matchWindowControlsToTheme(useDarkTheme, windowBackground)
+    }
     SideEffect {
         activity?.window?.let { window ->
             WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -120,4 +127,29 @@ fun KajutaBotTheme(
         typography = Typography,
         content = content,
     )
+}
+
+/**
+ * Desktop window controls are drawn over the app, so they need to be told what is behind them:
+ * Android 14 reads the task's status bar color, which edge-to-edge leaves transparent and thus
+ * dark, and Android 15 onwards reads the caption bar appearance.
+ */
+private fun Activity.matchWindowControlsToTheme(useDarkTheme: Boolean, background: Int) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        setTaskDescription(
+            ActivityManager.TaskDescription.Builder()
+                .setPrimaryColor(background)
+                .setBackgroundColor(background)
+                .setStatusBarColor(background)
+                .build(),
+        )
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+        val transparent = WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND
+        val light = WindowInsetsController.APPEARANCE_LIGHT_CAPTION_BARS
+        window.insetsController?.setSystemBarsAppearance(
+            if (useDarkTheme) transparent else transparent or light,
+            transparent or light,
+        )
+    }
 }

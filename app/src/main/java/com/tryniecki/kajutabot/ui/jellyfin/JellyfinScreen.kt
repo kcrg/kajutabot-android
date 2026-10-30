@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,36 +30,42 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.components.TrackGridCells
+import com.tryniecki.kajutabot.ui.components.fullLineSpan
 import com.tryniecki.kajutabot.api.model.jellyfin.JellyfinAudioItemResponse
 import com.tryniecki.kajutabot.ui.components.SwipeActionCard
 import com.tryniecki.kajutabot.ui.components.SwipeActionHints
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.ui.components.TrackListCardContent
 import com.tryniecki.kajutabot.ui.favorites.FavoriteSkeletonCard
-import com.tryniecki.kajutabot.ui.navigation.ScrollToTopOnReselect
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommand
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommandEffect
 import com.tryniecki.kajutabot.ui.player.formatDuration
 import com.tryniecki.kajutabot.ui.text.asString
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
-fun JellyfinRoute(viewModel: JellyfinViewModel, reselected: Flow<Unit>) {
+fun JellyfinRoute(viewModel: JellyfinViewModel, commands: Flow<ScreenCommand>) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     SideEffect(viewModel, ui.isConnected) { viewModel.ensureLibraryLoaded() }
     JellyfinScreen(
         ui = ui,
         onSearchQueryChange = viewModel::setSearchQuery,
+        onRefresh = viewModel::reloadLibrary,
         onLoadMore = viewModel::loadMore,
         onRetry = viewModel::retryLoad,
         onEnqueue = viewModel::enqueue,
         onDismiss = viewModel::dismissMessage,
-        reselected = reselected,
+        commands = commands,
     )
 }
 
@@ -67,15 +73,25 @@ fun JellyfinRoute(viewModel: JellyfinViewModel, reselected: Flow<Unit>) {
 fun JellyfinScreen(
     ui: JellyfinUiState,
     onSearchQueryChange: (String) -> Unit,
+    onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     onEnqueue: (String) -> Unit,
     onDismiss: () -> Unit,
-    reselected: Flow<Unit>,
+    commands: Flow<ScreenCommand>,
 ) {
-    val listState = rememberLazyListState()
+    val listState = rememberLazyGridState()
     val motion = MaterialTheme.motionScheme
-    ScrollToTopOnReselect(listState, reselected)
+    val searchFocus = remember { FocusRequester() }
+    ScreenCommandEffect(
+        commands = commands,
+        onScrollToTop = { listState.animateScrollToItem(0) },
+        onRefresh = onRefresh,
+        onFocusSearch = {
+            listState.scrollToItem(0)
+            searchFocus.requestFocus()
+        },
+    )
     val currentUi by rememberUpdatedState(ui)
     val loadMore by rememberUpdatedState(onLoadMore)
     LaunchedEffect(listState) {
@@ -86,7 +102,8 @@ fun JellyfinScreen(
     }
 
     Scaffold { innerPadding ->
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = TrackGridCells,
             modifier = Modifier.fillMaxSize(),
             state = listState,
             contentPadding = PaddingValues(
@@ -96,14 +113,15 @@ fun JellyfinScreen(
                 bottom = innerPadding.calculateBottomPadding() + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "header", contentType = "header") {
+            item(key = "header", span = fullLineSpan, contentType = "header") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.nav_jellyfin), style = MaterialTheme.typography.titleLarge)
                     OutlinedTextField(
                         value = ui.searchQuery,
                         onValueChange = onSearchQueryChange,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().focusRequester(searchFocus),
                         label = { Text(stringResource(R.string.jellyfin_search)) },
                         singleLine = true,
                     )
@@ -111,7 +129,7 @@ fun JellyfinScreen(
                 }
             }
             if (ui.error != null) {
-                item(key = "error", contentType = "error") {
+                item(key = "error", span = fullLineSpan, contentType = "error") {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(ui.error.asString(), modifier = Modifier.weight(1f))
@@ -144,7 +162,7 @@ fun JellyfinScreen(
                     ),
                 )
             }
-            item(key = "footer", contentType = "footer") {
+            item(key = "footer", span = fullLineSpan, contentType = "footer") {
                 when {
                     ui.isLoadingMore -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(32.dp))

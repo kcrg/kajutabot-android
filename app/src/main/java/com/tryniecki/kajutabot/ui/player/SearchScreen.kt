@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.tryniecki.kajutabot.BuildConfig
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.components.ActionTooltip
 import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
 import com.tryniecki.kajutabot.ui.feedback.rememberFeedbackPerformer
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
@@ -133,11 +135,13 @@ fun SearchScreen(
                 TopAppBar(
                     title = { Text(stringResource(R.string.search_title)) },
                     navigationIcon = {
-                        IconButton(onClick = onClose) {
-                            Icon(
-                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_x_outline),
-                                contentDescription = stringResource(R.string.action_close),
-                            )
+                        ActionTooltip(stringResource(R.string.action_close)) {
+                            IconButton(onClick = onClose) {
+                                Icon(
+                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_x_outline),
+                                    contentDescription = stringResource(R.string.action_close),
+                                )
+                            }
                         }
                     },
                     actions = {
@@ -399,7 +403,7 @@ private fun SearchSourceDropdown(
     onSelected: (SearchSourceOption) -> Unit,
 ) {
     val performFeedback = rememberFeedbackPerformer()
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,

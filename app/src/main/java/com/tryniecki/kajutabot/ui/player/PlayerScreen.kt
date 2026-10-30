@@ -35,6 +35,8 @@ import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -80,6 +82,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
@@ -102,7 +106,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
-import com.tryniecki.kajutabot.ui.navigation.ScrollToTopOnReselect
+import com.tryniecki.kajutabot.ui.components.ActionTooltip
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommand
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommandEffect
 import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
 import com.tryniecki.kajutabot.ui.feedback.ReorderFeedback
 import com.tryniecki.kajutabot.ui.feedback.rememberFeedbackPerformer
@@ -165,7 +171,7 @@ fun PlayerRoute(
     onDiscordSelectionOpen: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
-    reselected: Flow<Unit> = emptyFlow(),
+    commands: Flow<ScreenCommand> = emptyFlow(),
 ) {
     val ui by viewModel.playerScreenState.collectAsStateWithLifecycle()
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
@@ -197,7 +203,7 @@ fun PlayerRoute(
         },
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
-        reselected = reselected,
+        commands = commands,
         onLocalVolumeOpen = { localVolumeOpen = true },
         showLocalVolumeButton = localVolume.showVolumeButton,
     )
@@ -295,7 +301,7 @@ fun PlayerScreen(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     onLocalVolumeOpen: () -> Unit = {},
     showLocalVolumeButton: Boolean = false,
-    reselected: Flow<Unit> = emptyFlow(),
+    commands: Flow<ScreenCommand> = emptyFlow(),
 ) {
     val motion = MaterialTheme.motionScheme
     val performFeedback = rememberFeedbackPerformer()
@@ -303,7 +309,11 @@ fun PlayerScreen(
     var confirmStop by rememberSaveable { mutableStateOf(false) }
     var confirmClear by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
-    ScrollToTopOnReselect(listState, reselected)
+    ScreenCommandEffect(
+        commands = commands,
+        onScrollToTop = { listState.animateScrollToItem(0) },
+        onRefresh = onRetryQueue,
+    )
     val showFloatingActions = rememberScrollAwareFabVisible(listState)
     val showBackToTop by remember(listState) {
         derivedStateOf {
@@ -375,21 +385,81 @@ fun PlayerScreen(
     val changeServerChannelDesc = stringResource(R.string.player_change_server_channel)
     val missingVoiceChannelDesc = stringResource(R.string.player_voice_channel_required)
     val needsVoiceChannel = ui.needsVoiceChannelSelection
+    val surfaceState = when {
+        ui.queue == null && ui.queueLoadState == QueueLoadState.ERROR -> PlayerSurfaceState.ERROR
+        ui.isInitialContentLoading -> PlayerSurfaceState.LOADING
+        else -> PlayerSurfaceState.READY
+    }
+    val nowPlayingControls: @Composable () -> Unit = {
+        NowPlayingControls(
+            queue = ui.queue,
+            presentedNowPlaying = ui.presentedNowPlaying ?: ui.queue?.nowPlayingPresentationOrNull(),
+            favoritesRadioSelected = ui.favoritesRadioSelected,
+            isMutating = ui.isMutating,
+            isQueueReordering = ui.isQueueReordering,
+            activeControlAction = ui.activeControlAction,
+            onSkip = onSkip,
+            onRequeueNowPlaying = onRequeueNowPlaying,
+            onStop = { confirmStop = true },
+            isFavorite = isFavorite,
+            favoriteStatus = favoriteStatus,
+            onToggleFavorite = onToggleFavorite,
+            favoritesBusy = favoritesBusy,
+            onRepeatToggle = onRepeatToggle,
+            onRadioToggle = onRadioToggle,
+            onRadioSourceToggle = onRadioSourceToggle,
+            onLocalVolumeOpen = onLocalVolumeOpen,
+            showLocalVolumeButton = showLocalVolumeButton,
+        )
+    }
+    // On a half-open foldable the controls leave this card for the flat half of the screen.
+    val nowPlayingSurface: @Composable (Boolean) -> Unit = { showControls ->
+        AnimatedContent(
+            modifier = Modifier.onSizeChanged { nowPlayingHeightPx = it.height },
+            targetState = surfaceState,
+            transitionSpec = {
+                fadeThrough(
+                    enterSpec = motion.defaultEffectsSpec(),
+                    exitSpec = motion.fastEffectsSpec(),
+                ).using(SizeTransform { _, _ -> motion.defaultSpatialSpec() })
+            },
+            label = "playerInitialState",
+        ) { state ->
+            when (state) {
+                PlayerSurfaceState.LOADING -> NowPlayingSkeletonCard()
+                PlayerSurfaceState.ERROR -> PlayerLoadErrorCard(
+                    message = ui.queueLoadError,
+                    onRetry = onRetryQueue,
+                )
+                PlayerSurfaceState.READY -> NowPlayingCard(
+                    queue = ui.queue,
+                    queueObservedAtElapsedRealtimeMs = ui.queueObservedAtElapsedRealtimeMs,
+                    presentedNowPlaying = ui.presentedNowPlaying
+                        ?: ui.queue?.nowPlayingPresentationOrNull(),
+                    controls = nowPlayingControls.takeIf { showControls },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+            }
+        }
+    }
     Scaffold(
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (showBackToTop) {
-                    SmallFloatingActionButton(
-                        onClick = {
-                            if (scrollToTopJob?.isActive != true) {
-                                scrollToTopJob = scrollScope.launch { listState.animateScrollToItem(0) }
-                            }
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_up_outline),
-                            contentDescription = stringResource(R.string.action_back_to_top),
-                        )
+                    ActionTooltip(stringResource(R.string.action_back_to_top)) {
+                        SmallFloatingActionButton(
+                            onClick = {
+                                if (scrollToTopJob?.isActive != true) {
+                                    scrollToTopJob = scrollScope.launch { listState.animateScrollToItem(0) }
+                                }
+                            },
+                        ) {
+                            Icon(
+                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_up_outline),
+                                contentDescription = stringResource(R.string.action_back_to_top),
+                            )
+                        }
                     }
                 }
                 AnimatedVisibility(
@@ -403,53 +473,57 @@ fun PlayerScreen(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        SmallFloatingActionButton(
-                            onClick = onDiscordSelectionOpen,
-                            modifier = Modifier.semantics {
-                                contentDescription = changeServerChannelDesc
-                                if (needsVoiceChannel) stateDescription = missingVoiceChannelDesc
-                            },
-                            containerColor = if (needsVoiceChannel) MaterialTheme.colorScheme.surfaceContainerHigh
-                                else MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = if (needsVoiceChannel) MaterialTheme.colorScheme.onSurfaceVariant
-                                else MaterialTheme.colorScheme.onPrimaryContainer,
-                        ) {
-                            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                                if (ui.selectedGuild != null) {
-                                    GuildAvatar(
-                                        iconUrl = ui.selectedGuild.iconUrl,
-                                        modifier = Modifier.size(32.dp).alpha(if (needsVoiceChannel) 0.55f else 1f),
-                                        iconSize = 18.dp,
-                                    )
-                                } else {
-                                    Icon(
-                                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_discord_outline),
-                                        contentDescription = null,
-                                    )
-                                }
-                                if (needsVoiceChannel) {
-                                    Box(
-                                        modifier = Modifier.align(Alignment.TopEnd)
-                                            .padding(2.dp)
-                                            .size(18.dp)
-                                            .background(MaterialTheme.colorScheme.error, CircleShape),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_alert_triangle_outline),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp),
-                                            tint = MaterialTheme.colorScheme.onError,
+                        ActionTooltip(changeServerChannelDesc) {
+                            SmallFloatingActionButton(
+                                onClick = onDiscordSelectionOpen,
+                                modifier = Modifier.semantics {
+                                    contentDescription = changeServerChannelDesc
+                                    if (needsVoiceChannel) stateDescription = missingVoiceChannelDesc
+                                },
+                                containerColor = if (needsVoiceChannel) MaterialTheme.colorScheme.surfaceContainerHigh
+                                    else MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = if (needsVoiceChannel) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.onPrimaryContainer,
+                            ) {
+                                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                                    if (ui.selectedGuild != null) {
+                                        GuildAvatar(
+                                            iconUrl = ui.selectedGuild.iconUrl,
+                                            modifier = Modifier.size(32.dp).alpha(if (needsVoiceChannel) 0.55f else 1f),
+                                            iconSize = 18.dp,
                                         )
+                                    } else {
+                                        Icon(
+                                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_brand_discord_outline),
+                                            contentDescription = null,
+                                        )
+                                    }
+                                    if (needsVoiceChannel) {
+                                        Box(
+                                            modifier = Modifier.align(Alignment.TopEnd)
+                                                .padding(2.dp)
+                                                .size(18.dp)
+                                                .background(MaterialTheme.colorScheme.error, CircleShape),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_alert_triangle_outline),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp),
+                                                tint = MaterialTheme.colorScheme.onError,
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-                        FloatingActionButton(onClick = onSearchOpen) {
-                            Icon(
-                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
-                                contentDescription = stringResource(R.string.search_title),
-                            )
+                        ActionTooltip(stringResource(R.string.search_title)) {
+                            FloatingActionButton(onClick = onSearchOpen) {
+                                Icon(
+                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_search_outline),
+                                    contentDescription = stringResource(R.string.search_title),
+                                )
+                            }
                         }
                     }
                 }
@@ -458,362 +532,348 @@ fun PlayerScreen(
     ) { innerPadding ->
         val hasMessage = ui.error != null || ui.info != null
         val queueBottomClearance = 128.dp
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .onSizeChanged { viewportHeightPx = it.height }
-                .pointerInput(pendingIndexById, ui.queue?.version, ui.isMutating, ui.retainedRemovalEntries) {
-                    if (ui.isMutating || ui.retainedRemovalEntries.isNotEmpty() || pending.size < 2) return@pointerInput
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val totalWidth = size.width.toFloat()
-                        val sourceInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
-                            val id = info.key as? String
-                            if (id == null || id !in pendingEntryIds) return@firstOrNull false
-                            val itemTop = info.offset.toFloat()
-                            val itemBottom = itemTop + info.size
-                            down.position.y >= itemTop && down.position.y <= itemBottom &&
-                                down.position.x < totalWidth - favoriteTouchAreaPx
-                        } ?: return@awaitEachGesture
-                        val sourceId = sourceInfo.key as String
-                        val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
-                        longPress.consume()
-                        draggingEntryId = sourceId
-                        dragStartTopPx = sourceInfo.offset.toFloat()
-                        dragHeightPx = sourceInfo.size
-                        dragOffsetPx = 0f
-                        dragPointerY = longPress.position.y
-                        dragTargetIndex = pendingIndexById[sourceId] ?: -1
-                        dragSnapshotVersion = ui.queue?.version
-                        reorderFeedback.start(dragTargetIndex)
-                        try {
-                            val completed = drag(longPress.id) { change ->
-                                dragOffsetPx += change.position.y - change.previousPosition.y
-                                dragPointerY = change.position.y
-                                change.consume()
-                                updateDragTarget()
-                            }
-                            if (completed) {
-                                val targetId = pending.getOrNull(dragTargetIndex)?.entryId
-                                val version = dragSnapshotVersion
-                                if (targetId != null && version != null) {
-                                    val swapped = swappedQueueEntries(pending, sourceId, targetId)
-                                    if (swapped != null && onSwapEntries(sourceId, targetId, version)) {
-                                        previewOrder = swapped
-                                    }
-                                } else {
-                                    performFeedback(FeedbackEffect.Reject)
-                                }
-                            }
-                        } finally {
-                            resetDrag()
-                        }
-                    }
-                },
-        ) {
-            LaunchedEffect(draggingEntryId) {
-                if (draggingEntryId == null) return@LaunchedEffect
-                while (true) {
-                    withFrameNanos { }
-                    val delta = queueDragAutoScrollDelta(
-                        dragPointerY,
-                        listState.layoutInfo.viewportEndOffset.toFloat(),
-                        scrollEdgePx,
-                        maxScrollPerFramePx,
-                    )
-                    if (delta != 0f && listState.scrollBy(delta) != 0f) updateDragTarget()
-                }
-            }
-        val moveUpDescription = stringResource(R.string.action_move_up)
-        val moveDownDescription = stringResource(R.string.action_move_down)
-        val requeueLabel = stringResource(R.string.player_requeue_now_playing)
-        val removeLabel = stringResource(R.string.action_remove_from_queue)
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            userScrollEnabled = draggingEntryId == null,
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = innerPadding.calculateTopPadding() + 8.dp,
-                end = 16.dp,
-                bottom = innerPadding.calculateBottomPadding() + queueBottomClearance,
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            if (ui.error != null || ui.info != null) {
-                item(key = "message", contentType = "message") {
+        val queuePane: @Composable (PlayerPaneMode) -> Unit = { paneMode ->
+            Column(Modifier.fillMaxSize()) {
+                if (paneMode == PlayerPaneMode.TABLETOP && surfaceState == PlayerSurfaceState.READY) {
                     Card(
-                        modifier = Modifier.onSizeChanged { messageHeightPx = it.height },
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (ui.error != null) {
-                                MaterialTheme.colorScheme.errorContainer
-                            } else {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            },
-                        ),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = (ui.error ?: ui.info)?.asString().orEmpty(),
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            TextButton(onClick = onDismissMessage) { Text(stringResource(R.string.action_ok)) }
-                        }
+                        Box(Modifier.padding(16.dp)) { nowPlayingControls() }
                     }
                 }
-            }
-
-            item(key = "now-playing", contentType = "now-playing") {
-                val surfaceState = when {
-                    ui.queue == null && ui.queueLoadState == QueueLoadState.ERROR -> PlayerSurfaceState.ERROR
-                    ui.isInitialContentLoading -> PlayerSurfaceState.LOADING
-                    else -> PlayerSurfaceState.READY
-                }
-                AnimatedContent(
-                    modifier = Modifier.onSizeChanged { nowPlayingHeightPx = it.height },
-                    targetState = surfaceState,
-                    transitionSpec = {
-                        fadeThrough(
-                            enterSpec = motion.defaultEffectsSpec(),
-                            exitSpec = motion.fastEffectsSpec(),
-                        ).using(SizeTransform { _, _ -> motion.defaultSpatialSpec() })
-                    },
-                    label = "playerInitialState",
-                ) { state ->
-                    when (state) {
-                        PlayerSurfaceState.LOADING -> NowPlayingSkeletonCard()
-                        PlayerSurfaceState.ERROR -> PlayerLoadErrorCard(
-                            message = ui.queueLoadError,
-                            onRetry = onRetryQueue,
-                        )
-                        PlayerSurfaceState.READY -> NowPlayingCard(
-                            queue = ui.queue,
-                            queueObservedAtElapsedRealtimeMs = ui.queueObservedAtElapsedRealtimeMs,
-                            presentedNowPlaying = ui.presentedNowPlaying
-                                ?: ui.queue?.nowPlayingPresentationOrNull(),
-                            isMutating = ui.isMutating,
-                            isQueueReordering = ui.isQueueReordering,
-                            activeControlAction = ui.activeControlAction,
-                            onSkip = onSkip,
-                            onRequeueNowPlaying = onRequeueNowPlaying,
-                            onStop = { confirmStop = true },
-                            isFavorite = isFavorite,
-                            favoriteStatus = favoriteStatus,
-                            onToggleFavorite = onToggleFavorite,
-                            favoritesBusy = favoritesBusy,
-                            onRepeatToggle = onRepeatToggle,
-                            onRadioToggle = onRadioToggle,
-                            onRadioSourceToggle = onRadioSourceToggle,
-                            favoritesRadioSelected = ui.favoritesRadioSelected,
-                            onLocalVolumeOpen = onLocalVolumeOpen,
-                            showLocalVolumeButton = showLocalVolumeButton,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                        )
-                    }
-                }
-            }
-
-            item(key = "queue-header", contentType = "queue-header") {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().onSizeChanged { queueHeaderHeightPx = it.height },
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column {
-                                Text(
-                                    stringResource(R.string.player_queue_title),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                val queueSummary = ui.queue?.takeIf { it.pendingEntriesCount > 0 }?.let { queue ->
-                                    "${queue.pendingEntriesCount} · ${formatQueueDuration(queue.pendingDurationMilliseconds)}"
-                                }
-                                QueueSummaryOdometer(queueSummary)
-                            }
-                            if (pending.isNotEmpty()) {
-                                IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
-                                    Icon(
-                                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_x_outline),
-                                        contentDescription = stringResource(R.string.player_clear_queue),
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                            }
-                        }
-                        if (pending.isNotEmpty()) {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                SwipeActionHints()
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_drag_drop_2_outline),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Text(
-                                        stringResource(R.string.player_drag_reorder_hint),
-                                        modifier = Modifier.padding(start = 4.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    AnimatedVisibility(
-                        visible = !ui.isInitialContentLoading && pending.isEmpty(),
-                        enter = fadeIn(tween(220, delayMillis = 80)) + expandVertically(tween(320)),
-                        exit = fadeOut(tween(150)) + shrinkVertically(tween(280)),
-                        label = "emptyQueueTransition",
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(top = 16.dp)
-                                // Sibling heights change on every frame of a size animation.
-                                // Reading them here keeps that work out of composition.
-                                .layout { measurable, constraints ->
-                                    val gaps = (if (hasMessage) 3 else 2) * 16.dp.toPx()
-                                    val minHeight = (viewportHeightPx - nowPlayingHeightPx - queueHeaderHeightPx -
-                                        (if (hasMessage) messageHeightPx else 0) - gaps -
-                                        (innerPadding.calculateTopPadding() + 8.dp).toPx() -
-                                        (innerPadding.calculateBottomPadding() + queueBottomClearance).toPx())
-                                        .coerceAtLeast(0f).roundToInt()
-                                    val placeable = measurable.measure(
-                                        constraints.copy(minHeight = minHeight.coerceAtMost(constraints.maxHeight)),
-                                    )
-                                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            EmptyQueueCard(onSearchOpen = onSearchOpen)
-                        }
-                    }
-                }
-            }
-
-            if (ui.isInitialContentLoading) {
-                item(key = "queue-loading", contentType = "queue-loading") {
-                    QueueSkeleton(
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = motion.fastEffectsSpec(),
-                            fadeOutSpec = motion.defaultEffectsSpec(),
-                            placementSpec = motion.defaultSpatialSpec(),
-                        ),
-                    )
-                }
-            } else if (pending.isNotEmpty()) {
-                items(pending, key = { it.entryId }, contentType = { "queue-entry" }) { entry ->
-                    val entryIndex = pendingIndexById[entry.entryId] ?: -1
-                    val dragged = draggingEntryId == entry.entryId
-                    val target = dragTargetIndex == entryIndex
-                    SwipeActionCard(
-                        addLabel = requeueLabel,
-                        removeLabel = removeLabel,
-                        enabled = !ui.isMutating && entry.entryId !in ui.retainedRemovalEntries &&
-                            entry.entryId !in ui.mutatingEntryIds && draggingEntryId == null,
-                        addStatus = ui.requeueStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
-                        removeStatus = ui.removeStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
-                        onAdd = { onRequeueEntry(entry.entryId) },
-                        onRemove = { onRemoveEntry(entry.entryId) },
-                        modifier = Modifier
-                            .alpha(if (dragged) 0f else 1f)
-                            .animateItem(
-                                fadeInSpec = motion.fastEffectsSpec(),
-                                fadeOutSpec = motion.fastEffectsSpec(),
-                                placementSpec = motion.fastSpatialSpec(),
-                            ),
-                    ) { foregroundModifier ->
-                        Card(
-                            modifier = foregroundModifier.fillMaxWidth()
-                                .testTag("queue-drag-${entry.entryId}"),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (target && !dragged) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceContainer,
-                            ),
-                        ) {
-                            QueueTrackCardContent(
-                                track = entry.track,
-                                position = entryIndex + 1,
-                                titleModifier = Modifier.semantics {
-                                    customActions = listOf(
-                                        CustomAccessibilityAction(moveUpDescription) {
-                                            if (entryIndex > 0 && !ui.isMutating &&
-                                                ui.retainedRemovalEntries.isEmpty() && ui.queue != null) {
-                                                onSwapEntries(entry.entryId, pending[entryIndex - 1].entryId, ui.queue.version)
-                                            } else false
-                                        },
-                                        CustomAccessibilityAction(moveDownDescription) {
-                                            if (entryIndex in 0 until pending.lastIndex && !ui.isMutating &&
-                                                ui.retainedRemovalEntries.isEmpty() && ui.queue != null) {
-                                                onSwapEntries(entry.entryId, pending[entryIndex + 1].entryId, ui.queue.version)
-                                            } else false
-                                        },
-                                    )
-                                },
-                                trailingContent = {
-                                    FavoriteTrackButton(
-                                        track = entry.track,
-                                        checked = isFavorite(entry.track),
-                                        status = favoriteStatus(entry.track),
-                                        enabled = !favoritesBusy,
-                                        onToggle = onToggleFavorite,
-                                    )
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-            val draggedEntry = pending.firstOrNull { it.entryId == draggingEntryId }
-            if (draggedEntry != null) {
-                Card(
+                Box(
                     modifier = Modifier
-                        .offset { IntOffset(0, (dragStartTopPx + dragOffsetPx).roundToInt()) }
-                        .padding(horizontal = 16.dp)
+                        .weight(1f)
                         .fillMaxWidth()
-                        .height(with(density) { dragHeightPx.toDp() })
-                        .shadow(8.dp, RoundedCornerShape(12.dp)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                        .onSizeChanged { viewportHeightPx = it.height }
+                        .pointerInput(pendingIndexById, ui.queue?.version, ui.isMutating, ui.retainedRemovalEntries) {
+                            if (ui.isMutating || ui.retainedRemovalEntries.isNotEmpty() || pending.size < 2) return@pointerInput
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val totalWidth = size.width.toFloat()
+                                val sourceInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                                    val id = info.key as? String
+                                    if (id == null || id !in pendingEntryIds) return@firstOrNull false
+                                    val itemTop = info.offset.toFloat()
+                                    val itemBottom = itemTop + info.size
+                                    down.position.y >= itemTop && down.position.y <= itemBottom &&
+                                        down.position.x < totalWidth - favoriteTouchAreaPx
+                                } ?: return@awaitEachGesture
+                                val sourceId = sourceInfo.key as String
+                                val longPress = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                                longPress.consume()
+                                draggingEntryId = sourceId
+                                dragStartTopPx = sourceInfo.offset.toFloat()
+                                dragHeightPx = sourceInfo.size
+                                dragOffsetPx = 0f
+                                dragPointerY = longPress.position.y
+                                dragTargetIndex = pendingIndexById[sourceId] ?: -1
+                                dragSnapshotVersion = ui.queue?.version
+                                reorderFeedback.start(dragTargetIndex)
+                                try {
+                                    val completed = drag(longPress.id) { change ->
+                                        dragOffsetPx += change.position.y - change.previousPosition.y
+                                        dragPointerY = change.position.y
+                                        change.consume()
+                                        updateDragTarget()
+                                    }
+                                    if (completed) {
+                                        val targetId = pending.getOrNull(dragTargetIndex)?.entryId
+                                        val version = dragSnapshotVersion
+                                        if (targetId != null && version != null) {
+                                            val swapped = swappedQueueEntries(pending, sourceId, targetId)
+                                            if (swapped != null && onSwapEntries(sourceId, targetId, version)) {
+                                                previewOrder = swapped
+                                            }
+                                        } else {
+                                            performFeedback(FeedbackEffect.Reject)
+                                        }
+                                    }
+                                } finally {
+                                    resetDrag()
+                                }
+                            }
+                        },
                 ) {
-                    Box {
-                        ListItem(
-                            modifier = Modifier.fillMaxSize(),
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
-                            leadingContent = {
-                                TrackArtwork(draggedEntry.track.artworkUrl, modifier = Modifier.size(64.dp))
-                            },
-                            supportingContent = { Text(formatDuration(draggedEntry.track.durationMilliseconds)) },
-                            trailingContent = {
-                                FavoriteTrackButton(
-                                    track = draggedEntry.track,
-                                    checked = isFavorite(draggedEntry.track),
-                                    status = favoriteStatus(draggedEntry.track),
-                                    enabled = false,
-                                    onToggle = onToggleFavorite,
-                                )
-                            },
-                        ) {
-                            Text(draggedEntry.track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    LaunchedEffect(draggingEntryId) {
+                        if (draggingEntryId == null) return@LaunchedEffect
+                        while (true) {
+                            withFrameNanos { }
+                            val delta = queueDragAutoScrollDelta(
+                                dragPointerY,
+                                listState.layoutInfo.viewportEndOffset.toFloat(),
+                                scrollEdgePx,
+                                maxScrollPerFramePx,
+                            )
+                            if (delta != 0f && listState.scrollBy(delta) != 0f) updateDragTarget()
                         }
-                        QueuePositionIndicator(
-                            pendingIndexById.getValue(draggedEntry.entryId) + 1,
-                            Modifier.align(Alignment.TopEnd),
-                        )
+                    }
+                val moveUpDescription = stringResource(R.string.action_move_up)
+                val moveDownDescription = stringResource(R.string.action_move_down)
+                val requeueLabel = stringResource(R.string.player_requeue_now_playing)
+                val removeLabel = stringResource(R.string.action_remove_from_queue)
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    userScrollEnabled = draggingEntryId == null,
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        top = if (paneMode == PlayerPaneMode.TABLETOP) 8.dp else innerPadding.calculateTopPadding() + 8.dp,
+                        end = 16.dp,
+                        bottom = innerPadding.calculateBottomPadding() + queueBottomClearance,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    if (ui.error != null || ui.info != null) {
+                        item(key = "message", contentType = "message") {
+                            Card(
+                                modifier = Modifier.onSizeChanged { messageHeightPx = it.height },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (ui.error != null) {
+                                        MaterialTheme.colorScheme.errorContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    },
+                                ),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = (ui.error ?: ui.info)?.asString().orEmpty(),
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    TextButton(onClick = onDismissMessage) { Text(stringResource(R.string.action_ok)) }
+                                }
+                            }
+                        }
+                    }
+
+                    if (paneMode == PlayerPaneMode.SINGLE) {
+                        item(key = "now-playing", contentType = "now-playing") { nowPlayingSurface(true) }
+                    }
+
+                    item(key = "queue-header", contentType = "queue-header") {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().onSizeChanged { queueHeaderHeightPx = it.height },
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column {
+                                        Text(
+                                            stringResource(R.string.player_queue_title),
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                        val queueSummary = ui.queue?.takeIf { it.pendingEntriesCount > 0 }?.let { queue ->
+                                            "${queue.pendingEntriesCount} · ${formatQueueDuration(queue.pendingDurationMilliseconds)}"
+                                        }
+                                        QueueSummaryOdometer(queueSummary)
+                                    }
+                                    if (pending.isNotEmpty()) {
+                                        ActionTooltip(stringResource(R.string.player_clear_queue), enabled = !ui.isMutating) {
+                                            IconButton(onClick = { confirmClear = true }, enabled = !ui.isMutating) {
+                                                Icon(
+                                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_x_outline),
+                                                    contentDescription = stringResource(R.string.player_clear_queue),
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                if (pending.isNotEmpty()) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        SwipeActionHints()
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_drag_drop_2_outline),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                            Text(
+                                                stringResource(R.string.player_drag_reorder_hint),
+                                                modifier = Modifier.padding(start = 4.dp),
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = !ui.isInitialContentLoading && pending.isEmpty(),
+                                enter = fadeIn(tween(220, delayMillis = 80)) + expandVertically(tween(320)),
+                                exit = fadeOut(tween(150)) + shrinkVertically(tween(280)),
+                                label = "emptyQueueTransition",
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .padding(top = 16.dp)
+                                        // Sibling heights change on every frame of a size animation.
+                                        // Reading them here keeps that work out of composition.
+                                        .layout { measurable, constraints ->
+                                            val isNowPlayingInList = paneMode == PlayerPaneMode.SINGLE
+                                            val gaps = ((if (hasMessage) 2 else 1) + (if (isNowPlayingInList) 1 else 0)) * 16.dp.toPx()
+                                            val minHeight = (viewportHeightPx - (if (isNowPlayingInList) nowPlayingHeightPx else 0) - queueHeaderHeightPx -
+                                                (if (hasMessage) messageHeightPx else 0) - gaps -
+                                                (innerPadding.calculateTopPadding() + 8.dp).toPx() -
+                                                (innerPadding.calculateBottomPadding() + queueBottomClearance).toPx())
+                                                .coerceAtLeast(0f).roundToInt()
+                                            val placeable = measurable.measure(
+                                                constraints.copy(minHeight = minHeight.coerceAtMost(constraints.maxHeight)),
+                                            )
+                                            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    EmptyQueueCard(onSearchOpen = onSearchOpen)
+                                }
+                            }
+                        }
+                    }
+
+                    if (ui.isInitialContentLoading) {
+                        item(key = "queue-loading", contentType = "queue-loading") {
+                            QueueSkeleton(
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec = motion.fastEffectsSpec(),
+                                    fadeOutSpec = motion.defaultEffectsSpec(),
+                                    placementSpec = motion.defaultSpatialSpec(),
+                                ),
+                            )
+                        }
+                    } else if (pending.isNotEmpty()) {
+                        items(pending, key = { it.entryId }, contentType = { "queue-entry" }) { entry ->
+                            val entryIndex = pendingIndexById[entry.entryId] ?: -1
+                            val dragged = draggingEntryId == entry.entryId
+                            val target = dragTargetIndex == entryIndex
+                            SwipeActionCard(
+                                addLabel = requeueLabel,
+                                removeLabel = removeLabel,
+                                enabled = !ui.isMutating && entry.entryId !in ui.retainedRemovalEntries &&
+                                    entry.entryId !in ui.mutatingEntryIds && draggingEntryId == null,
+                                addStatus = ui.requeueStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
+                                removeStatus = ui.removeStatuses[entry.entryId] ?: SwipeActionStatus.IDLE,
+                                onAdd = { onRequeueEntry(entry.entryId) },
+                                onRemove = { onRemoveEntry(entry.entryId) },
+                                modifier = Modifier
+                                    .alpha(if (dragged) 0f else 1f)
+                                    .animateItem(
+                                        fadeInSpec = motion.fastEffectsSpec(),
+                                        fadeOutSpec = motion.fastEffectsSpec(),
+                                        placementSpec = motion.fastSpatialSpec(),
+                                    ),
+                            ) { foregroundModifier ->
+                                Card(
+                                    modifier = foregroundModifier.fillMaxWidth()
+                                        .testTag("queue-drag-${entry.entryId}"),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (target && !dragged) MaterialTheme.colorScheme.primaryContainer
+                                        else MaterialTheme.colorScheme.surfaceContainer,
+                                    ),
+                                ) {
+                                    QueueTrackCardContent(
+                                        track = entry.track,
+                                        position = entryIndex + 1,
+                                        titleModifier = Modifier.semantics {
+                                            customActions = listOf(
+                                                CustomAccessibilityAction(moveUpDescription) {
+                                                    if (entryIndex > 0 && !ui.isMutating &&
+                                                        ui.retainedRemovalEntries.isEmpty() && ui.queue != null) {
+                                                        onSwapEntries(entry.entryId, pending[entryIndex - 1].entryId, ui.queue.version)
+                                                    } else false
+                                                },
+                                                CustomAccessibilityAction(moveDownDescription) {
+                                                    if (entryIndex in 0 until pending.lastIndex && !ui.isMutating &&
+                                                        ui.retainedRemovalEntries.isEmpty() && ui.queue != null) {
+                                                        onSwapEntries(entry.entryId, pending[entryIndex + 1].entryId, ui.queue.version)
+                                                    } else false
+                                                },
+                                            )
+                                        },
+                                        trailingContent = {
+                                            FavoriteTrackButton(
+                                                track = entry.track,
+                                                checked = isFavorite(entry.track),
+                                                status = favoriteStatus(entry.track),
+                                                enabled = !favoritesBusy,
+                                                onToggle = onToggleFavorite,
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                    val draggedEntry = pending.firstOrNull { it.entryId == draggingEntryId }
+                    if (draggedEntry != null) {
+                        Card(
+                            modifier = Modifier
+                                .offset { IntOffset(0, (dragStartTopPx + dragOffsetPx).roundToInt()) }
+                                .padding(horizontal = 16.dp)
+                                .fillMaxWidth()
+                                .height(with(density) { dragHeightPx.toDp() })
+                                .pointerHoverIcon(PointerIcon(android.view.PointerIcon.TYPE_GRABBING))
+                                .shadow(8.dp, RoundedCornerShape(12.dp)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                        ) {
+                            Box {
+                                ListItem(
+                                    modifier = Modifier.fillMaxSize(),
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+                                    leadingContent = {
+                                        TrackArtwork(draggedEntry.track.artworkUrl, modifier = Modifier.size(64.dp))
+                                    },
+                                    supportingContent = { Text(formatDuration(draggedEntry.track.durationMilliseconds)) },
+                                    trailingContent = {
+                                        FavoriteTrackButton(
+                                            track = draggedEntry.track,
+                                            checked = isFavorite(draggedEntry.track),
+                                            status = favoriteStatus(draggedEntry.track),
+                                            enabled = false,
+                                            onToggle = onToggleFavorite,
+                                        )
+                                    },
+                                ) {
+                                    Text(draggedEntry.track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                }
+                                QueuePositionIndicator(
+                                    pendingIndexById.getValue(draggedEntry.entryId) + 1,
+                                    Modifier.align(Alignment.TopEnd),
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+        PlayerPanes(
+            tabletopHinge = tabletopHinge(),
+            nowPlaying = { paneMode ->
+                Box(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
+                        start = 16.dp,
+                        top = innerPadding.calculateTopPadding() + 8.dp,
+                        end = if (paneMode == PlayerPaneMode.SIDE_BY_SIDE) 0.dp else 16.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 8.dp,
+                    ),
+                ) {
+                    nowPlayingSurface(paneMode != PlayerPaneMode.TABLETOP)
+                }
+            },
+            queue = queuePane,
+        )
 
         if (confirmStop) {
             AlertDialog(
@@ -848,39 +908,16 @@ fun PlayerScreen(
 private fun NowPlayingCard(
     queue: QueueSnapshotResponse?,
     queueObservedAtElapsedRealtimeMs: Long?,
-    favoritesRadioSelected: Boolean = false,
     presentedNowPlaying: NowPlayingPresentation?,
-    isMutating: Boolean,
-    isQueueReordering: Boolean,
-    activeControlAction: PlayerControlAction?,
-    onSkip: () -> Unit,
-    onRequeueNowPlaying: () -> Unit,
-    onStop: () -> Unit,
-    isFavorite: (PlaybackTrackResponse) -> Boolean,
-    favoriteStatus: (PlaybackTrackResponse) -> SwipeActionStatus,
-    onToggleFavorite: (PlaybackTrackResponse) -> Unit,
-    favoritesBusy: Boolean,
-    onRepeatToggle: () -> Unit,
-    onRadioToggle: () -> Unit,
-    onRadioSourceToggle: () -> Unit = {},
-    onLocalVolumeOpen: () -> Unit,
-    showLocalVolumeButton: Boolean,
+    controls: (@Composable () -> Unit)?,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
-    val repeatEnabled = queue?.isRepeatEnabled == true
-    val radioEnabled = queue?.radio?.isEnabled == true
-    val favoritesSource = if (radioEnabled) queue.radio.mode == "favorites" else favoritesRadioSelected
-    val activeTrack = presentedNowPlaying?.track
-    val hasActivePlayback = activeTrack != null
     val motion = MaterialTheme.motionScheme
     val currentSlide = nowPlayingSlide(
         presentation = presentedNowPlaying,
         hasQueue = queue != null,
         positionObservedAtElapsedRealtimeMs = queueObservedAtElapsedRealtimeMs,
-    )
-    val playbackControlsBlocked = shouldBlockPlaybackControls(
-        isMutating, activeControlAction, isQueueReordering,
     )
     Card(
         colors = CardDefaults.cardColors(
@@ -977,24 +1014,60 @@ private fun NowPlayingCard(
                 }
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            controls?.invoke()
+        }
+    }
+}
+
+@Composable
+private fun NowPlayingControls(
+    queue: QueueSnapshotResponse?,
+    presentedNowPlaying: NowPlayingPresentation?,
+    favoritesRadioSelected: Boolean,
+    isMutating: Boolean,
+    isQueueReordering: Boolean,
+    activeControlAction: PlayerControlAction?,
+    onSkip: () -> Unit,
+    onRequeueNowPlaying: () -> Unit,
+    onStop: () -> Unit,
+    isFavorite: (PlaybackTrackResponse) -> Boolean,
+    favoriteStatus: (PlaybackTrackResponse) -> SwipeActionStatus,
+    onToggleFavorite: (PlaybackTrackResponse) -> Unit,
+    favoritesBusy: Boolean,
+    onRepeatToggle: () -> Unit,
+    onRadioToggle: () -> Unit,
+    onRadioSourceToggle: () -> Unit,
+    onLocalVolumeOpen: () -> Unit,
+    showLocalVolumeButton: Boolean,
+) {
+    val repeatEnabled = queue?.isRepeatEnabled == true
+    val radioEnabled = queue?.radio?.isEnabled == true
+    val favoritesSource = if (radioEnabled) queue.radio.mode == "favorites" else favoritesRadioSelected
+    val activeTrack = presentedNowPlaying?.track
+    val hasActivePlayback = activeTrack != null
+    val playbackControlsBlocked = shouldBlockPlaybackControls(
+        isMutating, activeControlAction, isQueueReordering,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(
+                onClick = onRequeueNowPlaying,
+                modifier = Modifier.weight(1f),
+                enabled = hasActivePlayback && activeControlAction != PlayerControlAction.REQUEUE,
             ) {
-                OutlinedButton(
-                    onClick = onRequeueNowPlaying,
-                    modifier = Modifier.weight(1f),
-                    enabled = hasActivePlayback && activeControlAction != PlayerControlAction.REQUEUE,
-                ) {
-                    Icon(
-                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.player_requeue_now_playing))
-                }
-                if (showLocalVolumeButton) OutlinedIconButton(
+                Icon(
+                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_playlist_add_outline),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.player_requeue_now_playing))
+            }
+            if (showLocalVolumeButton) ActionTooltip(stringResource(R.string.local_volume_title)) {
+                OutlinedIconButton(
                     onClick = onLocalVolumeOpen,
                     shape = CircleShape,
                     modifier = Modifier.size(ButtonDefaults.MinHeight).testTag("local-volume-open"),
@@ -1010,12 +1083,14 @@ private fun NowPlayingCard(
                     )
                 }
             }
+        }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ActionTooltip(stringResource(R.string.action_stop), enabled = hasActivePlayback && !playbackControlsBlocked) {
                 OutlinedIconButton(
                     onClick = onStop,
                     enabled = hasActivePlayback && !playbackControlsBlocked,
@@ -1030,6 +1105,8 @@ private fun NowPlayingCard(
                         },
                     )
                 }
+            }
+            ActionTooltip(stringResource(R.string.action_skip), enabled = hasActivePlayback && !playbackControlsBlocked) {
                 FilledIconButton(
                     onClick = onSkip,
                     enabled = hasActivePlayback && !playbackControlsBlocked,
@@ -1040,29 +1117,31 @@ private fun NowPlayingCard(
                         contentDescription = stringResource(R.string.action_skip),
                     )
                 }
+            }
+            TonalToggleIconButton(
+                checked = repeatEnabled,
+                onCheckedChange = { onRepeatToggle() },
+                iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_repeat_outline,
+                checkedContentDescription = stringResource(R.string.player_repeat_disable),
+                uncheckedContentDescription = stringResource(R.string.player_repeat_enable),
+                enabled = hasActivePlayback && !playbackControlsBlocked,
+            )
+            Row(
+                modifier = Modifier.background(
+                    MaterialTheme.colorScheme.surfaceContainerHighest,
+                    MaterialTheme.shapes.extraLarge,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 TonalToggleIconButton(
-                    checked = repeatEnabled,
-                    onCheckedChange = { onRepeatToggle() },
-                    iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_repeat_outline,
-                    checkedContentDescription = stringResource(R.string.player_repeat_disable),
-                    uncheckedContentDescription = stringResource(R.string.player_repeat_enable),
-                    enabled = hasActivePlayback && !playbackControlsBlocked,
+                    checked = radioEnabled,
+                    onCheckedChange = { onRadioToggle() },
+                    iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline,
+                    checkedContentDescription = stringResource(R.string.player_radio_disable),
+                    uncheckedContentDescription = stringResource(R.string.player_radio_enable),
+                    enabled = !playbackControlsBlocked,
                 )
-                Row(
-                    modifier = Modifier.background(
-                        MaterialTheme.colorScheme.surfaceContainerHighest,
-                        MaterialTheme.shapes.extraLarge,
-                    ),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TonalToggleIconButton(
-                        checked = radioEnabled,
-                        onCheckedChange = { onRadioToggle() },
-                        iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_radio_outline,
-                        checkedContentDescription = stringResource(R.string.player_radio_disable),
-                        uncheckedContentDescription = stringResource(R.string.player_radio_enable),
-                        enabled = !playbackControlsBlocked,
-                    )
+                ActionTooltip(stringResource(R.string.player_radio_favorites_source), enabled = !playbackControlsBlocked) {
                     androidx.compose.material3.IconToggleButton(
                         checked = favoritesSource,
                         onCheckedChange = { onRadioSourceToggle() },
@@ -1077,24 +1156,24 @@ private fun NowPlayingCard(
                         )
                     }
                 }
-                if (activeTrack != null) {
-                    FavoriteTrackButton(
-                        track = activeTrack,
-                        checked = isFavorite(activeTrack),
-                        status = favoriteStatus(activeTrack),
-                        enabled = !favoritesBusy,
-                        onToggle = onToggleFavorite,
-                    )
-                } else {
-                    TonalToggleIconButton(
-                        checked = false,
-                        onCheckedChange = {},
-                        iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_heart_outline,
-                        checkedContentDescription = stringResource(R.string.action_remove_favorite),
-                        uncheckedContentDescription = stringResource(R.string.action_add_favorite),
-                        enabled = false,
-                    )
-                }
+            }
+            if (activeTrack != null) {
+                FavoriteTrackButton(
+                    track = activeTrack,
+                    checked = isFavorite(activeTrack),
+                    status = favoriteStatus(activeTrack),
+                    enabled = !favoritesBusy,
+                    onToggle = onToggleFavorite,
+                )
+            } else {
+                TonalToggleIconButton(
+                    checked = false,
+                    onCheckedChange = {},
+                    iconRes = com.composables.icons.tabler.outline.R.drawable.tabler_ic_heart_outline,
+                    checkedContentDescription = stringResource(R.string.action_remove_favorite),
+                    uncheckedContentDescription = stringResource(R.string.action_add_favorite),
+                    enabled = false,
+                )
             }
         }
     }

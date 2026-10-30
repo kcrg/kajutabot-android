@@ -17,9 +17,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -36,6 +36,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -44,7 +46,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
-import com.tryniecki.kajutabot.ui.navigation.ScrollToTopOnReselect
+import com.tryniecki.kajutabot.ui.components.TrackGridCells
+import com.tryniecki.kajutabot.ui.components.fullLineSpan
+import com.tryniecki.kajutabot.ui.components.ActionTooltip
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommand
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommandEffect
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.SwipeActionCard
@@ -68,7 +74,7 @@ import java.time.format.FormatStyle
 
 
 @Composable
-fun FavoritesRoute(viewModel: FavoritesViewModel, reselected: Flow<Unit>) {
+fun FavoritesRoute(viewModel: FavoritesViewModel, commands: Flow<ScreenCommand>) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     FavoritesScreen(
         ui = ui,
@@ -78,7 +84,7 @@ fun FavoritesRoute(viewModel: FavoritesViewModel, reselected: Flow<Unit>) {
         onPlaySingle = viewModel::playSingle,
         onShuffleChange = viewModel::setShuffle,
         onDismiss = viewModel::dismissMessage,
-        reselected = reselected,
+        commands = commands,
     )
 }
 
@@ -91,12 +97,16 @@ fun FavoritesScreen(
     onPlaySingle: (String) -> Unit,
     onShuffleChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
-    reselected: Flow<Unit> = emptyFlow(),
+    commands: Flow<ScreenCommand> = emptyFlow(),
 ) {
     val openUrl = rememberOpenCustomTab()
     val motion = MaterialTheme.motionScheme
-    val listState = rememberLazyListState()
-    ScrollToTopOnReselect(listState, reselected)
+    val listState = rememberLazyGridState()
+    ScreenCommandEffect(
+        commands = commands,
+        onScrollToTop = { listState.animateScrollToItem(0) },
+        onRefresh = onRefresh,
+    )
     val locale = LocalConfiguration.current.locales[0]
     val favoriteDateFormatter = remember(locale) {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)
@@ -128,20 +138,22 @@ fun FavoritesScreen(
                         val shuffleUncheckedIconColor = MaterialTheme.colorScheme.onSecondaryContainer
                         val shuffleCheckedIconColor = MaterialTheme.colorScheme.onPrimaryContainer
 
-                        ToggleFloatingActionButton(
-                            checked = ui.shuffle,
-                            onCheckedChange = onShuffleChange,
-                            containerColor = shuffleContainerColor,
-                        ) {
-                            Icon(
-                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrows_shuffle_outline),
-                                contentDescription = stringResource(if (ui.shuffle) R.string.favorites_shuffle_disable else R.string.favorites_shuffle_enable),
-                                tint = lerp(
-                                    shuffleUncheckedIconColor,
-                                    shuffleCheckedIconColor,
-                                    checkedProgress,
-                                ),
-                            )
+                        ActionTooltip(stringResource(if (ui.shuffle) R.string.favorites_shuffle_disable else R.string.favorites_shuffle_enable)) {
+                            ToggleFloatingActionButton(
+                                checked = ui.shuffle,
+                                onCheckedChange = onShuffleChange,
+                                containerColor = shuffleContainerColor,
+                            ) {
+                                Icon(
+                                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrows_shuffle_outline),
+                                    contentDescription = stringResource(if (ui.shuffle) R.string.favorites_shuffle_disable else R.string.favorites_shuffle_enable),
+                                    tint = lerp(
+                                        shuffleUncheckedIconColor,
+                                        shuffleCheckedIconColor,
+                                        checkedProgress,
+                                    ),
+                                )
+                            }
                         }
 
                         ExtendedFloatingActionButton(
@@ -184,7 +196,8 @@ fun FavoritesScreen(
                 }
             }
         } else {
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = TrackGridCells,
             modifier = Modifier.fillMaxSize(),
             state = listState,
             contentPadding = PaddingValues(
@@ -194,12 +207,13 @@ fun FavoritesScreen(
                 bottom = innerPadding.calculateBottomPadding() + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "header", contentType = "header") {
+            item(key = "header", span = fullLineSpan, contentType = "header") {
                 FavoritesHeader(ui, onRefresh, hasVisibleItems = visibleItems.isNotEmpty())
             }
             if (ui.error != null) {
-                item(key = "error", contentType = "error") {
+                item(key = "error", span = fullLineSpan, contentType = "error") {
                     FavoritesErrorCard(ui.error, onDismiss)
                 }
             }
@@ -255,7 +269,7 @@ fun FavoritesScreen(
                                     val canOpen = fav.contentUrl.startsWith("https://") || fav.contentUrl.startsWith("http://")
                                     Text(
                                         text = fav.title.ifBlank { fav.contentUrl },
-                                        modifier = if (canOpen) Modifier.clickable { openUrl(fav.contentUrl) } else Modifier,
+                                        modifier = if (canOpen) Modifier.pointerHoverIcon(PointerIcon.Hand).clickable { openUrl(fav.contentUrl) } else Modifier,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,

@@ -47,7 +47,8 @@ import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.jellyfin.JellyfinConnectionCard
 import com.tryniecki.kajutabot.ui.jellyfin.JellyfinViewModel
-import com.tryniecki.kajutabot.ui.navigation.ScrollToTopOnReselect
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommand
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommandEffect
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.RealtimeConnectionState
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
@@ -66,7 +67,7 @@ fun MoreRootScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     onOpenOnboarding: () -> Unit,
     jellyfinViewModel: JellyfinViewModel,
-    reselected: Flow<Unit>,
+    commands: Flow<ScreenCommand>,
 ) {
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
     val appUi by appViewModel.ui.collectAsStateWithLifecycle()
@@ -74,7 +75,7 @@ fun MoreRootScreen(
     val logoutError = appUi.accountError
     val openCustomTab = rememberOpenCustomTab()
     val listState = rememberLazyListState()
-    ScrollToTopOnReselect(listState, reselected)
+    ScreenCommandEffect(commands, onScrollToTop = { listState.animateScrollToItem(0) })
 
     Scaffold(
     ) { innerPadding ->

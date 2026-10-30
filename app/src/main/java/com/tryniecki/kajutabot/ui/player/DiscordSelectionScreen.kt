@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.components.ActionTooltip
 import com.tryniecki.kajutabot.ui.components.DiscordTargetPicker
 
 @Composable
@@ -30,6 +31,7 @@ fun DiscordSelectionRoute(
     viewModel: PlayerViewModel,
     onBack: () -> Unit,
     isGuest: Boolean = false,
+    isSupportingPane: Boolean = false,
 ) {
     val ui by viewModel.entryState.collectAsStateWithLifecycle()
 
@@ -38,6 +40,7 @@ fun DiscordSelectionRoute(
         onGuildSelect = viewModel::selectGuild,
         onChannelSelect = viewModel::selectChannel,
         onBack = onBack,
+        isSupportingPane = isSupportingPane,
         isGuest = isGuest,
     )
 }
@@ -49,6 +52,7 @@ private fun DiscordSelectionScreen(
     onGuildSelect: (String) -> Unit,
     onChannelSelect: (String) -> Unit,
     onBack: () -> Unit,
+    isSupportingPane: Boolean = false,
     isGuest: Boolean,
 ) {
     Scaffold(
@@ -56,11 +60,16 @@ private fun DiscordSelectionScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.discord_selection_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_left_outline),
-                            contentDescription = stringResource(R.string.action_back),
-                        )
+                    ActionTooltip(stringResource(if (isSupportingPane) R.string.action_close else R.string.action_back)) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                painter = painterResource(
+                                    if (isSupportingPane) com.composables.icons.tabler.outline.R.drawable.tabler_ic_x_outline
+                                    else com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_left_outline,
+                                ),
+                                contentDescription = stringResource(if (isSupportingPane) R.string.action_close else R.string.action_back),
+                            )
+                        }
                     }
                 },
             )

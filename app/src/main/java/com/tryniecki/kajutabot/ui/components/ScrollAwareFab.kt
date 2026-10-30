@@ -1,6 +1,7 @@
 package com.tryniecki.kajutabot.ui.components
 
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,23 +23,50 @@ import kotlin.math.abs
  */
 @Composable
 fun rememberScrollAwareFabVisible(
+    listState: LazyGridState,
+    movementThreshold: Dp = 14.dp,
+): Boolean = rememberScrollAwareFabVisible(
+    key = listState,
+    movementThreshold = movementThreshold,
+    firstVisibleItemIndex = { listState.firstVisibleItemIndex },
+    firstVisibleItemScrollOffset = { listState.firstVisibleItemScrollOffset },
+    isScrollInProgress = { listState.isScrollInProgress },
+)
+
+@Composable
+fun rememberScrollAwareFabVisible(
     listState: LazyListState,
     movementThreshold: Dp = 14.dp,
+): Boolean = rememberScrollAwareFabVisible(
+    key = listState,
+    movementThreshold = movementThreshold,
+    firstVisibleItemIndex = { listState.firstVisibleItemIndex },
+    firstVisibleItemScrollOffset = { listState.firstVisibleItemScrollOffset },
+    isScrollInProgress = { listState.isScrollInProgress },
+)
+
+@Composable
+private fun rememberScrollAwareFabVisible(
+    key: Any,
+    movementThreshold: Dp = 14.dp,
+    firstVisibleItemIndex: () -> Int,
+    firstVisibleItemScrollOffset: () -> Int,
+    isScrollInProgress: () -> Boolean,
 ): Boolean {
     val thresholdPx = with(LocalDensity.current) { movementThreshold.roundToPx() }
-    var visible by remember(listState) { mutableStateOf(true) }
+    var visible by remember(key) { mutableStateOf(true) }
 
-    LaunchedEffect(listState, thresholdPx) {
-        var previousIndex = listState.firstVisibleItemIndex
-        var previousOffset = listState.firstVisibleItemScrollOffset
+    LaunchedEffect(key, thresholdPx) {
+        var previousIndex = firstVisibleItemIndex()
+        var previousOffset = firstVisibleItemScrollOffset()
         var accumulatedDown = 0
         var accumulatedUp = 0
 
         snapshotFlow {
             Triple(
-                listState.firstVisibleItemIndex,
-                listState.firstVisibleItemScrollOffset,
-                listState.isScrollInProgress,
+                firstVisibleItemIndex(),
+                firstVisibleItemScrollOffset(),
+                isScrollInProgress(),
             )
         }
             .distinctUntilChanged()

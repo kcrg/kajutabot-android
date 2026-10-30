@@ -3,6 +3,9 @@ package com.tryniecki.kajutabot
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.KeyboardShortcutGroup
+import android.view.Menu
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,12 +16,14 @@ import androidx.lifecycle.ViewModelProvider
 import com.tryniecki.kajutabot.auth.DiscordOAuth
 import com.tryniecki.kajutabot.ui.KajutaBotApp
 import com.tryniecki.kajutabot.ui.app.AppViewModel
+import com.tryniecki.kajutabot.ui.navigation.AppKeyboardShortcuts
 import com.tryniecki.kajutabot.ui.theme.KajutaBotTheme
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var container: AppContainer
     private lateinit var appViewModel: AppViewModel
+    private val keyboardShortcuts = AppKeyboardShortcuts()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -53,11 +58,25 @@ class MainActivity : ComponentActivity() {
                 KajutaBotApp(
                     container = container,
                     appViewModel = appViewModel,
+                    keyboardShortcuts = keyboardShortcuts,
                     themeMode = appUi.themeMode,
                     onThemeModeChange = appViewModel::setThemeMode,
                 )
             }
         }
+    }
+
+    // Unhandled keys land here, which leaves a focused text field its own use of Ctrl+Right.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        keyboardShortcuts.dispatch(event) || super.onKeyDown(keyCode, event)
+
+    override fun onProvideKeyboardShortcuts(
+        data: MutableList<KeyboardShortcutGroup>,
+        menu: Menu?,
+        deviceId: Int,
+    ) {
+        super.onProvideKeyboardShortcuts(data, menu, deviceId)
+        data.add(keyboardShortcuts.describe(this))
     }
 
     override fun onNewIntent(intent: Intent) {

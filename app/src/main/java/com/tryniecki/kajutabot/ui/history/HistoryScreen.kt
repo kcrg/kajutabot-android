@@ -10,9 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +35,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -42,8 +44,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.components.TrackGridCells
+import com.tryniecki.kajutabot.ui.components.fullLineSpan
+import com.tryniecki.kajutabot.ui.components.ActionTooltip
 import com.tryniecki.kajutabot.ui.feedback.ObserveUserFeedback
-import com.tryniecki.kajutabot.ui.navigation.ScrollToTopOnReselect
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommand
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommandEffect
 import com.tryniecki.kajutabot.api.model.history.PlaybackHistoryEntryResponse
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.components.SwipeActionCard
@@ -62,10 +68,10 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 @Composable
-fun HistoryRoute(viewModel: HistoryViewModel, reselected: Flow<Unit>) {
+fun HistoryRoute(viewModel: HistoryViewModel, commands: Flow<ScreenCommand>) {
     ObserveUserFeedback(viewModel.feedbackEvents)
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    HistoryScreen(ui, viewModel::refresh, viewModel::loadMore, viewModel::retry, viewModel::enqueue, viewModel::dismissMessage, reselected)
+    HistoryScreen(ui, viewModel::refresh, viewModel::loadMore, viewModel::retry, viewModel::enqueue, viewModel::dismissMessage, commands)
 }
 
 @Composable
@@ -76,10 +82,14 @@ fun HistoryScreen(
     onRetry: () -> Unit,
     onEnqueue: (Long) -> Unit,
     onDismiss: () -> Unit,
-    reselected: Flow<Unit> = emptyFlow(),
+    commands: Flow<ScreenCommand> = emptyFlow(),
 ) {
-    val listState = rememberLazyListState()
-    ScrollToTopOnReselect(listState, reselected)
+    val listState = rememberLazyGridState()
+    ScreenCommandEffect(
+        commands = commands,
+        onScrollToTop = { listState.animateScrollToItem(0) },
+        onRefresh = onRefresh,
+    )
     val showBackToTop by remember(listState) {
         derivedStateOf {
             listState.firstVisibleItemIndex > 4 ||
@@ -117,22 +127,25 @@ fun HistoryScreen(
     Scaffold(
         floatingActionButton = {
             if (showBackToTop) {
-                SmallFloatingActionButton(
-                    onClick = {
-                        if (scrollToTopJob?.isActive != true) {
-                            scrollToTopJob = scrollScope.launch { listState.animateScrollToItem(0) }
-                        }
-                    },
-                ) {
-                    Icon(
-                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_up_outline),
-                        contentDescription = stringResource(R.string.action_back_to_top),
-                    )
+                ActionTooltip(stringResource(R.string.action_back_to_top)) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            if (scrollToTopJob?.isActive != true) {
+                                scrollToTopJob = scrollScope.launch { listState.animateScrollToItem(0) }
+                            }
+                        },
+                    ) {
+                        Icon(
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_arrow_up_outline),
+                            contentDescription = stringResource(R.string.action_back_to_top),
+                        )
+                    }
                 }
             }
         },
     ) { innerPadding ->
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = TrackGridCells,
             modifier = Modifier.fillMaxSize(),
             state = listState,
             contentPadding = PaddingValues(
@@ -142,8 +155,9 @@ fun HistoryScreen(
                 bottom = innerPadding.calculateBottomPadding() + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "header", contentType = "header") {
+            item(key = "header", span = fullLineSpan, contentType = "header") {
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -159,7 +173,7 @@ fun HistoryScreen(
                 }
             }
             if (ui.error != null) {
-                item(key = "error", contentType = "error") {
+                item(key = "error", span = fullLineSpan, contentType = "error") {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(ui.error.asString(), modifier = Modifier.weight(1f))
@@ -179,7 +193,7 @@ fun HistoryScreen(
                     onOpenUrl = openUrl,
                 )
             }
-            item(key = "footer", contentType = "footer") {
+            item(key = "footer", span = fullLineSpan, contentType = "footer") {
                 when {
                     ui.isLoading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(32.dp))
@@ -240,7 +254,7 @@ private fun HistoryEntryRow(
                 titleContent = {
                     Text(
                         text = entry.title.ifBlank { entry.queueInput },
-                        modifier = if (canOpen) Modifier.clickable { onOpenUrl(entry.queueInput) } else Modifier,
+                        modifier = if (canOpen) Modifier.pointerHoverIcon(PointerIcon.Hand).clickable { onOpenUrl(entry.queueInput) } else Modifier,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,

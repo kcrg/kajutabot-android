@@ -15,13 +15,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +35,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
+import androidx.compose.material3.adaptive.navigation.BackNavigationBehavior
+import androidx.compose.material3.adaptive.navigation3.SupportingPaneSceneStrategy
+import androidx.compose.material3.adaptive.navigation3.rememberSupportingPaneSceneStrategy
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
@@ -48,6 +57,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -85,10 +96,13 @@ import com.tryniecki.kajutabot.ui.jellyfin.JellyfinConnectionStatus
 import com.tryniecki.kajutabot.ui.jellyfin.JellyfinRoute
 import com.tryniecki.kajutabot.ui.jellyfin.JellyfinViewModel
 import com.tryniecki.kajutabot.ui.more.MoreRootScreen
+import com.tryniecki.kajutabot.ui.navigation.AppKeyboardShortcuts
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
+import com.tryniecki.kajutabot.ui.navigation.AppShortcut
 import com.tryniecki.kajutabot.ui.navigation.AppRoute
 import com.tryniecki.kajutabot.ui.navigation.NavigationMotionSpecs
 import com.tryniecki.kajutabot.ui.navigation.Navigator
+import com.tryniecki.kajutabot.ui.navigation.ScreenCommand
 import com.tryniecki.kajutabot.ui.navigation.hidesBottomNavigation
 import com.tryniecki.kajutabot.ui.navigation.kajutaForwardTransition
 import com.tryniecki.kajutabot.ui.navigation.kajutaPopTransition
@@ -119,6 +133,7 @@ import kotlinx.coroutines.awaitCancellation
 fun KajutaBotApp(
     container: AppContainer,
     appViewModel: AppViewModel,
+    keyboardShortcuts: AppKeyboardShortcuts,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
 ) {
@@ -173,6 +188,7 @@ fun KajutaBotApp(
                         AuthenticatedShell(
                             container = container,
                             appViewModel = appViewModel,
+                            keyboardShortcuts = keyboardShortcuts,
                             discordUserId = state.user.discordUserId,
                             sessionType = sessionType,
                             themeMode = themeMode,
@@ -241,6 +257,7 @@ private fun RestoreErrorScreen(message: UiText, onRetry: () -> Unit) {
 private fun AuthenticatedShell(
     container: AppContainer,
     appViewModel: AppViewModel,
+    keyboardShortcuts: AppKeyboardShortcuts,
     discordUserId: String,
     sessionType: SessionType,
     themeMode: ThemeMode,
@@ -349,9 +366,9 @@ private fun AuthenticatedShell(
                     )
                 }
                 AuthenticatedGate.CONTENT -> AuthenticatedContent(
-                    constrainWideContent = constrainWideContent,
                     container = container,
                     appViewModel = appViewModel,
+                    keyboardShortcuts = keyboardShortcuts,
                     playerViewModel = playerViewModel,
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange,
@@ -365,21 +382,34 @@ private fun AuthenticatedShell(
     }
 }
 
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 private fun AuthenticatedContent(
     container: AppContainer,
     appViewModel: AppViewModel,
+    keyboardShortcuts: AppKeyboardShortcuts,
     playerViewModel: PlayerViewModel,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     onOpenOnboarding: () -> Unit,
     sessionType: SessionType,
-    constrainWideContent: Boolean,
 ) {
     val navigationState = rememberNavigationState()
     val navigator = remember(navigationState) { Navigator(navigationState) }
     val currentDestination = navigationState.currentDestination
-    val isFullScreenDetailOpen = navigationState.currentRoute.hidesBottomNavigation()
+    val adaptiveInfo = currentWindowAdaptiveInfoV2()
+    // The recipe drops the spacer because of b/444438086.
+    val paneDirective = remember(adaptiveInfo) {
+        calculatePaneScaffoldDirective(adaptiveInfo)
+            .copy(horizontalPartitionSpacerSize = 0.dp, verticalPartitionSpacerSize = 0.dp)
+    }
+    // Phones keep the regular transitions; only a window with room for two panes needs the scene.
+    val isTwoPane = paneDirective.maxHorizontalPartitions > 1
+    val supportingPaneStrategy = rememberSupportingPaneSceneStrategy<NavKey>(
+        backNavigationBehavior = BackNavigationBehavior.PopUntilCurrentDestinationChange,
+        directive = paneDirective,
+    )
+    val isFullScreenDetailOpen = navigationState.currentRoute.hidesBottomNavigation() && !isTwoPane
     val navigationSuiteState = rememberNavigationSuiteScaffoldState(
         if (isFullScreenDetailOpen) NavigationSuiteScaffoldValue.Hidden else NavigationSuiteScaffoldValue.Visible,
     )
@@ -397,6 +427,34 @@ private fun AuthenticatedContent(
     )
     ObserveUserFeedback(jellyfinViewModel.feedbackEvents)
     val jellyfinStatus by jellyfinViewModel.connectionStatus.collectAsStateWithLifecycle()
+    val visibleDestinations = AppDestination.entries.filter { destination ->
+        destination != AppDestination.JELLYFIN || currentDestination == destination ||
+            jellyfinStatus == JellyfinConnectionStatus.CONNECTED
+    }
+    val isPlayerOnTop = currentDestination == AppDestination.PLAYER && navigationState.currentRoute == AppRoute.Player
+    val canDismissRoute = navigationState.activeBackStack.size > 1
+    SideEffect(visibleDestinations, isPlayerOnTop, canDismissRoute) {
+        keyboardShortcuts.visibleDestinations = visibleDestinations
+        keyboardShortcuts.canSkipTrack = isPlayerOnTop
+        keyboardShortcuts.canDismiss = canDismissRoute
+    }
+    LaunchedEffect(keyboardShortcuts) {
+        keyboardShortcuts.events.collect { shortcut ->
+            when (shortcut) {
+                is AppShortcut.Destination ->
+                    keyboardShortcuts.visibleDestinations.getOrNull(shortcut.index)?.let(navigator::selectTopLevel)
+                AppShortcut.Search ->
+                    if (navigationState.currentDestination == AppDestination.JELLYFIN) {
+                        navigator.send(ScreenCommand.FOCUS_SEARCH)
+                    } else {
+                        navigator.openSearch()
+                    }
+                AppShortcut.Refresh -> navigator.send(ScreenCommand.REFRESH)
+                AppShortcut.NextTrack -> playerViewModel.skip()
+                AppShortcut.Dismiss -> navigator.goBack()
+            }
+        }
+    }
     SideEffect(jellyfinStatus) {
         if (jellyfinStatus == JellyfinConnectionStatus.DISCONNECTED ||
             jellyfinStatus == JellyfinConnectionStatus.ERROR
@@ -451,8 +509,12 @@ private fun AuthenticatedContent(
     }
 
     SharedTransitionLayout {
+        val supportingPaneMetadata =
+            navigationMotionMetadata(AppDestination.PLAYER) + SupportingPaneSceneStrategy.supportingPane()
         val appEntryProvider: (NavKey) -> NavEntry<NavKey> = entryProvider {
-            entry<AppRoute.Player>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
+            entry<AppRoute.Player>(
+                metadata = navigationMotionMetadata(AppDestination.PLAYER) + SupportingPaneSceneStrategy.mainPane(),
+            ) {
                 PlayerRoute(
                     viewModel = playerViewModel,
                     favoritesViewModel = favoritesViewModel,
@@ -460,53 +522,57 @@ private fun AuthenticatedContent(
                     onDiscordSelectionOpen = { navigator.navigate(AppRoute.DiscordSelection) },
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = LocalNavAnimatedContentScope.current,
-                    reselected = navigator.reselected(AppDestination.PLAYER),
+                    commands = navigator.commands(AppDestination.PLAYER),
                 )
             }
             entry<AppRoute.Favorites>(metadata = navigationMotionMetadata(AppDestination.FAVORITES)) {
                 FavoritesRoute(
                     viewModel = favoritesViewModel,
-                    reselected = navigator.reselected(AppDestination.FAVORITES),
+                    commands = navigator.commands(AppDestination.FAVORITES),
                 )
             }
             entry<AppRoute.Jellyfin>(metadata = navigationMotionMetadata(AppDestination.JELLYFIN)) {
                 JellyfinRoute(
                     viewModel = jellyfinViewModel,
-                    reselected = navigator.reselected(AppDestination.JELLYFIN),
+                    commands = navigator.commands(AppDestination.JELLYFIN),
                 )
             }
             entry<AppRoute.History>(metadata = navigationMotionMetadata(AppDestination.HISTORY)) {
                 val historyViewModel: HistoryViewModel = viewModel(factory = HistoryViewModel.factory(container))
                 HistoryRoute(
                     viewModel = historyViewModel,
-                    reselected = navigator.reselected(AppDestination.HISTORY),
+                    commands = navigator.commands(AppDestination.HISTORY),
                 )
             }
             entry<AppRoute.More>(metadata = navigationMotionMetadata(AppDestination.MORE)) {
-                MoreRootScreen(
-                    appViewModel = appViewModel,
-                    playerViewModel = playerViewModel,
-                    isGuest = sessionType == SessionType.GUEST,
-                    themeMode = themeMode,
-                    onThemeModeChange = onThemeModeChange,
-                    onOpenOnboarding = onOpenOnboarding,
-                    jellyfinViewModel = jellyfinViewModel,
-                    reselected = navigator.reselected(AppDestination.MORE),
-                )
+                ReadableWidth {
+                    MoreRootScreen(
+                        appViewModel = appViewModel,
+                        playerViewModel = playerViewModel,
+                        isGuest = sessionType == SessionType.GUEST,
+                        themeMode = themeMode,
+                        onThemeModeChange = onThemeModeChange,
+                        onOpenOnboarding = onOpenOnboarding,
+                        jellyfinViewModel = jellyfinViewModel,
+                        commands = navigator.commands(AppDestination.MORE),
+                    )
+                }
             }
-            entry<AppRoute.Search>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
+            entry<AppRoute.Search>(metadata = supportingPaneMetadata) {
                 // Disposal follows the actual Navigation 3 exit transition,
                 // including system and predictive Back.
                 DisposableEffect(Unit) {
                     onDispose { playerViewModel.clearSearch() }
                 }
-                SearchRoute(
-                    viewModel = playerViewModel,
-                    favoritesViewModel = favoritesViewModel,
-                    onClose = navigator::goBack,
-                )
+                ReadableWidth {
+                    SearchRoute(
+                        viewModel = playerViewModel,
+                        favoritesViewModel = favoritesViewModel,
+                        onClose = navigator::goBack,
+                    )
+                }
             }
-            entry<AppRoute.SharedTrack>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) { route ->
+            entry<AppRoute.SharedTrack>(metadata = supportingPaneMetadata) { route ->
                 SharedTrackRoute(
                     viewModel = playerViewModel,
                     requestId = route.requestId,
@@ -514,9 +580,10 @@ private fun AuthenticatedContent(
                     onClose = navigator::goBack,
                 )
             }
-            entry<AppRoute.DiscordSelection>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
+            entry<AppRoute.DiscordSelection>(metadata = supportingPaneMetadata) {
                 DiscordSelectionRoute(
                     viewModel = playerViewModel,
+                    isSupportingPane = isTwoPane,
                     onBack = navigator::goBack,
                     isGuest = sessionType == SessionType.GUEST,
                 )
@@ -527,14 +594,11 @@ private fun AuthenticatedContent(
 
         NavigationSuiteScaffold(
             navigationItems = {
-                val isJellyfinConnected = jellyfinStatus == JellyfinConnectionStatus.CONNECTED
-                AppDestination.entries.forEach { destination ->
-                    if (destination == AppDestination.JELLYFIN && !isJellyfinConnected &&
-                        currentDestination != destination
-                    ) return@forEach
+                visibleDestinations.forEach { destination ->
                     val destinationLabel = stringResource(destination.labelResId)
                     NavigationSuiteItem(
                         selected = currentDestination == destination,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand),
                         onClick = { navigator.selectTopLevel(destination) },
                         icon = {
                             Icon(
@@ -560,17 +624,21 @@ private fun AuthenticatedContent(
                 NavDisplay(
                     entries = activeEntries,
                     onBack = navigator::goBack,
+                    sceneStrategies = if (isTwoPane) listOf(supportingPaneStrategy) else emptyList(),
                     sharedTransitionScope = this@SharedTransitionLayout,
                     transitionSpec = { kajutaForwardTransition(navigationMotion) },
                     popTransitionSpec = { kajutaPopTransition(navigationMotion) },
                     predictivePopTransitionSpec = { kajutaPopTransition(navigationMotion) },
                     modifier = Modifier
                         .weight(1f)
-                        .adaptiveContentWidth(constrainWideContent),
+                        .fillMaxWidth(),
                 )
                 AnimatedVisibility(
                     visible = miniPlayerVisible,
-                    modifier = Modifier.adaptiveContentWidth(constrainWideContent),
+                    // A rail leaves the bottom inset to the content; the bar has already consumed it.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
                     enter = fadeIn(motion.defaultEffectsSpec()) +
                         expandVertically(
                             animationSpec = motion.defaultSpatialSpec(),
@@ -626,5 +694,13 @@ private fun PlayerRealtimeEffect(viewModel: PlayerViewModel) {
                 viewModel.setRealtimeOwner(RealtimeOwner.UI, false)
             }
         }
+    }
+}
+
+/** Text-first screens stay readable on a window wider than a line of text should be. */
+@Composable
+private fun ReadableWidth(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.widthIn(max = 840.dp).fillMaxWidth()) { content() }
     }
 }

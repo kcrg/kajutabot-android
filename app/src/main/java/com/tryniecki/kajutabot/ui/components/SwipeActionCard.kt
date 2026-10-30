@@ -28,6 +28,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -51,6 +53,8 @@ import kotlinx.coroutines.delay
 enum class SwipeActionStatus { IDLE, PENDING, SUCCESS, FAILURE }
 
 const val SWIPE_RESULT_HOLD_MS = 900L
+
+private val GrabCursor = PointerIcon(android.view.PointerIcon.TYPE_GRAB)
 
 /** Shared, bounded swipe actions for track cards, with optional removal. */
 @Composable
@@ -198,6 +202,7 @@ fun SwipeActionCard(
         }
         content(
             Modifier.offset { IntOffset(swipeState.requireOffset().roundToInt(), 0) }
+                .then(if (enabled) Modifier.pointerHoverIcon(GrabCursor) else Modifier)
                 .semantics {
                     customActions = buildList {
                         add(CustomAccessibilityAction(addLabel) {

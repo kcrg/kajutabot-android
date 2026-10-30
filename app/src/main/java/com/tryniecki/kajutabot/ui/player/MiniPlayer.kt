@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.components.ActionTooltip
 import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
@@ -190,15 +191,17 @@ fun MiniPlayer(
                     enabled = !favoritesBusy,
                     onToggle = onToggleFavorite,
                 )
-                IconButton(
-                    onClick = onSkip,
-                    enabled = !playbackControlsBlocked,
-                ) {
-                    Icon(
-                        painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_skip_forward_outline),
-                        contentDescription = stringResource(R.string.action_skip_track),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
+                ActionTooltip(stringResource(R.string.action_skip_track), enabled = !playbackControlsBlocked) {
+                    IconButton(
+                        onClick = onSkip,
+                        enabled = !playbackControlsBlocked,
+                    ) {
+                        Icon(
+                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_skip_forward_outline),
+                            contentDescription = stringResource(R.string.action_skip_track),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
 

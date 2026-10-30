@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.components.ActionTooltip
 import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
 import com.tryniecki.kajutabot.ui.components.rememberDelayedPending
 import com.tryniecki.kajutabot.ui.components.TrackArtwork
@@ -80,11 +81,13 @@ fun SharedTrackScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.shared_track_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onClose) {
-                        Icon(
-                            painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_x_outline),
-                            contentDescription = stringResource(R.string.action_close),
-                        )
+                    ActionTooltip(stringResource(R.string.action_close)) {
+                        IconButton(onClick = onClose) {
+                            Icon(
+                                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_x_outline),
+                                contentDescription = stringResource(R.string.action_close),
+                            )
+                        }
                     }
                 },
             )
