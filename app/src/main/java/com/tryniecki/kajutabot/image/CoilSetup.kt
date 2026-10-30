@@ -4,12 +4,12 @@ import android.content.Context
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import com.tryniecki.kajutabot.api.client.KajutaBotApiClientFactory
 import com.tryniecki.kajutabot.auth.SessionManager
 import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
-import okhttp3.OkHttpClient
 
 /**
  * Shared Coil [ImageLoader] for backend-provided artwork.
@@ -26,9 +26,12 @@ object CoilSetup {
         sessionManager: SessionManager,
     ) {
         val apiOrigin = apiBaseUrl.trim().trimEnd('/').toHttpUrlOrNull()
-        val httpClient = OkHttpClient.Builder()
-            .addInterceptor(artworkAuthorizationInterceptor(apiOrigin, sessionManager))
-            .build()
+        // Shares the API client's connection pool and is built on first image load, not at startup.
+        val httpClient by lazy {
+            KajutaBotApiClientFactory.baseHttpClient.newBuilder()
+                .addInterceptor(artworkAuthorizationInterceptor(apiOrigin, sessionManager))
+                .build()
+        }
 
         SingletonImageLoader.setSafe { ctx ->
             ImageLoader.Builder(ctx)

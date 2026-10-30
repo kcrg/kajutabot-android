@@ -18,7 +18,7 @@ internal val KajutaBotJson = Json {
 
 object KajutaBotApiClientFactory {
     const val AUTHORIZATION_HEADER = "Authorization"
-    internal val baseHttpClient = OkHttpClient.Builder().build()
+    val baseHttpClient: OkHttpClient = OkHttpClient.Builder().build()
 
     /**
      * Creates the authenticated user API. Adds `Authorization: Bearer <token>` when available.
