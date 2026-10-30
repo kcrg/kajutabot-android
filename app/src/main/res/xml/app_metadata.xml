@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:instructions="KajutaBot controls a music bot on Discord: skipping tracks, adding tracks by title, playing a track immediately, changing the bot's volume, repeat and radio, checking playback, and saving the current track to favorites.
+
+    Operational Patterns:
+    - Use 'playTrackNow' instead of 'addTrackToQueue' followed by 'skipCurrentTrack'.
+    - Use 'changeBotVolume' for relative requests such as lower by 20 and 'setBotVolume' for exact levels.
+    - Call 'getPlaybackStatus' to answer what is playing or what plays next.
+
+    Constraints:
+    - All functions act on the server and voice channel selected in the app and affect everyone listening in that channel.
+    - Tracks are matched by search, so the returned title can differ from the requested one.
+    - Volume functions need a Discord sign-in and the KajutaBot helper running next to Discord on a computer."
+    appfn:displayDescription="@string/app_functions_description" />

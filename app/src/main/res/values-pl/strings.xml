@@ -44,6 +44,7 @@
     <string name="action_try_guest">Wypróbuj jako gość</string>
     <string name="action_remove_favorite">Usuń z ulubionych</string>
     <string name="action_add_favorite">Dodaj do ulubionych</string>
+    <string name="app_functions_description">Pozwala asystentom sterować botem na Discordzie: pomijać utwory, dodawać je i zmieniać głośność.</string>
     <string name="nav_player">Odtwarzacz</string>
     <string name="nav_favorites">Ulubione</string>
     <string name="nav_history">History</string>

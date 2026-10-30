@@ -44,6 +44,7 @@
     <string name="action_try_guest">Try as guest</string>
     <string name="action_remove_favorite">Remove from favorites</string>
     <string name="action_add_favorite">Add to favorites</string>
+    <string name="app_functions_description">Lets assistants control the bot on Discord: skip tracks, add tracks and change the volume.</string>
     <string name="nav_player">Player</string>
     <string name="nav_favorites">Favorites</string>
     <string name="nav_history">History</string>

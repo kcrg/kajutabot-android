@@ -5,12 +5,15 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.baselineprofile)
+    alias(libs.plugins.ksp)
 }
 
 tasks.withType<Test>().configureEach {
     // Robolectric accesses FileDescriptor internals when the Gradle daemon uses JDK 25.
     jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // Recovering a stack trace reflects on AppFunctionException, whose platform class is missing on the JVM.
+    jvmArgs("-Dkotlinx.coroutines.stacktrace.recovery=false")
 }
 
 val kajutaApiBaseUrl: String =
@@ -96,6 +99,10 @@ baselineProfile {
 dependencies {
     implementation(project(":api"))
     implementation(libs.androidx.profileinstaller)
+    implementation(libs.androidx.appfunctions)
+    // AppFunctions pulls in an older version, and AGP makes test APKs match the app runtime.
+    constraints { implementation(libs.errorprone.annotations) }
+    ksp(libs.androidx.appfunctions.compiler)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.compose.material3.adaptive)
     implementation(libs.retrofit)
