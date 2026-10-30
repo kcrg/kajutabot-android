@@ -94,7 +94,6 @@
     <string name="error_rate_limit_short">Wykonujesz akcje zbyt szybko. Spróbuj ponownie za chwilę.</string>
     <string name="error_queue_full">Kolejka może zawierać maksymalnie 999 utworów.</string>
     <string name="error_timeout">Upłynął czas oczekiwania na odpowiedź. Spróbuj ponownie.</string>
-    <string name="player_repeat_skip_restart">Zapętlenie włączone. Utwór odtwarza się od początku.</string>
     <string name="action_back_to_top">Wróć na górę</string>
     <string name="swipe_queue_hint">W prawo · Kolejka</string>
     <string name="swipe_remove_hint">W lewo · Usuń</string>
@@ -119,14 +118,6 @@
     <string name="discord_voice_channel_a11y">Kanał głosowy: %1$s</string>
     <string name="artwork_load_error">Błąd ładowania</string>
     <string name="artwork_missing">Brak miniatury</string>
-    <string name="favorites_shuffle_on">Losowanie włączone</string>
-    <string name="favorites_shuffle_off">Losowanie wyłączone</string>
-    <string name="favorites_added">Dodano do ulubionych</string>
-    <string name="favorites_removed">Usunięto z ulubionych</string>
-    <string name="favorites_selection_required_all">Wybierz serwer i kanał głosowy w Odtwarzaczu, aby dodać ulubione.</string>
-    <string name="favorites_queued_all">Dodano ulubione do kolejki.</string>
-    <string name="favorites_selection_required_play">Wybierz serwer i kanał głosowy w Odtwarzaczu, aby odtworzyć.</string>
-    <string name="favorites_queued_one">Dodano do kolejki.</string>
     <string name="favorites_shuffle_disable">Wyłącz losowanie</string>
     <string name="favorites_shuffle_enable">Włącz losowanie</string>
     <string name="favorites_add_all_count">Dodaj wszystkie (%1$d)</string>
@@ -240,10 +231,6 @@
     <string name="player_queue_empty_title">Kolejka jest pusta</string>
     <string name="player_queue_empty_body">Użyj przycisku wyszukiwania, aby dodać utwory.</string>
     <string name="player_select_target_to_add">Wybierz serwer i kanał głosowy na ekranie odtwarzacza, aby dodać utwór.</string>
-    <string name="player_repeat_on">Powtarzanie włączone</string>
-    <string name="player_repeat_off">Powtarzanie wyłączone</string>
-    <string name="player_radio_on">Radio włączone</string>
-    <string name="player_radio_off">Radio wyłączone</string>
     <string name="player_select_target_first">Najpierw wybierz serwer i kanał głosowy.</string>
     <string name="player_queue_conflict_refreshed">Kolejka zmieniła się w międzyczasie. Odświeżono stan.</string>
     <string name="search_source_youtube">YouTube</string>

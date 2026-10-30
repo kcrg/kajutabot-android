@@ -94,7 +94,6 @@
     <string name="error_rate_limit_short">You’re acting too quickly. Try again in a moment.</string>
     <string name="error_queue_full">The queue can contain at most 999 tracks.</string>
     <string name="error_timeout">The request timed out. Try again.</string>
-    <string name="player_repeat_skip_restart">Repeat is on. The track is playing again from the beginning.</string>
     <string name="action_back_to_top">Back to top</string>
     <string name="swipe_queue_hint">Swipe right · Queue</string>
     <string name="swipe_remove_hint">Swipe left · Remove</string>
@@ -119,14 +118,6 @@
     <string name="discord_voice_channel_a11y">Voice channel: %1$s</string>
     <string name="artwork_load_error">Loading error</string>
     <string name="artwork_missing">No artwork</string>
-    <string name="favorites_shuffle_on">Shuffle on</string>
-    <string name="favorites_shuffle_off">Shuffle off</string>
-    <string name="favorites_added">Added to favorites</string>
-    <string name="favorites_removed">Removed from favorites</string>
-    <string name="favorites_selection_required_all">Select a server and voice channel in Player before adding favorites.</string>
-    <string name="favorites_queued_all">Favorites added to the queue.</string>
-    <string name="favorites_selection_required_play">Select a server and voice channel in Player before playing.</string>
-    <string name="favorites_queued_one">Added to queue.</string>
     <string name="favorites_shuffle_disable">Disable shuffle</string>
     <string name="favorites_shuffle_enable">Enable shuffle</string>
     <string name="favorites_add_all_count">Add all (%1$d)</string>
@@ -242,10 +233,6 @@
     <string name="player_queue_empty_title">The queue is empty</string>
     <string name="player_queue_empty_body">Use the search button to add tracks.</string>
     <string name="player_select_target_to_add">Select a server and voice channel on the player screen before adding a track.</string>
-    <string name="player_repeat_on">Repeat on</string>
-    <string name="player_repeat_off">Repeat off</string>
-    <string name="player_radio_on">Radio on</string>
-    <string name="player_radio_off">Radio off</string>
     <string name="player_select_target_first">Select a server and voice channel first.</string>
     <string name="player_queue_conflict_refreshed">The queue changed in the meantime. The state was refreshed.</string>
     <string name="search_source_youtube">YouTube</string>

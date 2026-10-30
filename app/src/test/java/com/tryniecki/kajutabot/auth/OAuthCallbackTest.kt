@@ -1,7 +1,6 @@
 package com.tryniecki.kajutabot.auth
 
 import com.tryniecki.kajutabot.R
-import com.tryniecki.kajutabot.api.client.KajutaBotApi
 import com.tryniecki.kajutabot.api.model.auth.AuthSessionResponse
 import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.DiscordOAuthExchangeRequest

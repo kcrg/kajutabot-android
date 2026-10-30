@@ -9,7 +9,6 @@ import com.tryniecki.kajutabot.api.model.auth.AuthUserResponse
 import com.tryniecki.kajutabot.api.model.auth.DiscordOAuthExchangeRequest
 import com.tryniecki.kajutabot.api.model.auth.RefreshUserSessionRequest
 import com.tryniecki.kajutabot.api.model.auth.SessionType
-import com.tryniecki.kajutabot.api.model.common.PlaybackTrackResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest
