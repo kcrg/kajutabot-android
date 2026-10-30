@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = (Resolve-Path -LiteralPath $PSScriptRoot).ProviderPath.TrimEnd('\', '/')
-$generatedDirectories = @('.gradle', '.kotlin', 'build', 'app/build', 'api/build')
+$generatedDirectories = @('.gradle', '.kotlin', 'build', 'app/build', 'api/build', 'baselineProfile/build')
 
 foreach ($relativePath in $generatedDirectories) {
     $target = Join-Path $repositoryRoot $relativePath
