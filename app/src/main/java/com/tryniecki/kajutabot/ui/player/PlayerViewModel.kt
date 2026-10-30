@@ -367,6 +367,9 @@ class PlayerViewModel(
 
     private val pendingControlActions = mutableSetOf<PlayerControlAction>()
 
+    private val guildCacheOwner = repository.guildCacheOwner(sessionIdentity)
+    private var guildRefreshJob: Job? = null
+    private var guildRefreshFailedInBackground = false
 
     init {
         viewModelScope.launch {
@@ -379,17 +382,27 @@ class PlayerViewModel(
         }
         viewModelScope.launch {
             val selection = preferencesRepository.currentGuildSelection()
+            val cachedGuilds = guildCacheOwner?.let { preferencesRepository.cachedGuilds(it) }
             _ui.update {
-                it.copy(
+                val selected = it.copy(
                     selectedGuildId = selection.guildId,
                     selectedVoiceChannelId = selection.voiceChannelId,
                 )
+                if (cachedGuilds == null) selected else selected.withCachedGuilds(cachedGuilds)
+            }
+            val guildId = selection.guildId
+            if (guildId != null && cachedGuilds?.any { it.id == guildId } == true) {
+                refreshChannels(guildId, preserveChannel = selection.voiceChannelId)
             }
             refreshGuilds()
         }
     }
 
-    fun setRealtimeOwner(owner: RealtimeOwner, active: Boolean) = realtime.setOwner(owner, active)
+    fun setRealtimeOwner(owner: RealtimeOwner, active: Boolean) {
+        realtime.setOwner(owner, active)
+        // This ViewModel outlives the Activity, so returning to the app is the next chance to retry.
+        if (owner == RealtimeOwner.UI && active && guildRefreshFailedInBackground) refreshGuilds()
+    }
 
     override fun onCleared() {
         localVolume.close()
@@ -448,18 +461,29 @@ class PlayerViewModel(
     }
 
     fun refreshGuilds() {
-        viewModelScope.launch {
-            _ui.update {
-                it.copy(
-                    isLoadingGuilds = true,
-                    guildAccessState = GuildAccessState.CHECKING,
-                    guildAccessError = null,
-                )
+        if (guildRefreshJob?.isActive == true) return
+        guildRefreshFailedInBackground = false
+        // Content already on screen stays there: only a confirmed result may replace it.
+        val inBackground = _ui.value.guildAccessState == GuildAccessState.AVAILABLE
+        guildRefreshJob = viewModelScope.launch {
+            if (!inBackground) {
+                _ui.update {
+                    it.copy(
+                        isLoadingGuilds = true,
+                        guildAccessState = GuildAccessState.CHECKING,
+                        guildAccessError = null,
+                    )
+                }
             }
             try {
                 val guilds = repository.getGuilds(sessionIdentity)
                 var selGuild = _ui.value.selectedGuildId
                 var selChannel = _ui.value.selectedVoiceChannelId
+                if (inBackground && _ui.value.alreadyShowsGuild(selGuild, guilds)) {
+                    _ui.update { it.copy(guilds = guilds, guildAccessError = null) }
+                    saveGuildCache(guilds)
+                    return@launch
+                }
                 if (selGuild != null && guilds.none { g -> g.id == selGuild }) {
                     selGuild = null
                     selChannel = null
@@ -496,15 +520,23 @@ class PlayerViewModel(
                         guildAccessError = null,
                     )
                 }
+                saveGuildCache(guilds)
                 if (selGuild != null) {
                     refreshChannels(selGuild, preserveChannel = selChannel)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val noGuildAccess = e is HttpException &&
                     e.code() == 403 &&
                     KajutaBotApiErrors.errorCodeOf(e) == "discord_guild_access_denied"
+                if (inBackground && !noGuildAccess) {
+                    guildRefreshFailedInBackground = true
+                    return@launch
+                }
                 _ui.update {
                     it.copy(
+                        guilds = if (noGuildAccess) emptyList() else it.guilds,
                         isLoadingGuilds = false,
                         isLoadingVoiceChannels = false,
                         guildAccessState = if (noGuildAccess) {
@@ -515,7 +547,17 @@ class PlayerViewModel(
                         guildAccessError = if (noGuildAccess) null else userMessageForError(e),
                     )
                 }
+                if (noGuildAccess) preferencesRepository.clearGuildCache()
             }
+        }
+    }
+
+    private suspend fun saveGuildCache(guilds: List<DiscordGuildResponse>) {
+        val owner = guildCacheOwner ?: return
+        if (guilds.isEmpty()) {
+            preferencesRepository.clearGuildCache()
+        } else {
+            preferencesRepository.saveGuildCache(owner, guilds)
         }
     }
 

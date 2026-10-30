@@ -90,7 +90,10 @@ class AppContainer(context: Context) {
     // It survives Activity destruction, but is cleared as soon as the user session ends.
     private val sessionScope = SessionViewModelScope {
         clearApiCache()
-        appScope.launch { preferencesRepository.clearGuildSelection() }
+        appScope.launch {
+            preferencesRepository.clearGuildSelection()
+            preferencesRepository.clearGuildCache()
+        }
     }
 
     init {

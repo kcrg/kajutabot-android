@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.tryniecki.kajutabot.api.model.auth.SessionType
+import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.auth.UserSession
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,7 @@ import kotlinx.serialization.json.Json
 import java.io.IOException
 
 private const val DATA_STORE_NAME = "kajutabot_user_preferences"
+private val guildCacheJson = Json { ignoreUnknownKeys = true }
 
 private val Context.userPreferencesDataStore by preferencesDataStore(
     name = DATA_STORE_NAME,
@@ -103,6 +105,36 @@ class UserPreferencesRepository internal constructor(private val dataStore: Data
         }
     }
 
+    /**
+     * The last confirmed guild list of [ownerKey], or null when there is none to show. A list
+     * left by another account is removed, not returned. Access is still enforced by the backend.
+     */
+    suspend fun cachedGuilds(ownerKey: String): List<DiscordGuildResponse>? {
+        val stored = preferences.first()
+        val storedOwner = stored[GUILD_CACHE_OWNER] ?: return null
+        if (storedOwner != ownerKey) {
+            clearGuildCache()
+            return null
+        }
+        return stored[GUILD_CACHE]
+            ?.let { value -> runCatching { guildCacheJson.decodeFromString<List<DiscordGuildResponse>>(value) }.getOrNull() }
+            ?.takeIf { it.isNotEmpty() }
+    }
+
+    suspend fun saveGuildCache(ownerKey: String, guilds: List<DiscordGuildResponse>) {
+        editSafely { preferences ->
+            preferences[GUILD_CACHE_OWNER] = ownerKey
+            preferences[GUILD_CACHE] = guildCacheJson.encodeToString(guilds)
+        }
+    }
+
+    suspend fun clearGuildCache() {
+        editSafely { preferences ->
+            preferences.remove(GUILD_CACHE_OWNER)
+            preferences.remove(GUILD_CACHE)
+        }
+    }
+
     fun onboardingCompleted(sessionType: SessionType, discordUserId: String): Flow<Boolean> =
         preferences.map { preferences ->
             preferences[booleanPreferencesKey(onboardingCompletedKey(sessionType, discordUserId))] ?: false
@@ -157,6 +189,8 @@ class UserPreferencesRepository internal constructor(private val dataStore: Data
         val GUILD_ID = stringPreferencesKey("guild_id")
         val VOICE_CHANNEL_ID = stringPreferencesKey("voice_channel_id")
         val SEARCH_HISTORY = stringPreferencesKey("entries")
+        val GUILD_CACHE_OWNER = stringPreferencesKey("guild_cache_owner")
+        val GUILD_CACHE = stringPreferencesKey("guild_cache")
     }
 }
 

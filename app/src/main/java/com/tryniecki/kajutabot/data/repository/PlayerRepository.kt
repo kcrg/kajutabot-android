@@ -5,6 +5,7 @@ import com.tryniecki.kajutabot.api.client.KajutaBotRealtimeClientFactory
 import com.tryniecki.kajutabot.api.model.discord.DiscordGuildResponse
 import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
+import com.tryniecki.kajutabot.api.model.queue.MoveQueueEntryRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.kajutabot.api.model.queue.SetQueueRepeatRequest
@@ -26,6 +27,13 @@ class PlayerRepository(
     fun isDiscordSession(expectedIdentity: Long): Boolean =
         sessionIdentity.value == expectedIdentity &&
             sessionManager.currentUserSession()?.sessionType == SessionType.DISCORD
+
+    /**
+     * Who a saved guild list belongs to, or null if this session must not use one. The identity
+     * is only a per-process counter, so it cannot tell accounts apart across restarts.
+     */
+    fun guildCacheOwner(expectedIdentity: Long): String? =
+        if (isDiscordSession(expectedIdentity)) sessionManager.currentUserSession()?.user?.discordUserId else null
 
     suspend fun accessToken(expectedIdentity: Long): String =
         sessionManager.accessTokenForSession(expectedIdentity)
@@ -117,6 +125,15 @@ class PlayerRepository(
         entryId: String,
     ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
         api.removeQueueEntry(guildId, entryId, token, key)
+    }
+
+    suspend fun moveQueueEntry(
+        expectedIdentity: Long,
+        guildId: String,
+        entryId: String,
+        newPosition: Int,
+    ): QueueSnapshotResponse = mutate(expectedIdentity, guildId) { api, token, key ->
+        api.moveQueueEntry(guildId, entryId, MoveQueueEntryRequest(newPosition, token), key)
     }
 
     suspend fun swapQueueEntries(
