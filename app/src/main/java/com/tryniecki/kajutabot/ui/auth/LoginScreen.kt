@@ -94,7 +94,7 @@ fun LoginScreen(
                         .heightIn(min = 52.dp),
                 ) {
                     if (isSigningIn && !isGuestSigningIn) {
-                        DelayedPendingSpinner(visible = true, color = MaterialTheme.colorScheme.onPrimary, size = 20.dp)
+                        DelayedPendingSpinner(visible = true, color = MaterialTheme.colorScheme.primary, size = 20.dp)
                         Spacer(Modifier.size(8.dp))
                         Text(stringResource(R.string.login_signing_in))
                     } else {
