@@ -11,10 +11,9 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,13 +62,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
@@ -126,9 +125,9 @@ import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 
 private val artworkAccentColorRegex = Regex("#[0-9a-fA-F]{6}")
 
@@ -1094,6 +1093,11 @@ private fun NowPlayingCard(
     }
 }
 
+@Stable
+private class ArtworkGlowLayer(val identity: String, val color: Color, initialAlpha: Float) {
+    val alpha = Animatable(initialAlpha)
+}
+
 @Composable
 private fun SmoothArtworkGlow(
     slide: NowPlayingSlide,
@@ -1104,42 +1108,41 @@ private fun SmoothArtworkGlow(
         Color.White,
         0.18f,
     )
+    val accent = slide.artworkAccentColor.toArtworkAccentColor()
 
-    val accents = remember { mutableStateMapOf<String, Color>() }
-    val accent = slide.artworkAccentColor.toArtworkAccentColor() ?: fallbackAccent
-    SideEffect {
-        if (slide.hasTrack) accents[slide.identity] = accent
-    }
-    LaunchedEffect(slide.identity) {
-        delay(700)
-        accents.keys.filter { it != slide.identity }.forEach(accents::remove)
-    }
-
-    AnimatedContent(
-        targetState = slide.identity to slide.hasTrack,
-        contentKey = { it.first },
-        transitionSpec = {
-            fadeIn(
-                animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-            ) togetherWith fadeOut(
-                animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-            )
-        },
-        modifier = modifier,
-        label = "nowPlayingGlow",
-    ) { (identity, hasTrack) ->
-        if (hasTrack) {
-            val animatedAccent by animateColorAsState(
-                targetValue = accents[identity] ?: fallbackAccent,
-                animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-                label = "nowPlayingGlowAccent",
-            )
-            AccentArtworkGlow(
-                colorProvider = { animatedAccent },
-                modifier = Modifier.fillMaxSize(),
-            )
+    // Seeded during the first composition: returning to this screen must show the
+    // current color right away instead of animating in from the theme accent.
+    val layers = remember {
+        mutableStateListOf<ArtworkGlowLayer>().apply {
+            if (slide.hasTrack) add(ArtworkGlowLayer(slide.identity, accent ?: fallbackAccent, 1f))
         }
     }
+
+    LaunchedEffect(slide.identity, slide.hasTrack, accent) {
+        val current = layers.lastOrNull()
+        val target = when {
+            !slide.hasTrack -> null
+            current?.identity == slide.identity -> accent ?: current.color
+            else -> accent ?: fallbackAccent
+        }
+        if (target != null && (current?.identity != slide.identity || current.color != target)) {
+            layers += ArtworkGlowLayer(slide.identity, target, 0f)
+        }
+        val incoming = layers.lastOrNull().takeIf { target != null }
+        coroutineScope {
+            layers.toList().forEach { layer ->
+                launch {
+                    layer.alpha.animateTo(
+                        targetValue = if (layer === incoming) 1f else 0f,
+                        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+                    )
+                    if (layer !== incoming) layers -= layer
+                }
+            }
+        }
+    }
+
+    AccentArtworkGlow(layers = layers, modifier = modifier)
 }
 
 private fun String?.toArtworkAccentColor(): Color? =
@@ -1184,35 +1187,36 @@ private fun NowPlayingArtwork(
 
 @Composable
 private fun AccentArtworkGlow(
-    colorProvider: () -> Color,
+    layers: List<ArtworkGlowLayer>,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     val cornerRadiusPx = remember(density) { with(density) { 14.dp.toPx() } }
     val cornerRadius = remember(cornerRadiusPx) { androidx.compose.ui.geometry.CornerRadius(cornerRadiusPx) }
 
-    Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(2.dp)
-                .offset(y = 4.dp)
-                .graphicsLayer {
-                    scaleX = 1.03f
-                    scaleY = 1.04f
-                }
-                .blur(
-                    radius = 40.dp,
-                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
-                )
-                .drawBehind {
+    // Layers fade through the drawn color, inside one blurred node: fading a graphics layer
+    // or AnimatedContent would clip the blur to its bounds for the whole transition.
+    Box(
+        modifier = modifier
+            .padding(2.dp)
+            .offset(y = 4.dp)
+            .graphicsLayer {
+                scaleX = 1.03f
+                scaleY = 1.04f
+            }
+            .blur(
+                radius = 40.dp,
+                edgeTreatment = BlurredEdgeTreatment.Unbounded,
+            )
+            .drawBehind {
+                layers.forEach { layer ->
                     drawRoundRect(
-                        color = colorProvider().copy(alpha = 0.24f),
+                        color = layer.color.copy(alpha = 0.24f * layer.alpha.value),
                         cornerRadius = cornerRadius,
                     )
-                },
-        )
-    }
+                }
+            },
+    )
 }
 
 @Composable
