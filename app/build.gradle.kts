@@ -70,6 +70,22 @@ android {
     }
 }
 
+androidComponents {
+    // The Baseline Profile plugin only turns off isMinifyEnabled, which does not undo
+    // optimization { enable = true } inherited from release. Without this the generator
+    // profiles R8-obfuscated code that cannot be mapped back to the sources.
+    finalizeDsl { dsl ->
+        dsl.buildTypes.findByName("nonMinifiedRelease")?.optimization?.enable = false
+    }
+    // Plugin-created build types do not pick up src/<buildType>/AndroidManifest.xml.
+    onVariants { variant ->
+        if (variant.name == "nonMinifiedRelease" || variant.name == "benchmarkRelease") {
+            variant.sources.manifests.addStaticManifestFile("src/baselineProfileTarget/AndroidManifest.xml")
+            variant.sources.kotlin?.addStaticSourceDirectory("src/baselineProfileTarget/java")
+        }
+    }
+}
+
 // Keep generated profiles under source control, but do not make every local
 // release build depend on having a benchmark-capable device connected.
 baselineProfile {

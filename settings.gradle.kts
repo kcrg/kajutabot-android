@@ -25,3 +25,5 @@ dependencyResolutionManagement {
 rootProject.name = "KajutaBot"
 include(":app", ":api")
 include(":baselineprofile")
+// The directory name differs in case, which only resolves on case-insensitive file systems.
+project(":baselineprofile").projectDir = file("baselineProfile")

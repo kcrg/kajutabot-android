@@ -40,15 +40,16 @@ class BaselineProfileSetupActivity : ComponentActivity() {
                 is GuestLoginResult.Failed -> error(result.message.resolve(this))
                 GuestLoginResult.Superseded -> error("Guest login was superseded by another session change.")
             }
+            // A new guest session starts deterministic; PlayerViewModel resolves the available
+            // guest guild normally. A reused session keeps the owner's server selection.
+            container.preferencesRepository.clearGuildSelection()
         }
 
         val session = checkNotNull(sessionManager.currentUserSession()) {
             "No active session after Baseline Profile setup."
         }
 
-        // The generator profiles the returning-user path, not first-run onboarding. Keep selection
-        // empty and deterministic; PlayerViewModel will resolve the available guest guild normally.
-        container.preferencesRepository.clearGuildSelection()
+        // The generator profiles the returning-user path, not first-run onboarding.
         container.preferencesRepository.setOnboardingCompleted(
             sessionType = session.sessionType,
             discordUserId = session.user.discordUserId,

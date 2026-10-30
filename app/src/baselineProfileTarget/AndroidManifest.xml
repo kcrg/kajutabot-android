@@ -5,5 +5,9 @@
             android:name=".BaselineProfileSetupActivity"
             android:exported="true"
             android:theme="@style/Theme.KajutaBot" />
+        <activity
+            android:name=".BaselineProfileScreensActivity"
+            android:exported="true"
+            android:theme="@style/Theme.KajutaBot" />
     </application>
 </manifest>

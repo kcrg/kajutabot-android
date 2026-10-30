@@ -58,4 +58,17 @@ class BaselineProfileGenerator {
             }
         }
     }
+
+    @Test
+    fun isolatedScreens() {
+        rule.collect(
+            packageName = packageName,
+            includeInStartupProfile = false,
+            maxIterations = 10,
+            stableIterations = 3,
+            outputFilePrefix = "isolated-screens",
+        ) {
+            KajutaBotJourneys.run { runIsolatedScreens(packageName) }
+        }
+    }
 }

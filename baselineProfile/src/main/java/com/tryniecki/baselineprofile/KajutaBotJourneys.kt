@@ -16,6 +16,22 @@ private const val SETUP_ACTIVITY = ".BaselineProfileSetupActivity"
 private const val SETUP_ACTION = "com.tryniecki.kajutabot.action.BASELINE_PROFILE_SETUP"
 private const val SETUP_ERROR_PREFIX = "BASELINE_PROFILE_SETUP_ERROR: "
 private const val SETUP_SUCCESS_MARKER = "BASELINE_PROFILE_SETUP_OK"
+private const val SCREENS_ACTIVITY = ".BaselineProfileScreensActivity"
+private const val SCREENS_EXTRA = "screen"
+private const val ONBOARDING_SCREEN = "onboarding"
+private const val ONBOARDING_PAGE_SWIPES = 5
+
+// Screen name to a text proving it rendered, null for screens with no stable text.
+private val ISOLATED_SCREENS = listOf(
+    "login" to null,
+    "access-checking" to null,
+    "no-access" to "No access",
+    "access-error" to "Could not check access",
+    ONBOARDING_SCREEN to null,
+    "shared-loading" to "Shared link",
+    "shared-failed" to "Shared link",
+    "dialog" to "Clear the queue?",
+)
 
 internal object KajutaBotJourneys {
 
@@ -79,40 +95,64 @@ internal object KajutaBotJourneys {
     fun MacrobenchmarkScope.launchAuthenticatedApp(packageName: String) {
         pressHome()
         startActivityAndWait()
-        device().waitForObject(By.desc("Player"), DEFAULT_TIMEOUT_MS)
+        device().waitForObject(By.text("Player"), DEFAULT_TIMEOUT_MS)
     }
 
-    /** Covers the most common code paths without mutating playback/queue state. */
+    /**
+     * Covers every screen reachable in a live session without mutating playback/queue state.
+     *
+     * Only navigation, scrolling and dismissing are allowed here: this may run against a real
+     * session, so never tap a track, a playback control or a dialog's confirm button. Never tap
+     * scrolling content after a swipe either: a list that is still settling moves the target,
+     * and the tap lands on whatever took its place. Fixed bars and FABs are safe.
+     */
     fun runCriticalUserJourneys() {
         val device = device()
 
-        // Player -> Favorites, including a representative list gesture.
-        device.clickAndWait(By.desc("Favorites"))
+        // The volume sheet is disabled until the bot is connected to a voice channel. Opened
+        // before the first swipe, while the Player content cannot move under the tap.
+        device.findObject(By.desc("KajutaBot volume in Discord"))?.takeIf { it.isEnabled }?.let { volume ->
+            volume.click()
+            device.waitForIdle()
+            device.pressBack()
+            device.waitForIdle()
+        }
+
+        // Player, including the queue below the fold.
         swipeContent(device, down = false)
         swipeContent(device, down = true)
 
-        // Favorites -> More -> libraries/contact detail routes.
-        device.clickAndWait(By.desc("More"))
+        // Player -> Favorites -> History, with a representative list gesture on each.
+        device.clickAndWait(By.text("Favorites"))
+        swipeContent(device, down = false)
+        swipeContent(device, down = true)
+
+        device.clickAndWait(By.text("History"))
+        swipeContent(device, down = false)
+        swipeContent(device, down = true)
+
+        // History -> More -> libraries/contact detail routes.
+        device.clickAndWait(By.text("More"))
         device.scrollUntilVisible(By.text("Libraries used")).click()
         device.waitForObject(By.desc("Back"))
+        swipeContent(device, down = false)
         device.pressBack()
-        device.waitForObject(By.desc("More"))
+        device.waitForObject(By.text("More"))
 
         device.scrollUntilVisible(By.text("Contact")).click()
         device.waitForObject(By.desc("Back"))
         device.pressBack()
-        device.waitForObject(By.desc("More"))
+        device.waitForObject(By.text("More"))
 
         // Back to Player and exercise both full-screen player detail routes.
-        device.clickAndWait(By.desc("Player"))
+        device.clickAndWait(By.text("Player"))
 
         device.clickAndWait(By.desc("Change server and voice channel"))
         device.waitForObject(By.text("Server and channel"))
         device.pressBack()
-        device.waitForObject(By.desc("Player"))
+        device.waitForObject(By.text("Player"))
 
-        device.clickAndWait(By.desc("Add track"))
-        device.waitForObject(By.text("Add to queue"))
+        device.clickAndWait(By.desc("Search"))
 
         // Exercise Compose text input/search-state code without depending on a live search result.
         device.waitForObject(By.clazz("android.widget.EditText")).apply {
@@ -121,13 +161,39 @@ internal object KajutaBotJourneys {
         }
         device.waitForIdle()
 
-        // First Back closes IME, second Back closes AddTrack and profiles the real system-back path.
+        // First Back closes IME, second Back closes Search and profiles the real system-back path.
         device.pressBack()
         SystemClock.sleep(200)
-        if (device.hasObject(By.text("Add to queue"))) {
+        if (device.hasObject(By.clazz("android.widget.EditText"))) {
             device.pressBack()
         }
-        device.waitForObject(By.desc("Player"))
+        device.waitForObject(By.text("Player"))
+    }
+
+    /** Opens the screens hosted by BaselineProfileScreensActivity, one launch per screen. */
+    fun MacrobenchmarkScope.runIsolatedScreens(packageName: String) {
+        val device = device()
+        ISOLATED_SCREENS.forEach { (screen, marker) ->
+            pressHome()
+            startActivityAndWait { intent ->
+                intent.setClassName(packageName, "$packageName$SCREENS_ACTIVITY")
+                intent.putExtra(SCREENS_EXTRA, screen)
+            }
+            if (marker != null) device.waitForObject(By.text(marker))
+            device.waitForIdle()
+            if (screen == ONBOARDING_SCREEN) {
+                repeat(ONBOARDING_PAGE_SWIPES) {
+                    device.swipe(
+                        (device.displayWidth * 0.85f).toInt(),
+                        device.displayHeight / 2,
+                        (device.displayWidth * 0.15f).toInt(),
+                        device.displayHeight / 2,
+                        12,
+                    )
+                    device.waitForIdle()
+                }
+            }
+        }
     }
 
     private fun UiDevice.clickAndWait(selector: BySelector) {
