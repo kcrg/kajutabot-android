@@ -4,6 +4,10 @@
     <string name="local_volume_percent">%1$d%%</string>
     <string name="local_volume_unknown">—</string>
     <string name="local_volume_guest">Sign in with Discord.</string>
+    <string name="local_volume_demo">Volume control is not available in the demo.</string>
+    <string name="local_volume_helper_start">Start KajutaBot Desktop Helper</string>
+    <string name="local_volume_helper_install">Don’t have it? Install it on your Windows computer.</string>
+    <string name="local_volume_helper_share">Share the helper link</string>
     <string name="local_volume_disconnected">Disconnected · state out of date</string>
     <string name="local_volume_syncing">Syncing…</string>
     <string name="local_volume_install">Install and start the KajutaBot helper on your Windows 11 computer.</string>
@@ -235,6 +239,7 @@
     <string name="jellyfin_status_connected">Connected as %1$s</string>
     <string name="jellyfin_status_disconnected">Not connected</string>
     <string name="jellyfin_status_error">Couldn\'t check the connection</string>
+    <string name="jellyfin_demo_unavailable">Not available in the demo</string>
     <string name="jellyfin_connect">Connect</string>
     <string name="jellyfin_disconnect">Disconnect</string>
     <string name="jellyfin_connect_title">Connect Jellyfin</string>

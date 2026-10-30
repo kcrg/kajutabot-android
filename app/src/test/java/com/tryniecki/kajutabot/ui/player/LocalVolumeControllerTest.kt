@@ -27,8 +27,20 @@ class LocalVolumeControllerTest {
         assertTrue(signedIn.copy(observed = LocalVolumeStateDto(true, false, false, null)).showVolumeButton)
         assertTrue(signedIn.copy(observed = LocalVolumeStateDto(true, true, false, null)).showVolumeButton)
         assertTrue(signedIn.copy(observed = ready()).showVolumeButton)
-        assertFalse(signedIn.copy(isDiscordSession = false, observed = ready()).showVolumeButton)
     }
+    @Test fun `the helper notice is for a helper with nothing to report`() {
+        val signedIn = LocalVolumeUiState(isDiscordSession = true)
+        assertTrue(signedIn.copy(observed = LocalVolumeStateDto(true, false, false, null)).isHelperOffline)
+        assertFalse(signedIn.copy(observed = LocalVolumeStateDto(true, true, false, null)).isHelperOffline)
+        assertFalse(signedIn.copy(observed = ready()).isHelperOffline)
+        assertFalse(LocalVolumeUiState(observed = LocalVolumeStateDto(true, false, false, null)).isHelperOffline)
+    }
+
+    @Test fun `a guest always gets the button, which leads to the demo notice`() {
+        assertTrue(LocalVolumeUiState(isDiscordSession = false).showVolumeButton)
+        assertFalse(LocalVolumeUiState(isDiscordSession = false, observed = ready()).enabled)
+    }
+
     private fun ready(volume: Int = 100) = LocalVolumeStateDto(true, true, true, volume)
 
     private class FakeClient(var observation: LocalVolumeStateDto) : KajutaBotRealtimeClient {

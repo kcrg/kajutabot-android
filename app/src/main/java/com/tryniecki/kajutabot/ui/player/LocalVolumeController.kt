@@ -50,10 +50,11 @@ data class LocalVolumeUiState(
     val error: LocalVolumeError? = null,
     val unsupported: Boolean = false,
 ) {
-    val showVolumeButton: Boolean get() = isDiscordSession && observed?.installed == true
+    val showVolumeButton: Boolean get() = !isDiscordSession || observed?.installed == true
     val enabled: Boolean get() = isDiscordSession && connected && fresh && !unsupported &&
         observed?.let { it.isValid() && it.available } == true
     val displayedVolume: Int? get() = draft ?: observed?.volume
+    val isHelperOffline: Boolean get() = isDiscordSession && observed?.online == false && displayedVolume == null
 }
 
 /** Confined to the ViewModel dispatcher, just like PlayerRealtime. Never owns a connection. */

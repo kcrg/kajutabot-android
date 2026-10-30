@@ -122,6 +122,14 @@ class LocalVolumeSheetTest {
         compose.onNodeWithTag("local-volume-slider").assertDoesNotExist()
     }
 
+    @Test fun offlineHelperOffersItsLinkInsteadOfControls() {
+        val offline = ready().copy(observed = LocalVolumeStateDto(true, false, false, null))
+        compose.setContent { MaterialTheme { LocalVolumeSheet(offline, {}, {}, {}, {}) } }
+        compose.onNodeWithTag("local-volume-helper-notice").assertIsDisplayed()
+        compose.onNodeWithText(compose.activity.getString(R.string.local_volume_helper_start)).assertIsDisplayed()
+        compose.onNodeWithTag("local-volume-slider").assertDoesNotExist()
+    }
+
     @Test fun staleApiStateDisablesSlider() {
         compose.setContent {
             MaterialTheme {

@@ -1,5 +1,13 @@
 package com.tryniecki.kajutabot.ui.player
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -31,7 +41,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
@@ -39,11 +51,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tryniecki.kajutabot.MainActivity
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.components.ActionTooltip
 import com.tryniecki.kajutabot.ui.feedback.VolumeBoundaryFeedback
 import com.tryniecki.kajutabot.ui.feedback.rememberFeedbackPerformer
 import com.tryniecki.kajutabot.ui.components.ExpressiveLoadingIndicator
 import kotlin.math.roundToInt
+
+private const val DESKTOP_HELPER_URL = "https://kajuta.tryniecki.eu"
 
 /** Touch detent only; keyboard/accessibility adjustments retain every integer percentage. */
 internal fun snapLocalVolume(value: Int, dragging: Boolean): Int =
@@ -90,8 +106,93 @@ fun LocalVolumeSheet(
         scrimColor = Color.Transparent,
         modifier = Modifier.testTag("local-volume-sheet").semantics { paneTitle = title },
     ) {
-        LocalVolumeSheetContent(state, onDraftChange, onGestureFinished, onGestureCancelled)
+        if (state.isDiscordSession) {
+            val motion = MaterialTheme.motionScheme
+            AnimatedContent(
+                targetState = state.isHelperOffline,
+                transitionSpec = {
+                    (fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()))
+                        .using(SizeTransform { _, _ -> motion.defaultSpatialSpec() })
+                },
+                label = "localVolumeHelper",
+            ) { isHelperOffline ->
+                if (isHelperOffline) {
+                    LocalVolumeHelperNotice()
+                } else {
+                    LocalVolumeSheetContent(state, onDraftChange, onGestureFinished, onGestureCancelled)
+                }
+            }
+        } else {
+            LocalVolumeDemoNotice()
+        }
     }
+}
+
+@Composable
+private fun LocalVolumeDemoNotice() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.local_volume_title),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = stringResource(R.string.local_volume_demo),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.testTag("local-volume-demo"),
+        )
+    }
+}
+
+/** Replaces the volume controls, which have nothing to show until the helper reports in. */
+@Composable
+private fun LocalVolumeHelperNotice() {
+    val context = LocalContext.current
+    val shareLabel = stringResource(R.string.local_volume_helper_share)
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .padding(start = 24.dp, end = 12.dp, bottom = 24.dp)
+            .testTag("local-volume-helper-notice"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = stringResource(R.string.local_volume_helper_start),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = stringResource(R.string.local_volume_helper_install),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        ActionTooltip(shareLabel) {
+            IconButton(onClick = { context.shareDesktopHelperLink(shareLabel) }) {
+                Icon(
+                    painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_share_outline),
+                    contentDescription = shareLabel,
+                )
+            }
+        }
+    }
+}
+
+private fun Context.shareDesktopHelperLink(title: String) {
+    val link = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, DESKTOP_HELPER_URL)
+    startActivity(
+        Intent.createChooser(link, title).putExtra(
+            // The app accepts shared links itself, and would try to queue this one.
+            Intent.EXTRA_EXCLUDE_COMPONENTS,
+            arrayOf(ComponentName(this, MainActivity::class.java)),
+        ),
+    )
 }
 
 @Composable

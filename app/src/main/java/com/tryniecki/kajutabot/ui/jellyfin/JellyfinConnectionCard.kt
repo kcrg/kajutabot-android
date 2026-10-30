@@ -37,6 +37,35 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.text.asString
 
+/** What a guest sees in place of [JellyfinConnectionCard]: linking a server needs an account. */
+@Composable
+fun JellyfinDemoCard() {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                painter = painterResource(com.composables.icons.tabler.outline.R.drawable.tabler_ic_server_outline),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Column {
+                Text(
+                    text = stringResource(R.string.nav_jellyfin),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = stringResource(R.string.jellyfin_demo_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 /** The Jellyfin section of the More tab: which server is linked, and linking or unlinking it. */
 @Composable
 fun JellyfinConnectionCard(viewModel: JellyfinViewModel) {

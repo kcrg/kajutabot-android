@@ -46,6 +46,7 @@ import com.tryniecki.kajutabot.auth.AuthState
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.app.AppViewModel
 import com.tryniecki.kajutabot.ui.jellyfin.JellyfinConnectionCard
+import com.tryniecki.kajutabot.ui.jellyfin.JellyfinDemoCard
 import com.tryniecki.kajutabot.ui.jellyfin.JellyfinViewModel
 import com.tryniecki.kajutabot.ui.navigation.ScreenCommand
 import com.tryniecki.kajutabot.ui.navigation.ScreenCommandEffect
@@ -197,10 +198,10 @@ fun MoreRootScreen(
                 }
             }
 
-            if (!isGuest) {
-                item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-                item { SectionTitle(stringResource(R.string.nav_jellyfin)) }
-                item { JellyfinConnectionCard(jellyfinViewModel) }
+            item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+            item { SectionTitle(stringResource(R.string.nav_jellyfin)) }
+            item {
+                if (isGuest) JellyfinDemoCard() else JellyfinConnectionCard(jellyfinViewModel)
             }
 
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
