@@ -122,6 +122,13 @@ internal object KajutaBotJourneys {
         swipeContent(device, down = false)
         swipeContent(device, down = true)
 
+        // The Jellyfin tab only exists for accounts with a linked server.
+        if (device.hasObject(By.text("Jellyfin"))) {
+            device.clickAndWait(By.text("Jellyfin"))
+            swipeContent(device, down = false)
+            swipeContent(device, down = true)
+        }
+
         // Player -> Favorites -> History, with a representative list gesture on each.
         device.clickAndWait(By.text("Favorites"))
         swipeContent(device, down = false)
@@ -131,18 +138,7 @@ internal object KajutaBotJourneys {
         swipeContent(device, down = false)
         swipeContent(device, down = true)
 
-        // History -> More -> libraries/contact detail routes.
         device.clickAndWait(By.text("More"))
-        device.scrollUntilVisible(By.text("Libraries used")).click()
-        device.waitForObject(By.desc("Back"))
-        swipeContent(device, down = false)
-        device.pressBack()
-        device.waitForObject(By.text("More"))
-
-        device.scrollUntilVisible(By.text("Contact")).click()
-        device.waitForObject(By.desc("Back"))
-        device.pressBack()
-        device.waitForObject(By.text("More"))
 
         // Back to Player and exercise both full-screen player detail routes.
         device.clickAndWait(By.text("Player"))

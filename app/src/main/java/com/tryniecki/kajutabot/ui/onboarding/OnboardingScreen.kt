@@ -1,6 +1,8 @@
 package com.tryniecki.kajutabot.ui.onboarding
 
-import androidx.activity.compose.BackHandler
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateDpAsState
@@ -115,7 +117,10 @@ fun OnboardingScreen(
         }
     }
 
-    BackHandler(enabled = backEnabled) {
+    NavigationBackHandler(
+        state = rememberNavigationEventState(currentInfo = NavigationEventInfo.None),
+        isBackEnabled = backEnabled,
+    ) {
         when {
             pagerState.currentPage > 0 -> goToPage(pagerState.currentPage - 1)
             canDismiss -> onDismiss()

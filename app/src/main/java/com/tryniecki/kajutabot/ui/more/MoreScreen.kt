@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,12 +45,16 @@ import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.auth.AuthState
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.app.AppViewModel
+import com.tryniecki.kajutabot.ui.jellyfin.JellyfinConnectionCard
+import com.tryniecki.kajutabot.ui.jellyfin.JellyfinViewModel
+import com.tryniecki.kajutabot.ui.navigation.ScrollToTopOnReselect
 import com.tryniecki.kajutabot.ui.player.PlayerViewModel
 import com.tryniecki.kajutabot.ui.player.RealtimeConnectionState
 import com.tryniecki.kajutabot.ui.theme.ThemeMode
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
 import com.tryniecki.kajutabot.ui.text.uiText
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.delay
 
 @Composable
@@ -60,19 +65,22 @@ fun MoreRootScreen(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     onOpenOnboarding: () -> Unit,
-    onOpenLibraries: () -> Unit,
-    onOpenContact: () -> Unit,
+    jellyfinViewModel: JellyfinViewModel,
+    reselected: Flow<Unit>,
 ) {
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
     val appUi by appViewModel.ui.collectAsStateWithLifecycle()
     val isLoggingOut = appUi.isLoggingOut
     val logoutError = appUi.accountError
     val openCustomTab = rememberOpenCustomTab()
+    val listState = rememberLazyListState()
+    ScrollToTopOnReselect(listState, reselected)
 
     Scaffold(
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(
                 start = 16.dp,
                 top = innerPadding.calculateTopPadding() + 8.dp,
@@ -188,6 +196,12 @@ fun MoreRootScreen(
                 }
             }
 
+            if (!isGuest) {
+                item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+                item { SectionTitle(stringResource(R.string.nav_jellyfin)) }
+                item { JellyfinConnectionCard(jellyfinViewModel) }
+            }
+
             item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
             item { SectionTitle(stringResource(R.string.more_section_realtime)) }
             item { RealtimeStatusCard(playerViewModel) }
@@ -229,30 +243,8 @@ fun MoreRootScreen(
                     onClick = onOpenOnboarding,
                 )
             }
-
-            item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-            item { SectionTitle(stringResource(R.string.more_section_about)) }
-
-            item {
-                SettingsRow(
-                    icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_info_circle_outline,
-                    title = stringResource(R.string.more_libraries_title),
-                    subtitle = stringResource(R.string.more_libraries_subtitle),
-                    useContainer = true,
-                    onClick = onOpenLibraries,
-                )
-            }
-            item {
-                SettingsRow(
-                    icon = com.composables.icons.tabler.outline.R.drawable.tabler_ic_mail_outline,
-                    title = stringResource(R.string.more_contact_title),
-                    subtitle = stringResource(R.string.more_contact_author),
-                    useContainer = true,
-                    onClick = onOpenContact,
-                )
-            }
-        }
     }
+        }
 }
 
 @Composable

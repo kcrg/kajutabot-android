@@ -25,17 +25,21 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldValue
+import androidx.compose.material3.adaptive.navigationsuite.rememberNavigationSuiteScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -58,9 +62,6 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberDecoratedNavEntries
-import androidx.navigation3.runtime.rememberNavBackStack
-import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
 import androidx.window.core.layout.WindowSizeClass.Companion.WIDTH_DP_EXPANDED_LOWER_BOUND
@@ -80,15 +81,19 @@ import com.tryniecki.kajutabot.ui.favorites.FavoritesRoute
 import com.tryniecki.kajutabot.ui.favorites.FavoritesViewModel
 import com.tryniecki.kajutabot.ui.history.HistoryRoute
 import com.tryniecki.kajutabot.ui.history.HistoryViewModel
-import com.tryniecki.kajutabot.ui.more.ContactScreen
-import com.tryniecki.kajutabot.ui.more.LibrariesScreen
+import com.tryniecki.kajutabot.ui.jellyfin.JellyfinConnectionStatus
+import com.tryniecki.kajutabot.ui.jellyfin.JellyfinRoute
+import com.tryniecki.kajutabot.ui.jellyfin.JellyfinViewModel
 import com.tryniecki.kajutabot.ui.more.MoreRootScreen
 import com.tryniecki.kajutabot.ui.navigation.AppDestination
 import com.tryniecki.kajutabot.ui.navigation.AppRoute
+import com.tryniecki.kajutabot.ui.navigation.NavigationMotionSpecs
+import com.tryniecki.kajutabot.ui.navigation.Navigator
 import com.tryniecki.kajutabot.ui.navigation.hidesBottomNavigation
 import com.tryniecki.kajutabot.ui.navigation.kajutaForwardTransition
 import com.tryniecki.kajutabot.ui.navigation.kajutaPopTransition
 import com.tryniecki.kajutabot.ui.navigation.navigationMotionMetadata
+import com.tryniecki.kajutabot.ui.navigation.rememberNavigationState
 import com.tryniecki.kajutabot.ui.onboarding.AccessCheckingScreen
 import com.tryniecki.kajutabot.ui.onboarding.AccessErrorScreen
 import com.tryniecki.kajutabot.ui.onboarding.NoAccessScreen
@@ -274,9 +279,8 @@ private fun AuthenticatedShell(
         ) {
         AnimatedContent(
             targetState = gate,
-            modifier = Modifier
-                .fillMaxHeight()
-                .adaptiveContentWidth(constrainWideContent),
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
             transitionSpec = {
                 when {
                     targetState == AuthenticatedGate.ONBOARDING ->
@@ -301,6 +305,13 @@ private fun AuthenticatedShell(
             },
             label = "authenticatedGateTransition",
         ) { activeGate ->
+            Box(
+                if (activeGate == AuthenticatedGate.CONTENT) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier.fillMaxHeight().adaptiveContentWidth(constrainWideContent)
+                },
+            ) {
             when (activeGate) {
                 AuthenticatedGate.CHECKING_ACCESS -> AccessCheckingScreen(isGuest = sessionType == SessionType.GUEST)
                 AuthenticatedGate.ACCESS_ERROR -> AccessErrorScreen(
@@ -338,6 +349,7 @@ private fun AuthenticatedShell(
                     )
                 }
                 AuthenticatedGate.CONTENT -> AuthenticatedContent(
+                    constrainWideContent = constrainWideContent,
                     container = container,
                     appViewModel = appViewModel,
                     playerViewModel = playerViewModel,
@@ -346,6 +358,7 @@ private fun AuthenticatedShell(
                     onOpenOnboarding = { manualOnboardingRequested = true },
                     sessionType = sessionType,
                 )
+            }
             }
         }
         }
@@ -361,49 +374,36 @@ private fun AuthenticatedContent(
     onThemeModeChange: (ThemeMode) -> Unit,
     onOpenOnboarding: () -> Unit,
     sessionType: SessionType,
+    constrainWideContent: Boolean,
 ) {
-    val playerBackStack = rememberNavBackStack(AppRoute.Player)
-    val favoritesBackStack = rememberNavBackStack(AppRoute.Favorites)
-    val historyBackStack = rememberNavBackStack(AppRoute.History)
-    val moreBackStack = rememberNavBackStack(AppRoute.More)
-    var currentDestination by rememberSaveable { mutableStateOf(AppDestination.PLAYER) }
-
-    val activeBackStack = when (currentDestination) {
-        AppDestination.PLAYER -> playerBackStack
-        AppDestination.FAVORITES -> favoritesBackStack
-        AppDestination.HISTORY -> historyBackStack
-        AppDestination.MORE -> moreBackStack
-    }
-    val currentRoute = activeBackStack.lastOrNull() as? AppRoute ?: AppRoute.Player
-    val isFullScreenDetailOpen = currentRoute.hidesBottomNavigation()
-
-    fun popActiveBackStack() {
-        if (activeBackStack.size > 1) {
-            activeBackStack.removeLastOrNull()
-        } else if (currentDestination != AppDestination.PLAYER) {
-            // Exit non-home top-level stacks through Player. This matches the
-            // Navigation 3 multiple-back-stack recipe and gives predictive Back
-            // a real previous scene instead of synthesizing one.
-            currentDestination = AppDestination.PLAYER
-        }
-    }
-
-    fun selectTopLevel(destination: AppDestination) {
-        if (currentDestination != destination) {
-            currentDestination = destination
-            return
-        }
-
-        // Re-selecting More returns to its root, matching the old NavController behavior.
-        if (destination == AppDestination.MORE) {
-            while (moreBackStack.size > 1) moreBackStack.removeLastOrNull()
-        }
+    val navigationState = rememberNavigationState()
+    val navigator = remember(navigationState) { Navigator(navigationState) }
+    val currentDestination = navigationState.currentDestination
+    val isFullScreenDetailOpen = navigationState.currentRoute.hidesBottomNavigation()
+    val navigationSuiteState = rememberNavigationSuiteScaffoldState(
+        if (isFullScreenDetailOpen) NavigationSuiteScaffoldValue.Hidden else NavigationSuiteScaffoldValue.Visible,
+    )
+    LaunchedEffect(isFullScreenDetailOpen) {
+        if (isFullScreenDetailOpen) navigationSuiteState.hide() else navigationSuiteState.show()
     }
 
     val favoritesViewModel: FavoritesViewModel = viewModel(
         factory = FavoritesViewModel.factory(container),
     )
     ObserveUserFeedback(favoritesViewModel.feedbackEvents)
+    // Lives here rather than in its entry: the tab itself depends on the connection.
+    val jellyfinViewModel: JellyfinViewModel = viewModel(
+        factory = JellyfinViewModel.factory(container, isAvailable = sessionType != SessionType.GUEST),
+    )
+    ObserveUserFeedback(jellyfinViewModel.feedbackEvents)
+    val jellyfinStatus by jellyfinViewModel.connectionStatus.collectAsStateWithLifecycle()
+    SideEffect(jellyfinStatus) {
+        if (jellyfinStatus == JellyfinConnectionStatus.DISCONNECTED ||
+            jellyfinStatus == JellyfinConnectionStatus.ERROR
+        ) {
+            navigator.leave(AppDestination.JELLYFIN)
+        }
+    }
     // Narrow slices: the shell only needs the mini-player state, the error
     // line and the polling keys — typing on the Search screen must not
     // recompose the shell or the MiniPlayer.
@@ -414,20 +414,25 @@ private fun AuthenticatedContent(
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
     val motion = MaterialTheme.motionScheme
     val density = LocalDensity.current
-    val hierarchySlideDistancePx = with(density) { KbMotion.HIERARCHY_SLIDE_DISTANCE.roundToPx() }
+    val navigationMotion = NavigationMotionSpecs(
+        hierarchySpatial = motion.defaultSpatialSpec(),
+        hierarchyEffects = motion.fastEffectsSpec(),
+        hierarchySlideDistancePx = with(density) { KbMotion.HIERARCHY_SLIDE_DISTANCE.roundToPx() },
+        tabEnter = motion.defaultEffectsSpec(),
+        tabExit = motion.fastEffectsSpec(),
+        tabSpatial = motion.fastSpatialSpec(),
+    )
 
     LaunchedEffect(appViewModel) {
         appViewModel.sharedUrlEvents.collect { event ->
-            currentDestination = AppDestination.PLAYER
-            while (playerBackStack.size > 1) playerBackStack.removeLastOrNull()
-            playerBackStack.add(AppRoute.SharedTrack(event.id, event.url))
+            navigator.showSharedTrack(AppRoute.SharedTrack(event.id, event.url))
         }
     }
 
     // Retain the last content for the exit transition: visibility and state
     // go null in the same frame when the track ends.
     var lastMiniPlayerState by remember { mutableStateOf<MiniPlayerState?>(null) }
-    LaunchedEffect(miniPlayerState) {
+    SideEffect(miniPlayerState) {
         if (miniPlayerState != null) lastMiniPlayerState = miniPlayerState
     }
 
@@ -439,7 +444,7 @@ private fun AuthenticatedContent(
     )
 
     PlayerRealtimeEffect(playerViewModel)
-    LaunchedEffect(remotePlaybackActive, mediaServiceActive) {
+    SideEffect(remotePlaybackActive, mediaServiceActive) {
         if (remotePlaybackActive && !mediaServiceActive) {
             RemotePlaybackService.start(context)
         }
@@ -451,26 +456,31 @@ private fun AuthenticatedContent(
                 PlayerRoute(
                     viewModel = playerViewModel,
                     favoritesViewModel = favoritesViewModel,
-                    onSearchOpen = {
-                        if (playerBackStack.lastOrNull() != AppRoute.Search) {
-                            playerBackStack.add(AppRoute.Search)
-                        }
-                    },
-                    onDiscordSelectionOpen = {
-                        if (playerBackStack.lastOrNull() != AppRoute.DiscordSelection) {
-                            playerBackStack.add(AppRoute.DiscordSelection)
-                        }
-                    },
+                    onSearchOpen = { navigator.navigate(AppRoute.Search) },
+                    onDiscordSelectionOpen = { navigator.navigate(AppRoute.DiscordSelection) },
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+                    reselected = navigator.reselected(AppDestination.PLAYER),
                 )
             }
             entry<AppRoute.Favorites>(metadata = navigationMotionMetadata(AppDestination.FAVORITES)) {
-                FavoritesRoute(viewModel = favoritesViewModel)
+                FavoritesRoute(
+                    viewModel = favoritesViewModel,
+                    reselected = navigator.reselected(AppDestination.FAVORITES),
+                )
+            }
+            entry<AppRoute.Jellyfin>(metadata = navigationMotionMetadata(AppDestination.JELLYFIN)) {
+                JellyfinRoute(
+                    viewModel = jellyfinViewModel,
+                    reselected = navigator.reselected(AppDestination.JELLYFIN),
+                )
             }
             entry<AppRoute.History>(metadata = navigationMotionMetadata(AppDestination.HISTORY)) {
                 val historyViewModel: HistoryViewModel = viewModel(factory = HistoryViewModel.factory(container))
-                HistoryRoute(viewModel = historyViewModel)
+                HistoryRoute(
+                    viewModel = historyViewModel,
+                    reselected = navigator.reselected(AppDestination.HISTORY),
+                )
             }
             entry<AppRoute.More>(metadata = navigationMotionMetadata(AppDestination.MORE)) {
                 MoreRootScreen(
@@ -480,23 +490,9 @@ private fun AuthenticatedContent(
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange,
                     onOpenOnboarding = onOpenOnboarding,
-                    onOpenLibraries = {
-                        if (moreBackStack.lastOrNull() != AppRoute.Libraries) {
-                            moreBackStack.add(AppRoute.Libraries)
-                        }
-                    },
-                    onOpenContact = {
-                        if (moreBackStack.lastOrNull() != AppRoute.Contact) {
-                            moreBackStack.add(AppRoute.Contact)
-                        }
-                    },
+                    jellyfinViewModel = jellyfinViewModel,
+                    reselected = navigator.reselected(AppDestination.MORE),
                 )
-            }
-            entry<AppRoute.Libraries>(metadata = navigationMotionMetadata(AppDestination.MORE)) {
-                LibrariesScreen(onBack = { popActiveBackStack() })
-            }
-            entry<AppRoute.Contact>(metadata = navigationMotionMetadata(AppDestination.MORE)) {
-                ContactScreen(onBack = { popActiveBackStack() })
             }
             entry<AppRoute.Search>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
                 // Disposal follows the actual Navigation 3 exit transition,
@@ -507,7 +503,7 @@ private fun AuthenticatedContent(
                 SearchRoute(
                     viewModel = playerViewModel,
                     favoritesViewModel = favoritesViewModel,
-                    onClose = { popActiveBackStack() },
+                    onClose = navigator::goBack,
                 )
             }
             entry<AppRoute.SharedTrack>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) { route ->
@@ -515,140 +511,97 @@ private fun AuthenticatedContent(
                     viewModel = playerViewModel,
                     requestId = route.requestId,
                     url = route.url,
-                    onClose = { popActiveBackStack() },
+                    onClose = navigator::goBack,
                 )
             }
             entry<AppRoute.DiscordSelection>(metadata = navigationMotionMetadata(AppDestination.PLAYER)) {
                 DiscordSelectionRoute(
                     viewModel = playerViewModel,
-                    onBack = { popActiveBackStack() },
+                    onBack = navigator::goBack,
                     isGuest = sessionType == SessionType.GUEST,
                 )
             }
         }
+        val activeEntries = navigationState.toDecoratedEntries(appEntryProvider)
+        val navigationSuiteType = NavigationSuiteScaffoldDefaults.navigationSuiteType(currentWindowAdaptiveInfoV2())
 
-        // Each top-level stack owns a separate state holder. This mirrors the
-        // Navigation 3 multiple-back-stack recipe and retains rememberSaveable
-        // state while a tab is not currently displayed.
-        val playerEntries = rememberDecoratedNavEntries(
-            backStack = playerBackStack,
-            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>()),
-            entryProvider = appEntryProvider,
-        )
-        val favoritesEntries = rememberDecoratedNavEntries(
-            backStack = favoritesBackStack,
-            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>()),
-            entryProvider = appEntryProvider,
-        )
-        val moreEntries = rememberDecoratedNavEntries(
-            backStack = moreBackStack,
-            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>()),
-            entryProvider = appEntryProvider,
-        )
-        val historyEntries = rememberDecoratedNavEntries(
-            backStack = historyBackStack,
-            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>()),
-            entryProvider = appEntryProvider,
-        )
-        // Keep Player as the starting stack underneath the selected tab. Besides
-        // matching the official "exit through home" pattern, this gives NavDisplay
-        // the correct previous scene for Back / predictive Back.
-        val activeEntries = when (currentDestination) {
-            AppDestination.PLAYER -> playerEntries
-            AppDestination.FAVORITES -> playerEntries + favoritesEntries
-            AppDestination.HISTORY -> playerEntries + historyEntries
-            AppDestination.MORE -> playerEntries + moreEntries
-        }
-
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            bottomBar = {
-                // Full-screen detail routes: no tabs reachable underneath.
-                if (!isFullScreenDetailOpen) {
-                    Column {
-                        AnimatedVisibility(
-                            visible = miniPlayerVisible,
-                            enter = fadeIn(motion.defaultEffectsSpec()) +
-                                expandVertically(
-                                    animationSpec = motion.defaultSpatialSpec(),
-                                    expandFrom = Alignment.Bottom,
-                                ),
-                            exit = fadeOut(motion.fastEffectsSpec()) +
-                                shrinkVertically(
-                                    animationSpec = motion.defaultSpatialSpec(),
-                                    shrinkTowards = Alignment.Bottom,
-                                ),
-                        ) {
-                            val miniPlayerVisibilityScope = this
-                            lastMiniPlayerState?.let { state ->
-                                MiniPlayer(
-                                    slide = state.slide,
-                                    track = state.track,
-                                    isMutating = state.isMutating,
-                                    isQueueReordering = state.isQueueReordering,
-                                    activeControlAction = state.activeControlAction,
-                                    isFavorite = favoritesUi.isFavorite(state.track),
-                                    favoriteStatus = favoritesUi.statusFor(state.track),
-                                    favoritesBusy = favoritesUi.isLoading,
-                                    onToggleFavorite = favoritesViewModel::toggleSilently,
-                                    onOpenPlayer = { selectTopLevel(AppDestination.PLAYER) },
-                                    onSkip = playerViewModel::skip,
-                                    sharedTransitionScope = this@SharedTransitionLayout,
-                                    animatedVisibilityScope = miniPlayerVisibilityScope,
-                                )
-                            }
-                        }
-                        NavigationBar {
-                            AppDestination.entries.forEach { destination ->
-                                val destinationLabel = stringResource(destination.labelResId)
-                                NavigationBarItem(
-                                    selected = currentDestination == destination,
-                                    onClick = { selectTopLevel(destination) },
-                                    icon = {
-                                        Icon(
-                                            painter = painterResource(destination.icon),
-                                            contentDescription = destinationLabel,
-                                        )
-                                    },
-                                    label = { Text(destinationLabel) },
-                                )
-                            }
-                        }
-                    }
+        NavigationSuiteScaffold(
+            navigationItems = {
+                val isJellyfinConnected = jellyfinStatus == JellyfinConnectionStatus.CONNECTED
+                AppDestination.entries.forEach { destination ->
+                    if (destination == AppDestination.JELLYFIN && !isJellyfinConnected &&
+                        currentDestination != destination
+                    ) return@forEach
+                    val destinationLabel = stringResource(destination.labelResId)
+                    NavigationSuiteItem(
+                        selected = currentDestination == destination,
+                        onClick = { navigator.selectTopLevel(destination) },
+                        icon = {
+                            Icon(
+                                painter = painterResource(destination.icon),
+                                contentDescription = destinationLabel,
+                            )
+                        },
+                        label = { Text(destinationLabel) },
+                        navigationSuiteType = navigationSuiteType,
+                    )
                 }
             },
-        ) { innerPadding ->
-            // Peer tabs fade through; detail pages use directional Shared Axis X.
-            // The same pop policy drives toolbar, system and predictive Back.
-            NavDisplay(
-                entries = activeEntries,
-                onBack = { popActiveBackStack() },
-                sharedTransitionScope = this@SharedTransitionLayout,
-                transitionSpec = {
-                    kajutaForwardTransition(
-                        hierarchySpatialSpec = motion.defaultSpatialSpec(),
-                        hierarchyEffectsSpec = motion.fastEffectsSpec(),
-                        hierarchySlideDistancePx = hierarchySlideDistancePx,
-                    )
-                },
-                popTransitionSpec = {
-                    kajutaPopTransition(
-                        hierarchySpatialSpec = motion.defaultSpatialSpec(),
-                        hierarchyEffectsSpec = motion.fastEffectsSpec(),
-                        hierarchySlideDistancePx = hierarchySlideDistancePx,
-                    )
-                },
-                predictivePopTransitionSpec = {
-                    kajutaPopTransition(
-                        hierarchySpatialSpec = motion.defaultSpatialSpec(),
-                        hierarchyEffectsSpec = motion.fastEffectsSpec(),
-                        hierarchySlideDistancePx = hierarchySlideDistancePx,
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = innerPadding.calculateBottomPadding()),
-            )
+            modifier = Modifier.fillMaxSize(),
+            navigationSuiteType = navigationSuiteType,
+            state = navigationSuiteState,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // Peer tabs fade through; detail pages use directional Shared Axis X.
+                // The same pop policy drives toolbar, system and predictive Back.
+                NavDisplay(
+                    entries = activeEntries,
+                    onBack = navigator::goBack,
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    transitionSpec = { kajutaForwardTransition(navigationMotion) },
+                    popTransitionSpec = { kajutaPopTransition(navigationMotion) },
+                    predictivePopTransitionSpec = { kajutaPopTransition(navigationMotion) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .adaptiveContentWidth(constrainWideContent),
+                )
+                AnimatedVisibility(
+                    visible = miniPlayerVisible,
+                    modifier = Modifier.adaptiveContentWidth(constrainWideContent),
+                    enter = fadeIn(motion.defaultEffectsSpec()) +
+                        expandVertically(
+                            animationSpec = motion.defaultSpatialSpec(),
+                            expandFrom = Alignment.Bottom,
+                        ),
+                    exit = fadeOut(motion.fastEffectsSpec()) +
+                        shrinkVertically(
+                            animationSpec = motion.defaultSpatialSpec(),
+                            shrinkTowards = Alignment.Bottom,
+                        ),
+                ) {
+                    val miniPlayerVisibilityScope = this
+                    (miniPlayerState ?: lastMiniPlayerState)?.let { state ->
+                        MiniPlayer(
+                            slide = state.slide,
+                            track = state.track,
+                            isMutating = state.isMutating,
+                            isQueueReordering = state.isQueueReordering,
+                            activeControlAction = state.activeControlAction,
+                            isFavorite = favoritesUi.isFavorite(state.track),
+                            favoriteStatus = favoritesUi.statusFor(state.track),
+                            favoritesBusy = favoritesUi.isLoading,
+                            onToggleFavorite = favoritesViewModel::toggleSilently,
+                            onOpenPlayer = { navigator.selectTopLevel(AppDestination.PLAYER) },
+                            onSkip = playerViewModel::skip,
+                            sharedTransitionScope = this@SharedTransitionLayout,
+                            animatedVisibilityScope = miniPlayerVisibilityScope,
+                        )
+                    }
+                }
+            }
         }
     }
 }

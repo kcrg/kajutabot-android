@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
 import com.tryniecki.kajutabot.ui.feedback.ObserveUserFeedback
+import com.tryniecki.kajutabot.ui.navigation.ScrollToTopOnReselect
 import com.tryniecki.kajutabot.api.model.history.PlaybackHistoryEntryResponse
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.components.SwipeActionCard
@@ -50,7 +51,9 @@ import com.tryniecki.kajutabot.ui.components.SwipeActionHints
 import com.tryniecki.kajutabot.ui.components.SwipeActionStatus
 import com.tryniecki.kajutabot.ui.components.TrackListCardContent
 import com.tryniecki.kajutabot.ui.text.asString
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
@@ -59,10 +62,10 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 @Composable
-fun HistoryRoute(viewModel: HistoryViewModel) {
+fun HistoryRoute(viewModel: HistoryViewModel, reselected: Flow<Unit>) {
     ObserveUserFeedback(viewModel.feedbackEvents)
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    HistoryScreen(ui, viewModel::refresh, viewModel::loadMore, viewModel::retry, viewModel::enqueue, viewModel::dismissMessage)
+    HistoryScreen(ui, viewModel::refresh, viewModel::loadMore, viewModel::retry, viewModel::enqueue, viewModel::dismissMessage, reselected)
 }
 
 @Composable
@@ -73,8 +76,10 @@ fun HistoryScreen(
     onRetry: () -> Unit,
     onEnqueue: (Long) -> Unit,
     onDismiss: () -> Unit,
+    reselected: Flow<Unit> = emptyFlow(),
 ) {
     val listState = rememberLazyListState()
+    ScrollToTopOnReselect(listState, reselected)
     val showBackToTop by remember(listState) {
         derivedStateOf {
             listState.firstVisibleItemIndex > 4 ||

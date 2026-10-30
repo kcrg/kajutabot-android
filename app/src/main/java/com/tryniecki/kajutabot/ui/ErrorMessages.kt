@@ -54,6 +54,13 @@ fun userMessageForError(e: Throwable?, parsedProblem: KajutaBotProblemDetails? =
             "search_failed" -> uiText(R.string.error_search_failed)
             "rate_limit_exceeded" -> uiText(R.string.error_rate_limit_short)
             "invalid_discord_id" -> uiText(R.string.error_invalid_discord_id)
+            "invalid_server_url" -> uiText(R.string.error_jellyfin_invalid_url)
+            "remote_endpoint_not_allowed" -> uiText(R.string.error_jellyfin_address_not_allowed)
+            "network_error" -> uiText(R.string.jellyfin_link_unreachable)
+            "jellyfin_timeout" -> uiText(R.string.error_jellyfin_timeout)
+            "jellyfin_unavailable" -> uiText(R.string.error_jellyfin_unavailable)
+            "jellyfin_authorization_failed" -> uiText(R.string.error_jellyfin_authorization)
+            "jellyfin_not_connected" -> uiText(R.string.error_jellyfin_not_connected)
             else -> when (e.code()) {
                 401 -> uiText(R.string.auth_session_expired)
                 403 -> uiText(R.string.error_access_denied)

@@ -102,6 +102,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.navigation.ScrollToTopOnReselect
 import com.tryniecki.kajutabot.ui.feedback.FeedbackEffect
 import com.tryniecki.kajutabot.ui.feedback.ReorderFeedback
 import com.tryniecki.kajutabot.ui.feedback.rememberFeedbackPerformer
@@ -125,6 +126,8 @@ import com.tryniecki.kajutabot.ui.theme.forwardSharedAxisY
 import com.tryniecki.kajutabot.ui.text.UiText
 import com.tryniecki.kajutabot.ui.text.asString
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -162,6 +165,7 @@ fun PlayerRoute(
     onDiscordSelectionOpen: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    reselected: Flow<Unit> = emptyFlow(),
 ) {
     val ui by viewModel.playerScreenState.collectAsStateWithLifecycle()
     val favoritesUi by favoritesViewModel.ui.collectAsStateWithLifecycle()
@@ -193,6 +197,7 @@ fun PlayerRoute(
         },
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope,
+        reselected = reselected,
         onLocalVolumeOpen = { localVolumeOpen = true },
         showLocalVolumeButton = localVolume.showVolumeButton,
     )
@@ -290,6 +295,7 @@ fun PlayerScreen(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     onLocalVolumeOpen: () -> Unit = {},
     showLocalVolumeButton: Boolean = false,
+    reselected: Flow<Unit> = emptyFlow(),
 ) {
     val motion = MaterialTheme.motionScheme
     val performFeedback = rememberFeedbackPerformer()
@@ -297,6 +303,7 @@ fun PlayerScreen(
     var confirmStop by rememberSaveable { mutableStateOf(false) }
     var confirmClear by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    ScrollToTopOnReselect(listState, reselected)
     val showFloatingActions = rememberScrollAwareFabVisible(listState)
     val showBackToTop by remember(listState) {
         derivedStateOf {

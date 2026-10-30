@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tryniecki.kajutabot.R
+import com.tryniecki.kajutabot.ui.navigation.ScrollToTopOnReselect
 import com.tryniecki.kajutabot.browser.rememberOpenCustomTab
 import com.tryniecki.kajutabot.ui.components.SkeletonBlock
 import com.tryniecki.kajutabot.ui.components.SwipeActionCard
@@ -57,13 +58,17 @@ import com.tryniecki.kajutabot.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.kajutabot.ui.components.rememberSkeletonPulse
 import com.tryniecki.kajutabot.ui.components.visibleSwipeItems
 import java.time.OffsetDateTime
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.window.core.layout.WindowSizeClass.Companion.HEIGHT_DP_MEDIUM_LOWER_BOUND
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 
 @Composable
-fun FavoritesRoute(viewModel: FavoritesViewModel) {
+fun FavoritesRoute(viewModel: FavoritesViewModel, reselected: Flow<Unit>) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     FavoritesScreen(
         ui = ui,
@@ -73,6 +78,7 @@ fun FavoritesRoute(viewModel: FavoritesViewModel) {
         onPlaySingle = viewModel::playSingle,
         onShuffleChange = viewModel::setShuffle,
         onDismiss = viewModel::dismissMessage,
+        reselected = reselected,
     )
 }
 
@@ -85,15 +91,19 @@ fun FavoritesScreen(
     onPlaySingle: (String) -> Unit,
     onShuffleChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
+    reselected: Flow<Unit> = emptyFlow(),
 ) {
     val openUrl = rememberOpenCustomTab()
     val motion = MaterialTheme.motionScheme
     val listState = rememberLazyListState()
+    ScrollToTopOnReselect(listState, reselected)
     val locale = LocalConfiguration.current.locales[0]
     val favoriteDateFormatter = remember(locale) {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)
     }
     val showFloatingAction = rememberScrollAwareFabVisible(listState)
+    val isTallWindow = currentWindowAdaptiveInfoV2().windowSizeClass
+        .isHeightAtLeastBreakpoint(HEIGHT_DP_MEDIUM_LOWER_BOUND)
     val visibleItems = visibleSwipeItems(
         items = ui.favorites,
         retainedItems = ui.retainedDeletedFavorites.values,
@@ -109,10 +119,7 @@ fun FavoritesScreen(
                 exit = fadeOut(animationSpec = motion.fastEffectsSpec()) +
                     scaleOut(animationSpec = motion.fastSpatialSpec(), targetScale = 0.82f),
             ) {
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+                FavoriteActions(horizontal = !isTallWindow) {
                     if (ui.favorites.isNotEmpty()) {
                         val shuffleContainerColor = ToggleFloatingActionButtonDefaults.containerColor(
                             initialColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -314,7 +321,7 @@ private fun FavoriteEmptyContent(onRefresh: () -> Unit) {
 }
 
 @Composable
-private fun FavoriteSkeletonCard(modifier: Modifier = Modifier) {
+internal fun FavoriteSkeletonCard(modifier: Modifier = Modifier) {
     val pulse = rememberSkeletonPulse()
     Card(
         modifier = modifier,
@@ -337,5 +344,21 @@ private fun FavoriteSkeletonCard(modifier: Modifier = Modifier) {
                 SkeletonBlock(pulse, Modifier.width(96.dp).height(12.dp))
             }
         }
+    }
+}
+
+/** Stacked above each other only where a short window still leaves the list visible. */
+@Composable
+private fun FavoriteActions(horizontal: Boolean, content: @Composable () -> Unit) {
+    if (horizontal) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) { content() }
+    } else {
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) { content() }
     }
 }

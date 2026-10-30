@@ -105,6 +105,8 @@ dependencies {
     ksp(libs.androidx.appfunctions.compiler)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.compose.material3.adaptive)
+    implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
+    implementation(libs.androidx.navigationevent.compose)
     implementation(libs.retrofit)
     implementation(libs.okhttp)
     implementation(platform(libs.androidx.compose.bom))

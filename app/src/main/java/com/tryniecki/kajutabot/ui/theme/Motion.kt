@@ -10,9 +10,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
@@ -49,16 +47,13 @@ object KbMotion {
     const val HIERARCHY_INITIAL_ALPHA = 0.93f
 }
 
-/** Peer destinations have no hierarchy: fade out, then fade and gently scale in. */
-fun tabFadeThroughMotion(): ContentTransform =
-    (fadeIn(
-        animationSpec = tween(durationMillis = 120, delayMillis = 90, easing = FastOutSlowInEasing),
-    ) + scaleIn(
-        animationSpec = tween(durationMillis = 210, easing = FastOutSlowInEasing),
-        initialScale = 0.96f,
-    )) togetherWith fadeOut(
-        animationSpec = tween(durationMillis = 90, easing = FastOutSlowInEasing),
-    )
+/** Peer destinations have no hierarchy: the old tab fades out while the new one gently scales in. */
+fun tabFadeThroughMotion(
+    enterSpec: FiniteAnimationSpec<Float>,
+    exitSpec: FiniteAnimationSpec<Float>,
+    scaleSpec: FiniteAnimationSpec<Float>,
+): ContentTransform =
+    (fadeIn(enterSpec) + scaleIn(scaleSpec, initialScale = 0.96f)) togetherWith fadeOut(exitSpec)
 
 /**
  * Material Shared Axis X-style app navigation. Position is the primary cue and

@@ -5,6 +5,11 @@ import com.tryniecki.kajutabot.api.model.discord.DiscordVoiceChannelResponse
 import com.tryniecki.kajutabot.api.model.favorites.AddFavoriteRequest
 import com.tryniecki.kajutabot.api.model.favorites.FavoriteResponse
 import com.tryniecki.kajutabot.api.model.favorites.QueueFavoritesRequest
+import com.tryniecki.kajutabot.api.model.jellyfin.JellyfinAudioPageResponse
+import com.tryniecki.kajutabot.api.model.jellyfin.JellyfinConnectionResponse
+import com.tryniecki.kajutabot.api.model.jellyfin.JellyfinQuickConnectStartResponse
+import com.tryniecki.kajutabot.api.model.jellyfin.JellyfinQuickConnectStatusResponse
+import com.tryniecki.kajutabot.api.model.jellyfin.StartJellyfinQuickConnectRequest
 import com.tryniecki.kajutabot.api.model.queue.EnqueueRequest
 import com.tryniecki.kajutabot.api.model.queue.MoveQueueEntryRequest
 import com.tryniecki.kajutabot.api.model.queue.QueueMutationRequest
@@ -55,6 +60,29 @@ interface KajutaBotApi {
         @Query("cursor") cursor: Long? = null,
         @Query("pageSize") pageSize: Int = 50,
     ): PlaybackHistoryPageResponse
+
+    @GET("users/me/jellyfin")
+    suspend fun getJellyfinConnection(): JellyfinConnectionResponse
+
+    @DELETE("users/me/jellyfin")
+    suspend fun disconnectJellyfin()
+
+    @POST("users/me/jellyfin/quick-connect")
+    suspend fun startJellyfinQuickConnect(
+        @Body request: StartJellyfinQuickConnectRequest,
+    ): JellyfinQuickConnectStartResponse
+
+    @GET("users/me/jellyfin/quick-connect/{attemptId}")
+    suspend fun getJellyfinQuickConnectStatus(
+        @Path("attemptId") attemptId: String,
+    ): JellyfinQuickConnectStatusResponse
+
+    @GET("users/me/jellyfin/audio")
+    suspend fun getJellyfinAudio(
+        @Query("startIndex") startIndex: Int,
+        @Query("limit") limit: Int,
+        @Query("searchTerm") searchTerm: String? = null,
+    ): JellyfinAudioPageResponse
 
     @POST("users/me/jellyfin/audio/{itemId}/enqueue")
     suspend fun enqueueJellyfinTrack(
