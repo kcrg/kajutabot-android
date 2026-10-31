@@ -10,18 +10,15 @@ data class PlaybackHistoryEntryResponse(
     val title: String,
     val queueInput: String,
     val startedAtUtc: String,
-    val thumbnailUrl: String? = null,
-)
+    val artworkUrl: String? = null,
+    val artworkThumbnailUrl: String? = null,
+    val durationMilliseconds: Long? = null,
+) {
+    val listArtworkUrl: String? get() = artworkThumbnailUrl ?: artworkUrl
+}
 
 @Serializable
 data class PlaybackHistoryPageResponse(
     val items: List<PlaybackHistoryEntryResponse>,
     val nextCursor: Long? = null,
-)
-
-@Serializable
-data class EnqueueJellyfinTrackRequest(
-    val guildId: String,
-    val voiceChannelId: String,
-    val expectedQueueVersion: Long? = null,
 )

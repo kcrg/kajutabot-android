@@ -59,6 +59,7 @@ import com.tryniecki.qumi.ui.components.SwipeActionHints
 import com.tryniecki.qumi.ui.text.asString
 import com.tryniecki.qumi.ui.text.UiText
 import com.tryniecki.qumi.ui.components.TrackListCardContent
+import com.tryniecki.qumi.ui.player.formatDuration
 import com.tryniecki.qumi.ui.components.ActionFeedbackIcon
 import com.tryniecki.qumi.ui.components.rememberScrollAwareFabVisible
 import com.tryniecki.qumi.ui.components.rememberSkeletonPulse
@@ -117,7 +118,7 @@ fun FavoritesScreen(
     val visibleItems = visibleSwipeItems(
         items = ui.favorites,
         retainedItems = ui.retainedDeletedFavorites.values,
-        identity = { favoriteIdentity(it.contentUrl) },
+        identity = { it.favoriteIdentity },
     )
 
     Scaffold(
@@ -229,18 +230,18 @@ fun FavoritesScreen(
                 }
             } else {
                 items(visibleItems, key = { it.contentUrl }, contentType = { "favorite" }) { fav ->
+                    val identity = fav.favoriteIdentity
                     val addLabel = stringResource(R.string.action_add_to_queue)
                     val removeLabel = stringResource(R.string.action_remove_favorite)
-                    val identity = remember(fav.contentUrl) { favoriteIdentity(fav.contentUrl) }
                     SwipeActionCard(
                         addLabel = addLabel,
                         removeLabel = removeLabel,
                         enabled = ui.favoriteStatuses[identity] != SwipeActionStatus.PENDING &&
                             identity !in ui.retainedDeletedFavorites,
-                        addStatus = ui.queueStatuses[fav.contentUrl] ?: SwipeActionStatus.IDLE,
+                        addStatus = ui.queueStatuses[identity] ?: SwipeActionStatus.IDLE,
                         removeStatus = ui.favoriteStatuses[identity] ?: SwipeActionStatus.IDLE,
-                        onAdd = { onPlaySingle(fav.contentUrl) },
-                        onRemove = { onDelete(fav.contentUrl) },
+                        onAdd = { onPlaySingle(identity) },
+                        onRemove = { onDelete(identity) },
                         modifier = Modifier.animateItem(
                             fadeInSpec = motion.fastEffectsSpec(),
                             fadeOutSpec = motion.fastEffectsSpec(),
@@ -254,7 +255,7 @@ fun FavoritesScreen(
                             ),
                         ) {
                             TrackListCardContent(
-                                artworkUrl = fav.thumbnailUrl,
+                                artworkUrl = fav.listArtworkUrl,
                                 supportingContent = {
                                     val zoneId = ZoneId.systemDefault()
                                     val date = remember(fav.addedAt, zoneId) {
@@ -263,7 +264,9 @@ fun FavoritesScreen(
                                                 .format(favoriteDateFormatter)
                                         }.getOrDefault(fav.addedAt)
                                     }
-                                    Text(stringResource(R.string.favorites_saved_date, date))
+                                    val saved = stringResource(R.string.favorites_saved_date, date)
+                                    val duration = fav.durationMilliseconds?.takeIf { it > 0 }?.let(::formatDuration)
+                                    Text(listOfNotNull(saved, duration).joinToString(" · "))
                                 },
                                 titleContent = {
                                     val canOpen = fav.contentUrl.startsWith("https://") || fav.contentUrl.startsWith("http://")

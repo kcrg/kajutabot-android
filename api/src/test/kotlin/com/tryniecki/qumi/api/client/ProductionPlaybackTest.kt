@@ -11,7 +11,7 @@ import org.junit.Test
 
 /** Explicit opt-in: creates a guest session and reads realtime state, without mutations. */
 class ProductionPlaybackTest {
-    @Test fun `production guest authenticates and receives queue and heartbeat`() {
+    @Test fun `production guest authenticates and receives queue`() {
         val baseUrl = System.getProperty("playbackTestBaseUrl", "")
         assumeTrue(baseUrl.isNotBlank())
         runBlocking {
@@ -22,12 +22,10 @@ class ProductionPlaybackTest {
                 val client = RealtimeClientFactory.create(baseUrl) { session.accessToken }
                 try {
                     val queue = async(start = CoroutineStart.UNDISPATCHED) { client.updates.first() }
-                    val heartbeat = async(start = CoroutineStart.UNDISPATCHED) { client.heartbeats.first() }
                     client.start()
                     client.connected.first { it }
                     if (client.subscribeGuild(guild.id)) assertEquals(guild.id, queue.await().guildId)
                     else queue.cancel()
-                    heartbeat.await()
                 } finally { client.stop() }
             }
         }

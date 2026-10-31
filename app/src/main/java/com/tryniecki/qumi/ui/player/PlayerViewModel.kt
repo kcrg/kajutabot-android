@@ -14,8 +14,10 @@ import com.tryniecki.qumi.R
 import com.tryniecki.qumi.api.client.ApiErrors
 import com.tryniecki.qumi.api.model.discord.DiscordGuildResponse
 import com.tryniecki.qumi.api.model.discord.DiscordVoiceChannelResponse
+import com.tryniecki.qumi.api.model.discord.VoiceChannelsUpdatedEvent
 import com.tryniecki.qumi.api.model.queue.EnqueueRequest
 import com.tryniecki.qumi.api.model.queue.QueueEntryResponse
+import com.tryniecki.qumi.api.model.queue.PlaybackStateResponse
 import com.tryniecki.qumi.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.qumi.api.model.search.SearchItemResponse
 import com.tryniecki.qumi.api.model.common.PlaybackTrackResponse
@@ -102,6 +104,7 @@ data class PlayerUiState(
     val searchQuery: String = "",
     val searchSource: SearchSourceOption = SearchSourceOption.SMART,
     val searchResults: List<SearchItemResponse> = emptyList(),
+    val searchUnavailableSources: List<String> = emptyList(),
     val searchQueueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val searchHistory: List<String> = emptyList(),
     val lastCompletedSearchQuery: String? = null,
@@ -185,6 +188,7 @@ data class SearchUiState(
     val searchQuery: String = "",
     val searchSource: SearchSourceOption = SearchSourceOption.SMART,
     val searchResults: List<SearchItemResponse> = emptyList(),
+    val searchUnavailableSources: List<String> = emptyList(),
     val searchQueueStatuses: Map<String, SwipeActionStatus> = emptyMap(),
     val searchHistory: List<String> = emptyList(),
     val lastCompletedSearchQuery: String? = null,
@@ -254,6 +258,7 @@ fun PlayerUiState.toSearchUiState(): SearchUiState = SearchUiState(
     searchQuery = searchQuery,
     searchSource = searchSource,
     searchResults = searchResults,
+    searchUnavailableSources = searchUnavailableSources,
     searchQueueStatuses = searchQueueStatuses,
     searchHistory = searchHistory,
     lastCompletedSearchQuery = lastCompletedSearchQuery,
@@ -281,6 +286,7 @@ fun PlayerUiState.toMiniPlayerState(): MiniPlayerState? {
 class PlayerViewModel(
     private val repository: PlayerRepository,
     private val preferencesRepository: UserPreferencesRepository,
+    network: StateFlow<Long?> = MutableStateFlow(0L),
 ) : ViewModel() {
     private val sessionIdentity = checkNotNull(repository.sessionIdentity.value)
     private val feedback = UserFeedback()
@@ -313,6 +319,11 @@ class PlayerViewModel(
         recoverQueue = ::recoverQueueOnce,
         elapsedRealtimeMs = SystemClock::elapsedRealtime,
         localVolume = localVolume,
+        onPlaybackState = ::applyPlaybackState,
+        onVoiceChannels = ::applyVoiceChannels,
+        onQuickConnect = repository.jellyfinLinkEvents::publish,
+        onConnected = ::onHubConnected,
+        network = network,
     )
     val realtimeDiagnostics: StateFlow<RealtimeDiagnostics> = realtime.diagnostics
 
@@ -416,6 +427,7 @@ class PlayerViewModel(
             it.copy(
                 searchQuery = query,
                 searchResults = emptyList(),
+                searchUnavailableSources = emptyList(),
                 lastCompletedSearchQuery = null,
                 isSearching = false,
             )
@@ -429,6 +441,7 @@ class PlayerViewModel(
             it.copy(
                 searchSource = source,
                 searchResults = emptyList(),
+                searchUnavailableSources = emptyList(),
                 lastCompletedSearchQuery = null,
                 isSearching = false,
                 error = null,
@@ -450,6 +463,7 @@ class PlayerViewModel(
             it.copy(
                 searchQuery = "",
                 searchResults = emptyList(),
+                searchUnavailableSources = emptyList(),
                 searchQueueStatuses = emptyMap(),
                 lastCompletedSearchQuery = null,
                 isSearching = false,
@@ -577,6 +591,7 @@ class PlayerViewModel(
                 queueLoadState = QueueLoadState.LOADING,
                 queueLoadError = null,
                 searchResults = emptyList(),
+                searchUnavailableSources = emptyList(),
             )
         }
         viewModelScope.launch {
@@ -590,24 +605,47 @@ class PlayerViewModel(
         _ui.update { it.copy(selectedVoiceChannelId = channelId, error = null) }
     }
 
+    private fun applyVoiceChannels(update: VoiceChannelsUpdatedEvent) {
+        viewModelScope.launch {
+            showVoiceChannels(update.guildId, update.channels, _ui.value.selectedVoiceChannelId)
+        }
+    }
+
+    private suspend fun showVoiceChannels(
+        guildId: String,
+        channels: List<DiscordVoiceChannelResponse>,
+        preserveChannel: String?,
+    ) {
+        if (_ui.value.selectedGuildId != guildId) return
+        val selChannel = preferredVoiceChannelId(channels, preserveChannel)
+        if (selChannel != preserveChannel) {
+            preferencesRepository.setVoiceChannelId(selChannel)
+        }
+        _ui.update {
+            if (it.selectedGuildId != guildId) it else it.copy(
+                voiceChannels = channels.sortedBy { c -> c.position },
+                selectedVoiceChannelId = selChannel,
+                isLoadingVoiceChannels = false,
+            )
+        }
+    }
+
+    private fun onHubConnected(isReconnect: Boolean) {
+        repository.jellyfinLinkEvents.publishHubConnected()
+        // Channel events sent while the hub was away are gone, and the first load has its own request.
+        val state = _ui.value
+        if (isReconnect && state.selectedGuildId != null) {
+            refreshChannels(state.selectedGuildId, preserveChannel = state.selectedVoiceChannelId)
+        }
+    }
+
     fun refreshChannels(guildId: String, preserveChannel: String?) {
         viewModelScope.launch {
             if (_ui.value.selectedGuildId != guildId) return@launch
             _ui.update { it.copy(isLoadingVoiceChannels = true, error = null) }
             try {
                 val channels = repository.getVoiceChannels(sessionIdentity, guildId)
-                if (_ui.value.selectedGuildId != guildId) return@launch
-                val selChannel = preferredVoiceChannelId(channels, preserveChannel)
-                if (selChannel != preserveChannel) {
-                    preferencesRepository.setVoiceChannelId(selChannel)
-                }
-                _ui.update {
-                    if (it.selectedGuildId != guildId) it else it.copy(
-                        voiceChannels = channels.sortedBy { c -> c.position },
-                        selectedVoiceChannelId = selChannel,
-                        isLoadingVoiceChannels = false,
-                    )
-                }
+                showVoiceChannels(guildId, channels, preserveChannel)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -688,17 +726,25 @@ class PlayerViewModel(
      * a version older than the one already shown, never overwrites UI state.
      * Returns whether the snapshot was applied.
      */
-    private fun applyQueueSnapshot(
-        snapshot: QueueSnapshotResponse,
-    ): Boolean {
-        repository.observe(snapshot)
-        // Enqueue-only result metadata is not part of the shared playback state.
-        val playbackSnapshot = if (snapshot.addedTracks == null) snapshot else snapshot.copy(addedTracks = null)
+    private fun applyQueueSnapshot(snapshot: QueueSnapshotResponse): Boolean = applyQueue { snapshot }
+
+    private fun applyPlaybackState(state: PlaybackStateResponse) {
+        applyQueue { current -> current?.takeIf { it.guildId == state.guildId }?.withPlaybackState(state) }
+    }
+
+    /** [next] runs inside the update, so a state merge cannot bring back a list that was just replaced. */
+    private fun applyQueue(next: (QueueSnapshotResponse?) -> QueueSnapshotResponse?): Boolean {
         val observedAtElapsedRealtimeMs = SystemClock.elapsedRealtime()
         val transitionToken = SystemClock.elapsedRealtimeNanos()
         var applied = false
         var startedTransitionToken: Long? = null
         _ui.update { current ->
+            applied = false
+            startedTransitionToken = null
+            val snapshot = next(current.queue) ?: return@update current
+            repository.observe(snapshot)
+            // Enqueue-only result metadata is not part of the shared playback state.
+            val playbackSnapshot = if (snapshot.addedTracks == null) snapshot else snapshot.copy(addedTracks = null)
             if (shouldApplyQueueSnapshot(current.queue, playbackSnapshot, current.selectedGuildId)) {
                 if (current.queue == playbackSnapshot) {
                     applied = true
@@ -767,6 +813,7 @@ class PlayerViewModel(
             _ui.update {
                 it.copy(
                     searchResults = emptyList(),
+                    searchUnavailableSources = emptyList(),
                     lastCompletedSearchQuery = null,
                     isSearching = false,
                 )
@@ -783,6 +830,7 @@ class PlayerViewModel(
             _ui.update {
                 it.copy(
                     searchResults = emptyList(),
+                    searchUnavailableSources = emptyList(),
                     lastCompletedSearchQuery = null,
                     isSearching = true,
                     error = null,
@@ -799,6 +847,7 @@ class PlayerViewModel(
                     if (current.searchQuery.trim() != trimmed || current.searchSource != source) current
                     else current.copy(
                         searchResults = response.items,
+                        searchUnavailableSources = response.unavailableSources.orEmpty(),
                         lastCompletedSearchQuery = trimmed,
                         isSearching = false,
                     )
@@ -1197,7 +1246,7 @@ class PlayerViewModel(
                 val guildId = _ui.value.selectedGuildId
                 if (guildId != null) {
                     try {
-                        val fresh = fetchQueueSnapshot(guildId)
+                        val fresh = ApiErrors.conflictSnapshotOf(problem) ?: fetchQueueSnapshot(guildId)
                         applyQueueSnapshot(fresh)
                         _ui.update {
                             it.copy(
@@ -1247,6 +1296,7 @@ class PlayerViewModel(
                     PlayerViewModel(
                         repository = container.playerRepository,
                         preferencesRepository = container.preferencesRepository,
+                        network = container.networkMonitor.network,
                     )
                 }
             }

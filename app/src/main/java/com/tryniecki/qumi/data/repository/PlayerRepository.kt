@@ -21,6 +21,7 @@ class PlayerRepository(
     private val sessionManager: SessionManager,
     private val apiBaseUrl: String,
     private val coordinator: QueueMutationCoordinator = QueueMutationCoordinator(),
+    val jellyfinLinkEvents: JellyfinLinkEvents = JellyfinLinkEvents(),
 ) {
     val sessionIdentity: StateFlow<Long?> = sessionManager.sessionIdentity
     val apiSnapshots = coordinator.apiSnapshots

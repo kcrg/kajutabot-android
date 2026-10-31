@@ -203,8 +203,8 @@ private fun JellyfinTrackRow(
     modifier: Modifier = Modifier,
 ) {
     val unknownArtist = stringResource(R.string.jellyfin_unknown_artist)
-    val details = remember(track.artist, track.duration, unknownArtist) {
-        val duration = parseTimeSpanMillis(track.duration)?.takeIf { it > 0 }?.let(::formatDuration)
+    val details = remember(track.artist, track.durationMilliseconds, unknownArtist) {
+        val duration = track.durationMilliseconds?.takeIf { it > 0 }?.let(::formatDuration)
         listOfNotNull(track.artist ?: unknownArtist, duration).joinToString(" · ")
     }
     // No onRemove: the library is read-only here, so the card only swipes right.
@@ -220,7 +220,7 @@ private fun JellyfinTrackRow(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         ) {
             TrackListCardContent(
-                artworkUrl = jellyfinArtworkPath(track.artworkItemId),
+                artworkUrl = track.artworkThumbnailUrl ?: track.artworkUrl,
                 titleContent = {
                     Text(text = track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 },

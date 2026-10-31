@@ -5,6 +5,7 @@ import com.tryniecki.qumi.R
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinAudioItemResponse
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinAudioPageResponse
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinConnectionResponse
+import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectEvent
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStartResponse
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStatusResponse
 import com.tryniecki.qumi.auth.httpError
@@ -17,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -110,11 +112,11 @@ class JellyfinViewModelTest {
         assertEquals("https://jf.example", repository.startedUrl)
         assertEquals(JellyfinLinkState.Waiting("123456"), model.ui.value.link)
 
-        advanceTimeBy(3_001)
+        advanceTimeBy(15_001)
         assertEquals(JellyfinLinkState.Waiting("123456"), model.ui.value.link)
 
         repository.quickConnectStatus = JellyfinQuickConnectStatusResponse("authorized", connection)
-        advanceTimeBy(3_001)
+        advanceTimeBy(15_001)
         assertEquals(JellyfinLinkState.Idle, model.ui.value.link)
         assertTrue(model.ui.value.isConnected)
     }
@@ -126,12 +128,12 @@ class JellyfinViewModelTest {
         runCurrent()
 
         repository.quickConnectError = IOException("offline")
-        advanceTimeBy(3_001)
+        advanceTimeBy(15_001)
         assertEquals(JellyfinLinkState.Waiting("123456"), model.ui.value.link)
 
         repository.quickConnectError = null
         repository.quickConnectStatus = JellyfinQuickConnectStatusResponse("rejected")
-        advanceTimeBy(3_001)
+        advanceTimeBy(15_001)
         assertEquals(JellyfinLinkState.Failed(uiText(R.string.jellyfin_link_rejected)), model.ui.value.link)
     }
 
@@ -143,7 +145,7 @@ class JellyfinViewModelTest {
         model.startQuickConnect("https://jf.example")
         runCurrent()
 
-        advanceTimeBy(3_001)
+        advanceTimeBy(15_001)
 
         assertEquals(JellyfinLinkState.Failed(uiText(R.string.jellyfin_link_expired)), model.ui.value.link)
     }
@@ -321,20 +323,40 @@ class JellyfinViewModelTest {
         assertEquals(emptyList<Triple<String, String, String>>(), repository.enqueued)
     }
 
-    @Test fun `durations are parsed from the backend time span format`() {
-        assertEquals(225_000L, parseTimeSpanMillis("00:03:45"))
-        assertEquals(225_000L, parseTimeSpanMillis("00:03:45.1234567"))
-        assertEquals(93_784_000L, parseTimeSpanMillis("1.02:03:04"))
-        assertNull(parseTimeSpanMillis(null))
-        assertNull(parseTimeSpanMillis("PT3M"))
+    @Test fun `quick connect result from the hub ends the attempt without a poll`() = runTest(dispatcher) {
+        val model = model()
+        runCurrent()
+        model.startQuickConnect("https://jf.example")
+        runCurrent()
+
+        repository.quickConnectUpdates.emit(JellyfinQuickConnectEvent("other-attempt", "rejected"))
+        runCurrent()
+        assertEquals(JellyfinLinkState.Waiting("123456"), model.ui.value.link)
+
+        repository.quickConnectUpdates.emit(JellyfinQuickConnectEvent("attempt", "authorized", connection))
+        runCurrent()
+        assertEquals(JellyfinLinkState.Idle, model.ui.value.link)
+        assertTrue(model.ui.value.isConnected)
+        assertEquals(0, repository.pollCalls)
     }
 
-    @Test fun `artwork uses the authorized path and escapes the id`() {
-        assertEquals("/api/v1/app/artwork/Jellyfin/a%2Fb%20c", jellyfinArtworkPath("a/b c"))
-        assertNull(jellyfinArtworkPath(null))
+    @Test fun `hub connection checks an attempt whose event could have been missed`() = runTest(dispatcher) {
+        val model = model()
+        runCurrent()
+        model.startQuickConnect("https://jf.example")
+        runCurrent()
+
+        repository.quickConnectStatus = JellyfinQuickConnectStatusResponse("rejected")
+        repository.hubConnected.emit(Unit)
+        runCurrent()
+
+        assertEquals(1, repository.pollCalls)
+        assertEquals(JellyfinLinkState.Failed(uiText(R.string.jellyfin_link_rejected)), model.ui.value.link)
     }
 
     private class FakeJellyfinRepository : JellyfinRepository {
+        override val quickConnectUpdates = MutableSharedFlow<JellyfinQuickConnectEvent>()
+        override val hubConnected = MutableSharedFlow<Unit>()
         var connection: JellyfinConnectionResponse? = null
         var connectionError: Exception? = null
         var quickConnectStatus = JellyfinQuickConnectStatusResponse("waiting")

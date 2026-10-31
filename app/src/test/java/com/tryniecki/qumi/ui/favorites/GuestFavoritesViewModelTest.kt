@@ -42,7 +42,7 @@ import java.time.Instant
 @Config(sdk = [36])
 @OptIn(ExperimentalCoroutinesApi::class)
 class GuestFavoritesViewModelTest {
-    private val favoriteJson = """{"contentUrl":"https://example.com/track","title":"Demo","addedAt":"2026-09-20T00:00:00Z"}"""
+    private val favoriteJson = """{"contentUrl":"https://example.com/track","title":"Demo","addedAt":"2026-09-20T00:00:00Z","contentType":"YouTube","contentId":"demo"}"""
     private val track = PlaybackTrackResponse(
         "demo", "YouTube", "Demo", "https://example.com/track", 60_000,
         null, 0,
@@ -123,7 +123,7 @@ class GuestFavoritesViewModelTest {
             withTimeout(5_000) { viewModel.ui.first { it.favorites.isEmpty() && !it.isMutating } }
             val delete = server.takeRequest()
             assertEquals("DELETE", delete.method)
-            assertTrue(delete.path!!.startsWith("/api/v1/app/users/me/favorites?"))
+            assertEquals("/api/v1/app/users/me/favorites?contentType=YouTube&contentId=demo", delete.path)
             assertFalse(viewModel.isFavorite(track))
             assertEquals(FeedbackEffect.Confirm, feedbackEvents.receive())
             assertTrue(feedbackEvents.tryReceive().isFailure)

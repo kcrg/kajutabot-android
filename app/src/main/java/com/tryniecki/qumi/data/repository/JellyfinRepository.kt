@@ -1,15 +1,20 @@
 package com.tryniecki.qumi.data.repository
 
-import com.tryniecki.qumi.api.model.history.EnqueueJellyfinTrackRequest
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinAudioPageResponse
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinConnectionResponse
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStartResponse
+import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectEvent
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStatusResponse
 import com.tryniecki.qumi.api.model.jellyfin.StartJellyfinQuickConnectRequest
+import com.tryniecki.qumi.api.model.queue.EnqueueRequest
 import com.tryniecki.qumi.auth.SessionManager
-import retrofit2.HttpException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 interface JellyfinRepository {
+    val quickConnectUpdates: Flow<JellyfinQuickConnectEvent> get() = emptyFlow()
+    val hubConnected: Flow<Unit> get() = emptyFlow()
+
     /** The linked server, or null if this account has none. */
     suspend fun getConnection(): JellyfinConnectionResponse?
     suspend fun startQuickConnect(serverUrl: String): JellyfinQuickConnectStartResponse
@@ -23,14 +28,14 @@ interface JellyfinRepository {
 class SessionJellyfinRepository(
     private val sessionManager: SessionManager,
     private val coordinator: QueueMutationCoordinator,
+    private val linkEvents: JellyfinLinkEvents,
 ) : JellyfinRepository {
     private val sessionIdentity = checkNotNull(sessionManager.sessionIdentity.value)
+    override val quickConnectUpdates = linkEvents.quickConnectUpdates
+    override val hubConnected = linkEvents.hubConnected
 
-    override suspend fun getConnection(): JellyfinConnectionResponse? = try {
-        sessionManager.withApiForSession(sessionIdentity) { it.getJellyfinConnection() }
-    } catch (e: HttpException) {
-        if (e.code() == 404) null else throw e
-    }
+    override suspend fun getConnection(): JellyfinConnectionResponse? =
+        sessionManager.withApiForSession(sessionIdentity) { it.getJellyfinConnection() }.connectionOrNull()
 
     override suspend fun startQuickConnect(serverUrl: String) =
         sessionManager.withApiForSession(sessionIdentity) {
@@ -52,7 +57,11 @@ class SessionJellyfinRepository(
             guildId,
             fetch = { sessionManager.withApiForSession(sessionIdentity) { it.getQueue(guildId) } },
             mutation = { version, key -> sessionManager.withApiForSession(sessionIdentity) {
-                it.enqueueJellyfinTrack(itemId, EnqueueJellyfinTrackRequest(guildId, channelId, version), key)
+                it.enqueue(
+                    guildId,
+                    EnqueueRequest(channelId, expectedQueueVersion = version, contentType = "Jellyfin", contentId = itemId),
+                    key,
+                )
             } },
         )
     }

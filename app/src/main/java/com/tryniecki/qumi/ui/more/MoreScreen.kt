@@ -285,11 +285,6 @@ private fun RealtimeStatusCard(playerViewModel: PlayerViewModel) {
                 Text(stringResource(status), style = MaterialTheme.typography.titleSmall)
             }
             Text(
-                stringResource(R.string.realtime_last_frame, realtimeAgeText(diagnostics.lastFrameAtMs, nowMs).asString()),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
                 stringResource(R.string.realtime_last_update, realtimeAgeText(diagnostics.lastQueueUpdateAtMs, nowMs).asString()),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

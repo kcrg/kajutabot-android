@@ -2,6 +2,7 @@ package com.tryniecki.qumi.api.model.error
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class ProblemDetails(
@@ -12,6 +13,8 @@ data class ProblemDetails(
     val instance: String? = null,
     val errorCode: String? = null,
     val currentQueueVersion: Long? = null,
+    // Kept raw: a snapshot that cannot be decoded must not cost the error code next to it.
+    val snapshot: JsonObject? = null,
 )
 
 object ProblemDetailsParser {

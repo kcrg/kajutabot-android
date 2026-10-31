@@ -31,14 +31,34 @@ data class QueueSnapshotResponse(
     val addedTracks: List<PlaybackTrackResponse>? = null,
 )
 
+
+/** A snapshot without the pending list, which only QueueUpdated carries. */
+@Serializable
+data class PlaybackStateResponse(
+    val guildId: String,
+    val voiceChannelId: String? = null,
+    val nowPlaying: PlaybackTrackResponse? = null,
+    val nowPlayingFromRadio: Boolean = false,
+    val radio: RadioStateResponse,
+    val pendingEntriesCount: Int,
+    val pendingDurationMilliseconds: Long,
+    val version: Long,
+    val queueVersion: Long,
+    val nowPlayingStartedAt: String? = null,
+    val isRepeatEnabled: Boolean = false,
+    val playbackInstanceId: String? = null,
+    val playbackPositionMilliseconds: Long? = null,
+)
 @Serializable
 enum class SkipOutcome { Advanced, RestartedRepeatedTrack }
 
 @Serializable
 data class EnqueueRequest(
     val voiceChannelId: String,
-    val inputs: List<String>,
+    val inputs: List<String>? = null,
     val expectedQueueVersion: Long? = null,
+    val contentType: String? = null,
+    val contentId: String? = null,
 )
 
 @Serializable

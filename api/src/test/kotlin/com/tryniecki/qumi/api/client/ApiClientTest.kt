@@ -191,7 +191,7 @@ class ApiClientTest {
 
         server.enqueue(
             MockResponse().setBody(
-                """{"discordUserId":"1","contentUrl":"https://x","title":"t","addedAt":"2026-09-18T12:00:00+00:00"}""",
+                """{"discordUserId":"1","contentUrl":"https://x","contentType":"YouTube","contentId":"abc","title":"t","addedAt":"2026-09-18T12:00:00+00:00"}""",
             ),
         )
         kotlinx.coroutines.runBlocking {
@@ -202,10 +202,10 @@ class ApiClientTest {
         assertEquals("""{"contentType":"YouTube","contentId":"x"}""", addFavorite.body.readUtf8())
 
         server.enqueue(MockResponse().setResponseCode(204))
-        kotlinx.coroutines.runBlocking { api.deleteFavorite("https://youtu.be/abc") }
+        kotlinx.coroutines.runBlocking { api.deleteFavorite("YouTube", "abc") }
         val delete = server.takeRequest()
         assertTrue(delete.path!!.startsWith("/api/v1/app/users/me/favorites?"))
-        assertTrue(delete.path!!.contains("contentUrl="))
+        assertTrue(delete.path!!.endsWith("?contentType=YouTube&contentId=abc"))
     }
 
     @Test

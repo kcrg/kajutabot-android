@@ -29,7 +29,7 @@ internal fun QueueTrackCardContent(
 ) {
     Box(modifier.fillMaxWidth()) {
         TrackListCardContent(
-            artworkUrl = track.artworkUrl,
+            artworkUrl = track.listArtworkUrl,
             reservePositionSpace = trailingContent == null,
             supportingContent = { Text(formatDuration(track.durationMilliseconds)) },
             trailingContent = trailingContent,

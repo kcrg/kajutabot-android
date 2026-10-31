@@ -12,7 +12,10 @@ data class PlaybackTrackResponse(
     val artworkUrl: String?,
     val playCount: Long,
     val artworkAccentColor: String? = null,
-)
+    val artworkThumbnailUrl: String? = null,
+) {
+    val listArtworkUrl: String? get() = artworkThumbnailUrl ?: artworkUrl
+}
 
 @Serializable
 data class SearchTrackResponse(
@@ -22,4 +25,7 @@ data class SearchTrackResponse(
     val url: String,
     val durationMilliseconds: Long,
     val artworkUrl: String?,
-)
+    val artworkThumbnailUrl: String? = null,
+) {
+    val listArtworkUrl: String? get() = artworkThumbnailUrl ?: artworkUrl
+}

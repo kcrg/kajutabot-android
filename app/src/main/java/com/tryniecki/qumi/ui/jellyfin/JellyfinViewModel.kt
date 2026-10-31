@@ -10,6 +10,7 @@ import com.tryniecki.qumi.R
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinAudioItemResponse
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinConnectionResponse
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStartResponse
+import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStatusResponse
 import com.tryniecki.qumi.data.preferences.GuildSelection
 import com.tryniecki.qumi.data.repository.JellyfinRepository
 import com.tryniecki.qumi.data.repository.SessionJellyfinRepository
@@ -27,6 +28,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -37,7 +43,8 @@ import java.time.OffsetDateTime
 private const val PAGE_SIZE = 50
 private const val MAX_SEARCH_LENGTH = 200
 private const val SEARCH_DEBOUNCE_MS = 350L
-private const val QUICK_CONNECT_POLL_MS = 3_000L
+// The hub reports the result; this only covers an event that was missed.
+private const val QUICK_CONNECT_POLL_MS = 15_000L
 private const val ENQUEUE_FEEDBACK_MS = 1_200L
 
 enum class JellyfinConnectionStatus { CHECKING, CONNECTED, DISCONNECTED, ERROR }
@@ -140,41 +147,51 @@ class JellyfinViewModel(
         }
     }
 
-    // The backend ends an attempt with a final status; the clock only matters once it stops answering.
     private suspend fun awaitQuickConnect(attempt: JellyfinQuickConnectStartResponse) {
+        val pushed = repository.quickConnectUpdates
+            .filter { it.attemptId == attempt.attemptId }
+            .map { JellyfinQuickConnectStatusResponse(it.status, it.connection, it.message) }
+        val polled = merge(quickConnectPollTicks(), repository.hubConnected)
+            .mapNotNull { pollQuickConnect(attempt) }
+        merge(pushed, polled).first(::finishQuickConnect)
+    }
+
+    private fun quickConnectPollTicks() = flow {
         while (true) {
             delay(QUICK_CONNECT_POLL_MS)
-            val result = try {
-                repository.getQuickConnectStatus(attempt.attemptId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // The user is approving this in another app; a dropped poll must not lose the attempt.
-                if (attempt.hasExpired()) {
-                    _ui.update { it.copy(link = JellyfinLinkState.Failed(uiText(R.string.jellyfin_link_expired))) }
-                    return
-                }
-                continue
+            emit(Unit)
+        }
+    }
+
+    // The backend ends an attempt with a final status; the clock only matters once it stops answering.
+    private suspend fun pollQuickConnect(attempt: JellyfinQuickConnectStartResponse) = try {
+        repository.getQuickConnectStatus(attempt.attemptId)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        // The user is approving this in another app; a dropped poll must not lose the attempt.
+        if (attempt.hasExpired()) JellyfinQuickConnectStatusResponse("expired") else null
+    }
+
+    /** Returns whether [result] ended the attempt. */
+    private fun finishQuickConnect(result: JellyfinQuickConnectStatusResponse): Boolean {
+        when (result.status) {
+            "waiting" -> return false
+            "authorized" -> {
+                _ui.update { it.copy(link = JellyfinLinkState.Idle) }
+                val connection = result.connection
+                if (connection != null) showConnected(connection) else refreshConnection()
             }
-            when (result.status) {
-                "waiting" -> Unit
-                "authorized" -> {
-                    _ui.update { it.copy(link = JellyfinLinkState.Idle) }
-                    val connection = result.connection
-                    if (connection != null) showConnected(connection) else refreshConnection()
-                    return
+            else -> {
+                val message = when (result.status) {
+                    "expired" -> R.string.jellyfin_link_expired
+                    "rejected" -> R.string.jellyfin_link_rejected
+                    else -> R.string.jellyfin_link_unreachable
                 }
-                else -> {
-                    val message = when (result.status) {
-                        "expired" -> R.string.jellyfin_link_expired
-                        "rejected" -> R.string.jellyfin_link_rejected
-                        else -> R.string.jellyfin_link_unreachable
-                    }
-                    _ui.update { it.copy(link = JellyfinLinkState.Failed(uiText(message))) }
-                    return
-                }
+                _ui.update { it.copy(link = JellyfinLinkState.Failed(uiText(message))) }
             }
         }
+        return true
     }
 
     private fun JellyfinQuickConnectStartResponse.hasExpired(): Boolean =
@@ -335,7 +352,11 @@ class JellyfinViewModel(
         fun factory(container: AppContainer, isAvailable: Boolean): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 JellyfinViewModel(
-                    SessionJellyfinRepository(container.sessionManager, container.queueMutationCoordinator),
+                    SessionJellyfinRepository(
+                        container.sessionManager,
+                        container.queueMutationCoordinator,
+                        container.jellyfinLinkEvents,
+                    ),
                     container.preferencesRepository.guildSelection,
                     isAvailable,
                 )

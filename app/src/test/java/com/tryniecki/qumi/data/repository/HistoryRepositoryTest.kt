@@ -11,7 +11,6 @@ import com.tryniecki.qumi.auth.SessionManager
 import com.tryniecki.qumi.auth.UserSession
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.mockwebserver.MockResponse
@@ -47,7 +46,7 @@ class HistoryRepositoryTest {
 
     @After fun tearDown() { server.shutdown() }
 
-    @Test fun `queues public track with queue version and idempotency key`() = runBlocking {
+    @Test fun `queues track by content with queue version and idempotency key`() = runBlocking {
         server.enqueue(MockResponse().setBody(queueResponse()))
         server.enqueue(MockResponse().setBody(queueResponse()))
         repository.enqueue("guild", "channel", entry("YouTube", "https://example.test/track"))
@@ -59,22 +58,21 @@ class HistoryRepositoryTest {
         val body = Json.parseToJsonElement(request.body.readUtf8()).jsonObject
         assertEquals("channel", body.getValue("voiceChannelId").jsonPrimitive.content)
         assertEquals("7", body.getValue("expectedQueueVersion").jsonPrimitive.content)
-        assertEquals("https://example.test/track", body.getValue("inputs").jsonArray.single().jsonPrimitive.content)
+        assertEquals("YouTube", body.getValue("contentType").jsonPrimitive.content)
+        assertEquals("id", body.getValue("contentId").jsonPrimitive.content)
     }
 
-    @Test fun `Jellyfin uses own connection endpoint without reusing source connection`() = runBlocking {
+    @Test fun `Jellyfin queues by content like every other source`() = runBlocking {
         server.enqueue(MockResponse().setBody(queueResponse()))
         server.enqueue(MockResponse().setBody(queueResponse()))
-        repository.enqueue("guild", "channel", entry("Jellyfin", "jellyfin://connection/someone-else/items/song%20id+1"))
+        repository.enqueue("guild", "channel", entry("Jellyfin", "jellyfin://connection/someone-else/items/song"))
         server.takeRequest()
         val request = server.takeRequest()
-        assertEquals("/api/v1/app/users/me/jellyfin/audio/song%20id+1/enqueue", request.path)
-        assertEquals("Bearer user-token", request.getHeader("Authorization"))
-        assertNotNull(request.getHeader("Idempotency-Key"))
+        assertEquals("/api/v1/app/guilds/guild/queue/items", request.path)
         val bodyText = request.body.readUtf8()
         val body = Json.parseToJsonElement(bodyText).jsonObject
-        assertEquals("guild", body.getValue("guildId").jsonPrimitive.content)
-        assertEquals("channel", body.getValue("voiceChannelId").jsonPrimitive.content)
+        assertEquals("Jellyfin", body.getValue("contentType").jsonPrimitive.content)
+        assertEquals("id", body.getValue("contentId").jsonPrimitive.content)
         assertEquals("7", body.getValue("expectedQueueVersion").jsonPrimitive.content)
         assertTrue(!bodyText.contains("someone-else"))
     }

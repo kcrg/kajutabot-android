@@ -45,7 +45,6 @@ class LocalVolumeControllerTest {
 
     private class FakeClient(var observation: LocalVolumeStateDto) : RealtimeClient {
         override val updates = emptyFlow<QueueSnapshotResponse>()
-        override val heartbeats = emptyFlow<Unit>()
         override val closed = MutableSharedFlow<RealtimeDisconnect>()
         override val localVolumeUpdates = MutableSharedFlow<LocalVolumeStateDto>(extraBufferCapacity = 8)
         val commands = mutableListOf<Int>()

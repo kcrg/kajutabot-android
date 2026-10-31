@@ -89,7 +89,7 @@ import java.util.Locale
  * Full-screen search page shown above the player.
  * Reuses [PlayerViewModel] smart input: URLs enqueue directly, text searches via
  * `GET /search`. Search-result artwork comes exclusively from the backend-provided
- * `SearchItemResponse.track.artworkUrl`.
+ * `SearchItemResponse.track.listArtworkUrl`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -274,6 +274,21 @@ fun SearchScreen(
                     }
                 }
 
+                if (!ui.isSearching && ui.searchUnavailableSources.isNotEmpty()) {
+                    item(key = "search-unavailable", contentType = "search-unavailable") {
+                        val names = ui.searchUnavailableSources.map { key ->
+                            SearchSourceOption.entries.firstOrNull { it.apiValue == key }
+                                ?.let { stringResource(it.displayNameResId) } ?: key
+                        }
+                        Text(
+                            text = stringResource(R.string.search_sources_unavailable, names.joinToString(", ")),
+                            modifier = Modifier.animateItem(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
                 if (ui.isSearching && ui.searchResults.isEmpty() && !isUrlInput) {
                     items(3, key = { "search-skeleton-$it" }, contentType = { "search-skeleton" }) {
                         SearchResultSkeleton(
@@ -359,7 +374,7 @@ private fun SearchResultRow(
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 verticalAlignment = Alignment.CenterVertically,
                 leadingContent = {
-                    SearchResultArtwork(imageUrl = item.track.artworkUrl, modifier = Modifier.size(64.dp))
+                    SearchResultArtwork(imageUrl = item.track.listArtworkUrl, modifier = Modifier.size(64.dp))
                 },
                 supportingContent = {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -546,4 +561,5 @@ private fun SearchResultSkeleton(modifier: Modifier = Modifier) {
 
 private fun SearchTrackResponse.asFavoriteTrack(): PlaybackTrackResponse = PlaybackTrackResponse(
     contentId, contentType, title, url, durationMilliseconds, artworkUrl, playCount = 0,
+    artworkThumbnailUrl = artworkThumbnailUrl,
 )

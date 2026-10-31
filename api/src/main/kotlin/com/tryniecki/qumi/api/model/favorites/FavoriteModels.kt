@@ -7,8 +7,14 @@ data class FavoriteResponse(
     val contentUrl: String,
     val title: String,
     val addedAt: String,
-    val thumbnailUrl: String? = null,
-)
+    val contentType: String,
+    val contentId: String,
+    val durationMilliseconds: Long? = null,
+    val artworkUrl: String? = null,
+    val artworkThumbnailUrl: String? = null,
+) {
+    val listArtworkUrl: String? get() = artworkThumbnailUrl ?: artworkUrl
+}
 
 @Serializable
 data class AddFavoriteRequest(

@@ -1,5 +1,6 @@
 package com.tryniecki.qumi.data.repository
 
+import com.tryniecki.qumi.api.client.ApiErrors
 import com.tryniecki.qumi.api.model.queue.QueueSnapshotResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -51,6 +52,10 @@ class QueueMutationCoordinator {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
+            ApiErrors.conflictSnapshotOf(ApiErrors.problemDetailsOf(error))?.let { current ->
+                publish(current)
+                throw error
+            }
             // The outcome of 503 and transport failures is ambiguous. Reconcile,
             // never resend a mutation automatically. An in-progress operation may still commit.
             try {

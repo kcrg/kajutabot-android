@@ -144,7 +144,6 @@
     <string name="realtime_subscribing">Subscribing to server…</string>
     <string name="realtime_connected">Connected</string>
     <string name="realtime_reconnecting">Reconnecting…</string>
-    <string name="realtime_last_frame">Last frame: %1$s</string>
     <string name="realtime_last_update">Last data update: %1$s</string>
     <string name="realtime_no_data">no data</string>
     <string name="realtime_seconds_ago">%1$d s ago</string>
@@ -180,6 +179,7 @@
     <string name="onboarding_discord_connection">Discord connection</string>
     <string name="search_title">Search</string>
     <string name="search_hint">Paste a link or search for a track</string>
+    <string name="search_sources_unavailable">%1$s did not respond. Results may be incomplete.</string>
     <string name="search_no_results_title">No results</string>
     <string name="search_no_results_body">Try another phrase or paste a direct link.</string>
     <string name="shared_track_title">Shared link</string>
@@ -256,4 +256,5 @@
     <string name="error_jellyfin_unavailable">Your Jellyfin library is unavailable right now.</string>
     <string name="error_jellyfin_authorization">Jellyfin rejected the saved connection. Connect again.</string>
     <string name="error_jellyfin_not_connected">Jellyfin isn\'t connected.</string>
+    <string name="error_jellyfin_owner_required">Jellyfin tracks need a Discord account.</string>
 </resources>

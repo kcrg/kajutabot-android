@@ -58,7 +58,7 @@ class ClientIdempotencyTest {
             player.swapQueueEntries(identity, "guild", "a", "b")
             player.clearQueue(identity, "guild")
             favorites.queueFavorites(identity, "guild", "voice", true)
-            favorites.playSingle(identity, "guild", "voice", "https://example.test/track")
+            favorites.playSingle(identity, "guild", "voice", "YouTube", "abc")
             val keys = List(13) { requireNotNull(server.takeRequest().getHeader("Idempotency-Key")) }
             keys.forEach { assertEquals(it, UUID.fromString(it).toString()) }
             assertEquals(13, keys.toSet().size)

@@ -18,3 +18,9 @@ data class DiscordVoiceChannelResponse(
     val userCount: Int,
     val isConnected: Boolean,
 )
+
+@Serializable
+data class VoiceChannelsUpdatedEvent(
+    val guildId: String,
+    val channels: List<DiscordVoiceChannelResponse>,
+)

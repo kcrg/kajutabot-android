@@ -56,6 +56,7 @@ import com.tryniecki.qumi.ui.components.SwipeActionCard
 import com.tryniecki.qumi.ui.components.SwipeActionHints
 import com.tryniecki.qumi.ui.components.SwipeActionStatus
 import com.tryniecki.qumi.ui.components.TrackListCardContent
+import com.tryniecki.qumi.ui.player.formatDuration
 import com.tryniecki.qumi.ui.text.asString
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -250,7 +251,7 @@ private fun HistoryEntryRow(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         ) {
             TrackListCardContent(
-                artworkUrl = entry.thumbnailUrl,
+                artworkUrl = entry.listArtworkUrl,
                 titleContent = {
                     Text(
                         text = entry.title.ifBlank { entry.queueInput },
@@ -260,7 +261,11 @@ private fun HistoryEntryRow(
                         color = if (canOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     )
                 },
-                supportingContent = { Text(stringResource(R.string.history_played_at, playedAt)) },
+                supportingContent = {
+                    val played = stringResource(R.string.history_played_at, playedAt)
+                    val duration = entry.durationMilliseconds?.takeIf { it > 0 }?.let(::formatDuration)
+                    Text(listOfNotNull(played, duration).joinToString(" · "))
+                },
             )
         }
     }

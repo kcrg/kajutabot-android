@@ -110,7 +110,7 @@ class AppFunctionCommandsTest {
                 snapshot(skipOutcome = "Advanced")
             }
             "POST users/me/favorites" ->
-                """{"contentUrl":"https://example.test/current","title":"Title current","addedAt":"2026-01-01T00:00:00Z"}"""
+                """{"contentUrl":"https://example.test/current","title":"Title current","addedAt":"2026-01-01T00:00:00Z","contentType":"youtube","contentId":"current"}"""
             else -> snapshot()
         }
         return MockResponse().setBody(body)
@@ -317,7 +317,6 @@ class AppFunctionCommandsTest {
         var stopped = false
         var state: LocalVolumeStateDto? = null
         override val updates: Flow<QueueSnapshotResponse> = emptyFlow()
-        override val heartbeats: Flow<Unit> = emptyFlow()
         override val closed: Flow<RealtimeDisconnect> = emptyFlow()
         override val localVolumeUpdates: Flow<LocalVolumeStateDto> = emptyFlow()
         override suspend fun getLocalVolumeState() =

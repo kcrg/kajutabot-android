@@ -54,12 +54,10 @@ class PlaybackConnectionTest {
                 }
                 try {
                     val queue = async(start = CoroutineStart.UNDISPATCHED) { client.updates.first() }
-                    val heartbeat = async(start = CoroutineStart.UNDISPATCHED) { client.heartbeats.first() }
                     client.start()
                     client.connected.first { it }
                     if (client.subscribeGuild(guild.id)) assertEquals(guild.id, queue.await().guildId)
                     else queue.cancel()
-                    heartbeat.await()
                     reconnectToken = auth.guest().accessToken
                     token.set(reconnectToken!!)
                     // Break only this test's TCP connection. Normal TLS verification stays enabled.

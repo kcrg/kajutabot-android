@@ -6,7 +6,7 @@ import com.tryniecki.qumi.api.model.favorites.AddFavoriteRequest
 import com.tryniecki.qumi.api.model.favorites.FavoriteResponse
 import com.tryniecki.qumi.api.model.favorites.QueueFavoritesRequest
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinAudioPageResponse
-import com.tryniecki.qumi.api.model.jellyfin.JellyfinConnectionResponse
+import com.tryniecki.qumi.api.model.jellyfin.JellyfinConnectionStateResponse
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStartResponse
 import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStatusResponse
 import com.tryniecki.qumi.api.model.jellyfin.StartJellyfinQuickConnectRequest
@@ -19,7 +19,6 @@ import com.tryniecki.qumi.api.model.queue.SkipQueueRequest
 import com.tryniecki.qumi.api.model.queue.SwapQueueEntriesRequest
 import com.tryniecki.qumi.api.model.radio.EnableRadioRequest
 import com.tryniecki.qumi.api.model.history.PlaybackHistoryPageResponse
-import com.tryniecki.qumi.api.model.history.EnqueueJellyfinTrackRequest
 import com.tryniecki.qumi.api.model.search.SearchResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -62,7 +61,9 @@ interface ControlApi {
     ): PlaybackHistoryPageResponse
 
     @GET("users/me/jellyfin")
-    suspend fun getJellyfinConnection(): JellyfinConnectionResponse
+    suspend fun getJellyfinConnection(
+        @Query("includeDisconnected") includeDisconnected: Boolean = true,
+    ): JellyfinConnectionStateResponse
 
     @DELETE("users/me/jellyfin")
     suspend fun disconnectJellyfin()
@@ -84,13 +85,7 @@ interface ControlApi {
         @Query("searchTerm") searchTerm: String? = null,
     ): JellyfinAudioPageResponse
 
-    @POST("users/me/jellyfin/audio/{itemId}/enqueue")
-    suspend fun enqueueJellyfinTrack(
-        @Path("itemId") itemId: String,
-        @Body request: EnqueueJellyfinTrackRequest,
-        @Header("Idempotency-Key") idempotencyKey: String,
-    ): QueueSnapshotResponse
-
+    @SlowRequest
     @POST("guilds/{guildId}/queue/items")
     suspend fun enqueue(
         @Path("guildId") guildId: String,
@@ -173,6 +168,7 @@ interface ControlApi {
     @GET("users/me/favorites")
     suspend fun getFavorites(): List<FavoriteResponse>
 
+    @SlowRequest
     @POST("users/me/favorites")
     suspend fun addFavorite(
         @Body request: AddFavoriteRequest,
@@ -180,9 +176,11 @@ interface ControlApi {
 
     @DELETE("users/me/favorites")
     suspend fun deleteFavorite(
-        @Query("contentUrl") contentUrl: String,
+        @Query("contentType") contentType: String,
+        @Query("contentId") contentId: String,
     )
 
+    @SlowRequest
     @POST("users/me/favorites/queue")
     suspend fun queueFavorites(
         @Body request: QueueFavoritesRequest,

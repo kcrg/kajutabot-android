@@ -2,6 +2,9 @@ package com.tryniecki.qumi.ui.player
 
 import com.tryniecki.qumi.api.client.RealtimeClient
 import com.tryniecki.qumi.api.client.RealtimeDisconnect
+import com.tryniecki.qumi.api.model.discord.VoiceChannelsUpdatedEvent
+import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectEvent
+import com.tryniecki.qumi.api.model.queue.PlaybackStateResponse
 import com.tryniecki.qumi.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.qumi.api.model.radio.RadioStateResponse
 import com.tryniecki.qumi.api.model.playback.LocalVolumeStateDto
@@ -15,6 +18,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -40,12 +44,13 @@ class PlayerRealtimeTest {
             extraBufferCapacity = 1,
             onBufferOverflow = BufferOverflow.DROP_OLDEST,
         )
-        private val _heartbeats = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         private val _closed = MutableSharedFlow<RealtimeDisconnect>(extraBufferCapacity = 1)
         override val connected = MutableStateFlow(true)
         override val updates: Flow<QueueSnapshotResponse> = _updates
-        override val heartbeats: Flow<Unit> = _heartbeats
         override val closed: Flow<RealtimeDisconnect> = _closed
+        override val playbackStates = MutableSharedFlow<PlaybackStateResponse>(extraBufferCapacity = 1)
+        override val voiceChannels = MutableSharedFlow<VoiceChannelsUpdatedEvent>(extraBufferCapacity = 1)
+        override val quickConnectUpdates = MutableSharedFlow<JellyfinQuickConnectEvent>(extraBufferCapacity = 1)
         override val localVolumeUpdates = MutableSharedFlow<LocalVolumeStateDto>(extraBufferCapacity = 1)
         var localVolumeReads = 0
         var localVolumeSnapshot = LocalVolumeStateDto(true, true, true, 87)
@@ -66,7 +71,6 @@ class PlayerRealtimeTest {
         }
         override suspend fun stop() { stopped = true }
         fun sendUpdate(snapshot: QueueSnapshotResponse) { _updates.tryEmit(snapshot) }
-        fun heartbeat() { _heartbeats.tryEmit(Unit) }
         suspend fun disconnect() { _closed.emit(RealtimeDisconnect("IOException")) }
     }
 
@@ -302,7 +306,7 @@ class PlayerRealtimeTest {
     }
 
     @Test
-    fun `latest queue snapshot wins burst and heartbeat only updates liveness`() = runTest {
+    fun `latest queue snapshot wins burst`() = runTest {
         val identity = MutableStateFlow<Long?>(7)
         val guild = MutableStateFlow<String?>("g1")
         val connection = FakeConnection()
@@ -317,12 +321,6 @@ class PlayerRealtimeTest {
         assertEquals(1_000L, realtime.diagnostics.value.lastQueueUpdateAtMs)
 
         received.clear()
-        nowMs = 4_000L
-        connection.heartbeat()
-        runCurrent()
-        assertEquals(emptyList<QueueSnapshotResponse>(), received)
-        assertEquals(4_000L, realtime.diagnostics.value.lastFrameAtMs)
-        assertEquals(1_000L, realtime.diagnostics.value.lastQueueUpdateAtMs)
 
         nowMs = 5_000L
         for (version in 2L..101L) connection.sendUpdate(snapshot("g1", version))
@@ -348,6 +346,145 @@ class PlayerRealtimeTest {
         runCurrent()
         assertEquals(listOf("g1"), connection.subscriptions)
         assertEquals(RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED, realtime.diagnostics.value.state)
+        realtime.close()
+    }
+
+    @Test
+    fun `hub events reach their handlers and a state event counts as an update`() = runTest {
+        val identity = MutableStateFlow<Long?>(7)
+        val guild = MutableStateFlow<String?>("g1")
+        val connection = FakeConnection()
+        val states = mutableListOf<PlaybackStateResponse>()
+        val channels = mutableListOf<VoiceChannelsUpdatedEvent>()
+        val links = mutableListOf<JellyfinQuickConnectEvent>()
+        var nowMs = 1_000L
+        val realtime = PlayerRealtime(backgroundScope, 7, identity, guild, { "jwt" },
+            { connection }, {}, {}, elapsedRealtimeMs = { nowMs }, jitterMs = { 0 },
+            onPlaybackState = states::add, onVoiceChannels = channels::add, onQuickConnect = links::add)
+        realtime.setOwner(RealtimeOwner.UI, true)
+        runCurrent()
+
+        nowMs = 2_000L
+        connection.playbackStates.emit(
+            PlaybackStateResponse("g1", radio = RadioStateResponse(false), pendingEntriesCount = 0,
+                pendingDurationMilliseconds = 0, version = 2, queueVersion = 1),
+        )
+        connection.voiceChannels.emit(VoiceChannelsUpdatedEvent("g1", emptyList()))
+        connection.quickConnectUpdates.emit(JellyfinQuickConnectEvent("a", "authorized"))
+        runCurrent()
+
+        assertEquals(1, states.size)
+        assertEquals(1, channels.size)
+        assertEquals(1, links.size)
+        assertEquals(2_000L, realtime.diagnostics.value.lastQueueUpdateAtMs)
+        realtime.close()
+    }
+
+    @Test
+    fun `only a later connection counts as a reconnect`() = runTest {
+        val identity = MutableStateFlow<Long?>(7)
+        val guild = MutableStateFlow<String?>("g1")
+        val connection = FakeConnection()
+        val reconnects = mutableListOf<Boolean>()
+        val realtime = PlayerRealtime(backgroundScope, 7, identity, guild, { "jwt" },
+            { connection }, {}, {}, jitterMs = { 0 }, onConnected = reconnects::add)
+        realtime.setOwner(RealtimeOwner.UI, true)
+        runCurrent()
+
+        connection.connected.value = false
+        runCurrent()
+        connection.connected.value = true
+        runCurrent()
+
+        assertEquals(listOf(false, true), reconnects)
+        realtime.close()
+    }
+
+    @Test
+    fun `no network holds retries and a new network connects at once`() = runTest {
+        val identity = MutableStateFlow<Long?>(7)
+        val guild = MutableStateFlow<String?>("g1")
+        val network = MutableStateFlow<Long?>(1)
+        val connections = mutableListOf<FakeConnection>()
+        val realtime = PlayerRealtime(backgroundScope, 7, identity, guild, { "jwt" },
+            { FakeConnection().also(connections::add) }, {}, {}, jitterMs = { 0 }, network = network)
+        realtime.setOwner(RealtimeOwner.MEDIA_SERVICE, true)
+        runCurrent()
+        assertEquals(1, connections.size)
+
+        network.value = null
+        runCurrent()
+        assertTrue(connections.single().stopped)
+        assertEquals(RealtimeConnectionState.DISCONNECTED, realtime.diagnostics.value.state)
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(1, connections.size)
+
+        network.value = 2
+        runCurrent()
+        assertEquals(2, connections.size)
+        assertEquals(RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED, realtime.diagnostics.value.state)
+        realtime.close()
+    }
+
+    @Test
+    fun `switching networks replaces the connection without waiting for its timeout`() = runTest {
+        val identity = MutableStateFlow<Long?>(7)
+        val guild = MutableStateFlow<String?>("g1")
+        val network = MutableStateFlow<Long?>(1)
+        val connections = mutableListOf<FakeConnection>()
+        val realtime = PlayerRealtime(backgroundScope, 7, identity, guild, { "jwt" },
+            { FakeConnection().also(connections::add) }, {}, {}, jitterMs = { 0 }, network = network)
+        realtime.setOwner(RealtimeOwner.UI, true)
+        runCurrent()
+
+        network.value = 2
+        runCurrent()
+
+        assertTrue(connections.first().stopped)
+        assertEquals(2, connections.size)
+        realtime.close()
+    }
+
+    @Test
+    fun `REST fills the queue while the hub is slow to start`() = runTest {
+        val identity = MutableStateFlow<Long?>(7)
+        val guild = MutableStateFlow<String?>("g1")
+        val gate = CompletableDeferred<Unit>()
+        val connection = FakeConnection().apply { onStart = { gate.await() } }
+        var recoveries = 0
+        val realtime = PlayerRealtime(backgroundScope, 7, identity, guild, { "jwt" },
+            { connection }, {}, { recoveries++ }, jitterMs = { 0 })
+        realtime.setOwner(RealtimeOwner.UI, true)
+        runCurrent()
+
+        advanceTimeBy(4_900)
+        runCurrent()
+        assertEquals(0, recoveries)
+        advanceTimeBy(200)
+        runCurrent()
+        assertEquals(1, recoveries)
+
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(1, recoveries)
+        realtime.close()
+    }
+
+    @Test
+    fun `a quick hub start makes no REST request`() = runTest {
+        val identity = MutableStateFlow<Long?>(7)
+        val guild = MutableStateFlow<String?>("g1")
+        var recoveries = 0
+        val realtime = PlayerRealtime(backgroundScope, 7, identity, guild, { "jwt" },
+            { FakeConnection() }, {}, { recoveries++ }, jitterMs = { 0 })
+        realtime.setOwner(RealtimeOwner.UI, true)
+        runCurrent()
+
+        advanceTimeBy(30_000)
+        runCurrent()
+
+        assertEquals(0, recoveries)
         realtime.close()
     }
 }

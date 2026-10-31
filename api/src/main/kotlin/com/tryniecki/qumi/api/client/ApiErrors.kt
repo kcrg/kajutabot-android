@@ -2,10 +2,12 @@ package com.tryniecki.qumi.api.client
 
 import com.tryniecki.qumi.api.model.error.ProblemDetailsParser
 import com.tryniecki.qumi.api.model.error.ProblemDetails
+import com.tryniecki.qumi.api.model.queue.QueueSnapshotResponse
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.WeakHashMap
 import retrofit2.HttpException
 
 object ApiErrors {
@@ -18,21 +20,32 @@ object ApiErrors {
         "refresh_token_reuse_detected",
     )
 
+    // An error body can be read only once, and a failed mutation is inspected at several levels.
+    private val parsedProblems = WeakHashMap<HttpException, ProblemDetails?>()
+
     fun problemDetailsOf(throwable: Throwable?): ProblemDetails? {
         val http = throwable as? HttpException ?: return null
-        val raw = try {
-            http.response()?.errorBody()?.string()
-        } catch (_: Exception) {
-            null
+        synchronized(parsedProblems) {
+            if (http in parsedProblems) return parsedProblems[http]
+            val raw = try {
+                http.response()?.errorBody()?.string()
+            } catch (_: Exception) {
+                null
+            }
+            return ProblemDetailsParser.parse(raw).also { parsedProblems[http] = it }
         }
-        return ProblemDetailsParser.parse(raw)
+    }
+
+    /** The current queue a conflict response can carry, which saves fetching it. */
+    fun conflictSnapshotOf(problem: ProblemDetails?): QueueSnapshotResponse? {
+        if (problem?.errorCode != QUEUE_VERSION_CONFLICT) return null
+        val snapshot = problem.snapshot ?: return null
+        return runCatching { ApiJson.decodeFromJsonElement(QueueSnapshotResponse.serializer(), snapshot) }.getOrNull()
     }
 
     fun errorCodeOf(throwable: Throwable?): String? = problemDetailsOf(throwable)?.errorCode
 
     fun currentQueueVersionOf(throwable: Throwable?): Long? {
-        // Note: errorBody can be consumed only once per HttpException instance.
-        // If you need both errorCode and currentQueueVersion, call problemDetailsOf() once.
         return problemDetailsOf(throwable)?.currentQueueVersion
     }
 

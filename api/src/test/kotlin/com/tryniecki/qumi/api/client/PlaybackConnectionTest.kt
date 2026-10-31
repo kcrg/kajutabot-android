@@ -69,10 +69,12 @@ class PlaybackConnectionTest {
     @Test fun `all events have independent simultaneous subscribers and guild completion uses boolean`() = runBlocking {
         val server = MockWebServer()
         server.enqueueConnection { socket, id, method, args ->
-            assertEquals("SubscribeGuild", method)
+            assertEquals("SubscribeGuildState", method)
             assertEquals("[\"g\"]", args)
             socket.send("""{"type":1,"target":"QueueUpdated","arguments":[$snapshot]}""" + '\u001e')
-            socket.send("""{"type":1,"target":"RealtimeHeartbeat","arguments":[1234567890123]}""" + '\u001e')
+            socket.send("""{"type":1,"target":"PlaybackStateUpdated","arguments":[{"guildId":"g","radio":{"isEnabled":false},"pendingEntriesCount":2,"pendingDurationMilliseconds":9,"version":5,"queueVersion":4}]}""" + '\u001e')
+            socket.send("""{"type":1,"target":"VoiceChannelsUpdated","arguments":[{"guildId":"g","channels":[{"id":"c","name":"Voice","position":0,"userCount":2,"isConnected":true}]}]}""" + '\u001e')
+            socket.send("""{"type":1,"target":"JellyfinQuickConnectUpdated","arguments":[{"attemptId":"a","status":"authorized"}]}""" + '\u001e')
             socket.send("""{"type":1,"target":"LocalVolumeStateChanged","arguments":[{"installed":true,"online":false,"available":false}]}""" + '\u001e')
             socket.send("""{"type":3,"invocationId":"$id","result":true}""" + '\u001e')
         }
@@ -82,7 +84,9 @@ class PlaybackConnectionTest {
             withTimeout(10_000) {
                 val queue = async(start = CoroutineStart.UNDISPATCHED) { client.updates.first() }
                 val secondQueue = async(start = CoroutineStart.UNDISPATCHED) { client.updates.first() }
-                val heartbeat = async(start = CoroutineStart.UNDISPATCHED) { client.heartbeats.first() }
+                val state = async(start = CoroutineStart.UNDISPATCHED) { client.playbackStates.first() }
+                val channels = async(start = CoroutineStart.UNDISPATCHED) { client.voiceChannels.first() }
+                val quickConnect = async(start = CoroutineStart.UNDISPATCHED) { client.quickConnectUpdates.first() }
                 val volume = async(start = CoroutineStart.UNDISPATCHED) { client.localVolumeUpdates.first() }
                 client.start()
                 assertTrue(client.connected.first())
@@ -96,7 +100,9 @@ class PlaybackConnectionTest {
                 assertEquals("favorites", received.radio.mode)
                 assertEquals("2026-10-24T12:00:00.1234567+00:00", received.nowPlayingStartedAt)
                 assertEquals("RestartedRepeatedTrack", received.skipOutcome!!.name)
-                assertEquals(Unit, heartbeat.await())
+                assertEquals(4L, state.await().queueVersion)
+                assertEquals(2, channels.await().channels.single().userCount)
+                assertEquals("a", quickConnect.await().attemptId)
                 assertNull(volume.await().volume)
             }
         } finally { client.stop(); server.shutdown() }
@@ -116,7 +122,7 @@ class PlaybackConnectionTest {
             AutomaticReconnect.Custom { count, _ -> if (count < 3) 0L else null }, http)
         try {
             withTimeout(10_000) {
-                val event = async(start = CoroutineStart.UNDISPATCHED) { client.heartbeats.first() }
+                val event = async(start = CoroutineStart.UNDISPATCHED) { client.playbackStates.first() }
                 client.start()
                 assertTrue(client.connected.first())
                 repeat(2) { assertEquals("Bearer old-jwt", server.takeRequest(3, TimeUnit.SECONDS)!!.getHeader("Authorization")) }
@@ -129,7 +135,7 @@ class PlaybackConnectionTest {
                 secondSocket.await()
                 client.connected.first { it }
                 repeat(2) { assertEquals("Bearer new-jwt", server.takeRequest(3, TimeUnit.SECONDS)!!.getHeader("Authorization")) }
-                secondSocket.await().send("""{"type":1,"target":"RealtimeHeartbeat","arguments":[42]}""" + '\u001e')
+                secondSocket.await().send("""{"type":1,"target":"PlaybackStateUpdated","arguments":[{"guildId":"g","radio":{"isEnabled":false},"pendingEntriesCount":0,"pendingDurationMilliseconds":0,"version":1,"queueVersion":1}]}""" + '\u001e')
                 event.await()
                 client.stop()
                 assertFalse(client.connected.first())

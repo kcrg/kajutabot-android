@@ -61,6 +61,7 @@ fun userMessageForError(e: Throwable?, parsedProblem: ProblemDetails? = null): U
             "jellyfin_unavailable" -> uiText(R.string.error_jellyfin_unavailable)
             "jellyfin_authorization_failed" -> uiText(R.string.error_jellyfin_authorization)
             "jellyfin_not_connected" -> uiText(R.string.error_jellyfin_not_connected)
+            "jellyfin_owner_required" -> uiText(R.string.error_jellyfin_owner_required)
             else -> when (e.code()) {
                 401 -> uiText(R.string.auth_session_expired)
                 403 -> uiText(R.string.error_access_denied)

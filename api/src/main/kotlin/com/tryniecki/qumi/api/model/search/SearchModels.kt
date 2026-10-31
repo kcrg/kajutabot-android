@@ -16,4 +16,5 @@ data class SearchItemResponse(
 data class SearchResponse(
     val query: String,
     val items: List<SearchItemResponse>,
+    val unavailableSources: List<String>? = null,
 )

@@ -69,4 +69,9 @@ class ArtworkUrlTest {
     fun `url without host is missing`() {
         assertEquals(ArtworkSource.Missing, resolveArtworkSource("https:///no-host.jpg"))
     }
+
+    @Test fun `artwork variants keep the query that identifies them`() {
+        val resolved = resolveArtworkUrl("/api/v1/app/artwork/YouTube/abc?size=thumb&v=3", "https://api.example.test")
+        assertEquals("https://api.example.test/api/v1/app/artwork/YouTube/abc?size=thumb&v=3", resolved)
+    }
 }

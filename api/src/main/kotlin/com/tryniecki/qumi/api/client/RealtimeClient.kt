@@ -1,5 +1,8 @@
 package com.tryniecki.qumi.api.client
 
+import com.tryniecki.qumi.api.model.discord.VoiceChannelsUpdatedEvent
+import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectEvent
+import com.tryniecki.qumi.api.model.queue.PlaybackStateResponse
 import com.tryniecki.qumi.api.model.queue.QueueSnapshotResponse
 import com.tryniecki.qumi.api.model.playback.LocalVolumeStateDto
 import eu.lepicekmichal.signalrkore.AutomaticReconnect
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -45,7 +49,9 @@ import kotlin.random.Random
 /** Coroutine-only surface of one physical SignalR connection. */
 interface RealtimeClient {
     val updates: Flow<QueueSnapshotResponse>
-    val heartbeats: Flow<Unit>
+    val playbackStates: Flow<PlaybackStateResponse> get() = emptyFlow()
+    val voiceChannels: Flow<VoiceChannelsUpdatedEvent> get() = emptyFlow()
+    val quickConnectUpdates: Flow<JellyfinQuickConnectEvent> get() = emptyFlow()
     val closed: Flow<RealtimeDisconnect>
     /** Emits again after every successful transport recovery. */
     val connected: Flow<Boolean> get() = flowOf(true)
@@ -143,7 +149,9 @@ internal class PlaybackRealtimeClient(
     // Native cold flows register synchronously in UNDISTPATCHED collectors before
     // start(). Cancellation unregisters them; no independent forwarding jobs exist.
     override val updates = event("QueueUpdated", QueueSnapshotResponse.serializer())
-    override val heartbeats = event("RealtimeHeartbeat", Long.serializer()).map { Unit }
+    override val playbackStates = event("PlaybackStateUpdated", PlaybackStateResponse.serializer())
+    override val voiceChannels = event("VoiceChannelsUpdated", VoiceChannelsUpdatedEvent.serializer())
+    override val quickConnectUpdates = event("JellyfinQuickConnectUpdated", JellyfinQuickConnectEvent.serializer())
     override val localVolumeUpdates = event("LocalVolumeStateChanged", LocalVolumeStateDto.serializer())
 
     // Emits DISCONNECTED while closing the old transport, before RECONNECTING.
@@ -173,7 +181,7 @@ internal class PlaybackRealtimeClient(
     }
 
     override suspend fun subscribeGuild(guildId: String): Boolean =
-        whileConnected { connection.invoke("SubscribeGuild", guildId, String.serializer(), Boolean.serializer()) }
+        whileConnected { connection.invoke("SubscribeGuildState", guildId, String.serializer(), Boolean.serializer()) }
 
     override suspend fun getLocalVolumeState(): LocalVolumeStateDto =
         whileConnected { connection.invoke("GetLocalVolumeState", LocalVolumeStateDto.serializer()) }

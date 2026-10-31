@@ -22,6 +22,7 @@ import com.tryniecki.qumi.MainApplication
 import com.tryniecki.qumi.MainActivity
 import com.tryniecki.qumi.R
 import com.tryniecki.qumi.ui.components.resolveArtworkUrl
+import com.tryniecki.qumi.ui.favorites.supportsFavorites
 import com.tryniecki.qumi.ui.favorites.FavoritesViewModel
 import com.tryniecki.qumi.ui.player.PlayerViewModel
 import com.tryniecki.qumi.ui.player.RealtimeOwner
@@ -232,7 +233,7 @@ class RemotePlaybackService : MediaSessionService() {
                 REPEAT.customAction -> player.setRepeat(!queue.isRepeatEnabled, feedbackEnabled = false)
                 RADIO.customAction -> player.toggleRadio(feedbackEnabled = false)
                 FAVORITE.customAction -> {
-                    if (favorites.ui.value.isLoading || favorites.ui.value.isFavoriteMutating) {
+                    if (!track.supportsFavorites || favorites.ui.value.isLoading || favorites.ui.value.isFavoriteMutating) {
                         return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
                     }
                     favorites.toggleSilently(track)
@@ -269,7 +270,7 @@ class RemotePlaybackService : MediaSessionService() {
             val queue = state.queue ?: return emptyList()
             val track = state.effectiveNowPlaying?.track ?: return emptyList()
             val isFavorite = favorites.isFavorite(track)
-            return listOf(
+            return listOfNotNull(
                 CommandButton.Builder(CommandButton.ICON_NEXT)
                     .setCustomIconResId(com.composables.icons.tabler.outline.R.drawable.tabler_ic_player_skip_forward_outline)
                     .setDisplayName(context.getString(R.string.action_skip_track))
@@ -300,7 +301,7 @@ class RemotePlaybackService : MediaSessionService() {
                     .setSessionCommand(RADIO)
                     .setEnabled(queue.radio.isEnabled || state.selectedVoiceChannelId != null)
                     .build(),
-                CommandButton.Builder(if (isFavorite) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                if (!track.supportsFavorites) null else CommandButton.Builder(if (isFavorite) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
                     .setCustomIconResId(
                         if (isFavorite) {
                             com.composables.icons.tabler.outline.R.drawable.tabler_ic_heart_outline

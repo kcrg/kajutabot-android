@@ -734,12 +734,11 @@ class SessionManagerTest {
         override suspend fun getVoiceChannels(guildId: String): List<DiscordVoiceChannelResponse> = throw UnsupportedOperationException()
         override suspend fun getQueue(guildId: String): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun getHistory(guildId: String, cursor: Long?, pageSize: Int): com.tryniecki.qumi.api.model.history.PlaybackHistoryPageResponse = throw UnsupportedOperationException()
-        override suspend fun getJellyfinConnection(): com.tryniecki.qumi.api.model.jellyfin.JellyfinConnectionResponse = throw UnsupportedOperationException()
+        override suspend fun getJellyfinConnection(includeDisconnected: Boolean): com.tryniecki.qumi.api.model.jellyfin.JellyfinConnectionStateResponse = throw UnsupportedOperationException()
         override suspend fun disconnectJellyfin(): Unit = throw UnsupportedOperationException()
         override suspend fun startJellyfinQuickConnect(request: com.tryniecki.qumi.api.model.jellyfin.StartJellyfinQuickConnectRequest): com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStartResponse = throw UnsupportedOperationException()
         override suspend fun getJellyfinQuickConnectStatus(attemptId: String): com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectStatusResponse = throw UnsupportedOperationException()
         override suspend fun getJellyfinAudio(startIndex: Int, limit: Int, searchTerm: String?): com.tryniecki.qumi.api.model.jellyfin.JellyfinAudioPageResponse = throw UnsupportedOperationException()
-        override suspend fun enqueueJellyfinTrack(itemId: String, request: com.tryniecki.qumi.api.model.history.EnqueueJellyfinTrackRequest, idempotencyKey: String): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun enqueue(guildId: String, request: EnqueueRequest, idempotencyKey: String): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun removeQueueEntry(guildId: String, entryId: String, expectedQueueVersion: Long?, idempotencyKey: String): QueueSnapshotResponse = throw UnsupportedOperationException()
         override suspend fun moveQueueEntry(guildId: String, entryId: String, request: MoveQueueEntryRequest, idempotencyKey: String): QueueSnapshotResponse = throw UnsupportedOperationException()
@@ -753,7 +752,7 @@ class SessionManagerTest {
         override suspend fun search(query: String, source: String, maxResults: Int): SearchResponse = throw UnsupportedOperationException()
         override suspend fun getFavorites(): List<FavoriteResponse> = throw UnsupportedOperationException()
         override suspend fun addFavorite(request: AddFavoriteRequest): FavoriteResponse = throw UnsupportedOperationException()
-        override suspend fun deleteFavorite(contentUrl: String): Unit = throw UnsupportedOperationException()
+        override suspend fun deleteFavorite(contentType: String, contentId: String): Unit = throw UnsupportedOperationException()
         override suspend fun queueFavorites(request: QueueFavoritesRequest, idempotencyKey: String): QueueSnapshotResponse = throw UnsupportedOperationException()
     }
 }

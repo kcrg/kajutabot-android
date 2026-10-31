@@ -28,8 +28,8 @@ class FavoritesRepository(
         it.addFavorite(AddFavoriteRequest(contentType, contentId))
     }
 
-    suspend fun deleteFavorite(expectedIdentity: Long, contentUrl: String) {
-        sessionManager.withApiForSession(expectedIdentity) { it.deleteFavorite(contentUrl) }
+    suspend fun deleteFavorite(expectedIdentity: Long, contentType: String, contentId: String) {
+        sessionManager.withApiForSession(expectedIdentity) { it.deleteFavorite(contentType, contentId) }
     }
 
     suspend fun queueFavorites(
@@ -49,12 +49,17 @@ class FavoritesRepository(
         expectedIdentity: Long,
         guildId: String,
         channelId: String,
-        contentUrl: String,
+        contentType: String,
+        contentId: String,
     ): QueueSnapshotResponse = coordinator.run(
         guildId,
         fetch = { sessionManager.withApiForSession(expectedIdentity) { it.getQueue(guildId) } },
         mutation = { token, key -> sessionManager.withApiForSession(expectedIdentity) {
-            it.enqueue(guildId, EnqueueRequest(channelId, listOf(contentUrl), token), key)
+            it.enqueue(
+                guildId,
+                EnqueueRequest(channelId, expectedQueueVersion = token, contentType = contentType, contentId = contentId),
+                key,
+            )
         } },
     )
 }

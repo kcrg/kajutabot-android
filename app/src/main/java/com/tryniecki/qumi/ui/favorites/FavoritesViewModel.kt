@@ -45,11 +45,10 @@ data class FavoritesUiState(
     val queueAllStatus: SwipeActionStatus = SwipeActionStatus.IDLE,
 ) {
     fun isFavorite(track: PlaybackTrackResponse): Boolean =
-        track.favoriteIdentities().any(favoriteIdentities::contains)
+        track.favoriteIdentity in favoriteIdentities
 
     fun statusFor(track: PlaybackTrackResponse): SwipeActionStatus =
-        track.favoriteIdentities().firstNotNullOfOrNull { favoriteStatuses[it] }
-            ?: SwipeActionStatus.IDLE
+        favoriteStatuses[track.favoriteIdentity] ?: SwipeActionStatus.IDLE
 }
 
 class FavoritesViewModel(
@@ -91,7 +90,7 @@ class FavoritesViewModel(
                 if (generation == refreshGeneration) {
                     if (revision == mutationRevision) {
                         val identities = items.asSequence()
-                            .map { favoriteIdentity(it.contentUrl) }
+                            .map { it.favoriteIdentity }
                             .toSet()
                         _ui.update { it.copy(favorites = items, favoriteIdentities = identities, isLoading = false) }
                     } else {
@@ -135,18 +134,12 @@ class FavoritesViewModel(
     fun toggleSilently(track: PlaybackTrackResponse) = toggleFavorite(track, feedbackEnabled = false)
 
     private fun toggleFavorite(track: PlaybackTrackResponse, feedbackEnabled: Boolean = true) {
-        if (_ui.value.isLoading || statusFor(track) == SwipeActionStatus.PENDING) return
-        val identities = track.favoriteIdentities()
-        val existing = _ui.value.favorites.firstOrNull { favoriteIdentity(it.contentUrl) in identities }
-        if (isFavorite(track) && existing != null) {
-            delete(existing.contentUrl, feedbackEnabled)
-        } else {
-            add(track, feedbackEnabled)
-        }
+        if (!track.supportsFavorites || _ui.value.isLoading || statusFor(track) == SwipeActionStatus.PENDING) return
+        if (isFavorite(track)) delete(track.favoriteIdentity, feedbackEnabled) else add(track, feedbackEnabled)
     }
 
     private fun add(track: PlaybackTrackResponse, feedbackEnabled: Boolean) {
-        val key = favoriteIdentity(track.url)
+        val key = track.favoriteIdentity
         if (_ui.value.favoriteStatuses[key] == SwipeActionStatus.PENDING) return
         val generation = nextFavoriteFeedbackGeneration(key)
         favoriteFeedbackJobs.remove(key)?.cancel()
@@ -165,7 +158,7 @@ class FavoritesViewModel(
                 )
                 mutationRevision++
                 if (feedbackEnabled) feedback.emit(FeedbackEffect.Confirm)
-                val identity = favoriteIdentity(added.contentUrl)
+                val identity = added.favoriteIdentity
                 _ui.update { current ->
                     val statuses = current.favoriteStatuses + (key to SwipeActionStatus.SUCCESS)
                     val otherPending = statuses.any { (identity, status) ->
@@ -173,7 +166,7 @@ class FavoritesViewModel(
                     }
                     current.copy(
                         favorites = listOf(added) + current.favorites.filterNot {
-                            favoriteIdentity(it.contentUrl) == identity
+                            it.favoriteIdentity == identity
                         },
                         favoriteIdentities = current.favoriteIdentities + identity,
                         retainedDeletedFavorites = current.retainedDeletedFavorites - identity,
@@ -196,12 +189,11 @@ class FavoritesViewModel(
         }
     }
 
-    fun delete(contentUrl: String) = delete(contentUrl, feedbackEnabled = true)
+    fun delete(identity: String) = delete(identity, feedbackEnabled = true)
 
-    private fun delete(contentUrl: String, feedbackEnabled: Boolean) {
-        val key = favoriteIdentity(contentUrl)
+    private fun delete(key: String, feedbackEnabled: Boolean) {
         if (_ui.value.favoriteStatuses[key] == SwipeActionStatus.PENDING) return
-        val position = _ui.value.favorites.indexOfFirst { favoriteIdentity(it.contentUrl) == key }
+        val position = _ui.value.favorites.indexOfFirst { it.favoriteIdentity == key }
         if (position < 0) return
         val favorite = _ui.value.favorites[position]
         val generation = nextFavoriteFeedbackGeneration(key)
@@ -213,7 +205,7 @@ class FavoritesViewModel(
                 favoriteStatuses = it.favoriteStatuses + (key to SwipeActionStatus.PENDING),
             ) }
             try {
-                repository.deleteFavorite(sessionIdentity, contentUrl)
+                repository.deleteFavorite(sessionIdentity, favorite.contentType, favorite.contentId)
                 mutationRevision++
                 if (feedbackEnabled) feedback.emit(FeedbackEffect.Confirm)
                 _ui.update { current ->
@@ -222,7 +214,7 @@ class FavoritesViewModel(
                         identity != key && status == SwipeActionStatus.PENDING
                     }
                     current.copy(
-                        favorites = current.favorites.filterNot { favoriteIdentity(it.contentUrl) == key },
+                        favorites = current.favorites.filterNot { it.favoriteIdentity == key },
                         isMutating = otherPending,
                         isFavoriteMutating = otherPending,
                         isLoading = false,
@@ -306,18 +298,19 @@ class FavoritesViewModel(
         }
     }
 
-    fun playSingle(contentUrl: String) {
-        if (_ui.value.queueStatuses[contentUrl] == SwipeActionStatus.PENDING) return
-        queueFeedbackJobs.remove(contentUrl)?.cancel()
-        _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.PENDING)) }
+    fun playSingle(identity: String) {
+        val favorite = _ui.value.favorites.firstOrNull { it.favoriteIdentity == identity } ?: return
+        if (_ui.value.queueStatuses[identity] == SwipeActionStatus.PENDING) return
+        queueFeedbackJobs.remove(identity)?.cancel()
+        _ui.update { it.copy(queueStatuses = it.queueStatuses + (identity to SwipeActionStatus.PENDING)) }
         viewModelScope.launch {
             val selection = preferencesRepository.currentGuildSelection()
             val guildId = selection.guildId
             val channelId = selection.voiceChannelId
             if (guildId == null || channelId == null) {
                 feedback.emit(FeedbackEffect.Reject)
-                _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.FAILURE)) }
-                clearQueueFeedbackLater(contentUrl)
+                _ui.update { it.copy(queueStatuses = it.queueStatuses + (identity to SwipeActionStatus.FAILURE)) }
+                clearQueueFeedbackLater(identity)
                 return@launch
             }
             _ui.update { it.copy(error = null) }
@@ -326,26 +319,27 @@ class FavoritesViewModel(
                     expectedIdentity = sessionIdentity,
                     guildId = guildId,
                     channelId = channelId,
-                    contentUrl = contentUrl,
+                    contentType = favorite.contentType,
+                    contentId = favorite.contentId,
                 )
                 _ui.update { it.copy(isMutating = it.isFavoriteMutating) }
-                _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.SUCCESS)) }
+                _ui.update { it.copy(queueStatuses = it.queueStatuses + (identity to SwipeActionStatus.SUCCESS)) }
                 feedback.emit(FeedbackEffect.Confirm)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 feedback.emit(FeedbackEffect.Reject)
                 _ui.update { it.copy(isMutating = it.isFavoriteMutating) }
-                _ui.update { it.copy(queueStatuses = it.queueStatuses + (contentUrl to SwipeActionStatus.FAILURE)) }
+                _ui.update { it.copy(queueStatuses = it.queueStatuses + (identity to SwipeActionStatus.FAILURE)) }
             }
-            clearQueueFeedbackLater(contentUrl)
+            clearQueueFeedbackLater(identity)
         }
     }
 
-    private fun clearQueueFeedbackLater(contentUrl: String) {
-        queueFeedbackJobs[contentUrl] = viewModelScope.launch {
+    private fun clearQueueFeedbackLater(identity: String) {
+        queueFeedbackJobs[identity] = viewModelScope.launch {
             delay(1_200)
-            _ui.update { it.copy(queueStatuses = it.queueStatuses - contentUrl) }
-            queueFeedbackJobs.remove(contentUrl)
+            _ui.update { it.copy(queueStatuses = it.queueStatuses - identity) }
+            queueFeedbackJobs.remove(identity)
         }
     }
 

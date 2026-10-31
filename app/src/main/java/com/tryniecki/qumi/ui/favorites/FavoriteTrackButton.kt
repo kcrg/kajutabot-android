@@ -17,6 +17,7 @@ fun FavoriteTrackButton(
     status: SwipeActionStatus = SwipeActionStatus.IDLE,
     onToggle: (PlaybackTrackResponse) -> Unit,
 ) {
+    if (!track.supportsFavorites) return
     TonalToggleIconButton(
         checked = checked,
         onCheckedChange = { onToggle(track) },

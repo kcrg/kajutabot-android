@@ -2,12 +2,15 @@ package com.tryniecki.qumi.api.client
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import retrofit2.Invocation
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.create
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalSerializationApi::class)
 internal val ApiJson = Json {
@@ -16,9 +19,34 @@ internal val ApiJson = Json {
     exceptionsWithDebugInfo = false
 }
 
+/** Marks a call the server may spend longer on, such as resolving what it adds to the queue. */
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+internal annotation class SlowRequest
+
 object ApiClientFactory {
     const val AUTHORIZATION_HEADER = "Authorization"
-    val baseHttpClient: OkHttpClient = OkHttpClient.Builder().build()
+    // Each read limit stays above the server's own deadline, so that the server reports a timeout
+    // and the app never shows a failure for an operation that later succeeds.
+    internal const val READ_TIMEOUT_SECONDS = 15L
+    internal const val SLOW_READ_TIMEOUT_SECONDS = 25L
+    internal const val MAX_REQUESTS_PER_HOST = 20
+
+    val baseHttpClient: OkHttpClient = OkHttpClient.Builder()
+        .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        // API calls and artwork share this limit, and HTTP/2 does not lift it.
+        .dispatcher(Dispatcher().apply { maxRequestsPerHost = MAX_REQUESTS_PER_HOST })
+        .build()
+
+    internal val slowRequestInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val slow = request.tag(Invocation::class.java)?.method()?.isAnnotationPresent(SlowRequest::class.java) == true
+        if (slow) {
+            chain.withReadTimeout(SLOW_READ_TIMEOUT_SECONDS.toInt(), TimeUnit.SECONDS).proceed(request)
+        } else {
+            chain.proceed(request)
+        }
+    }
 
     /**
      * Creates the authenticated user API. Adds `Authorization: Bearer <token>` when available.
@@ -46,6 +74,7 @@ object ApiClientFactory {
 
         val httpClient = baseHttpClient.newBuilder()
             .addInterceptor(bearerInterceptor)
+            .addInterceptor(slowRequestInterceptor)
             .build()
 
         return Retrofit.Builder()

@@ -12,8 +12,10 @@ import com.tryniecki.qumi.auth.PkceGenerator
 import com.tryniecki.qumi.auth.SecureSessionStore
 import com.tryniecki.qumi.auth.SessionManager
 import com.tryniecki.qumi.auth.SessionStore
+import com.tryniecki.qumi.data.network.NetworkMonitor
 import com.tryniecki.qumi.data.preferences.UserPreferencesRepository
 import com.tryniecki.qumi.data.repository.FavoritesRepository
+import com.tryniecki.qumi.data.repository.JellyfinLinkEvents
 import com.tryniecki.qumi.data.repository.PlayerRepository
 import com.tryniecki.qumi.data.repository.QueueMutationCoordinator
 import com.tryniecki.qumi.data.repository.SessionRepository
@@ -33,6 +35,9 @@ import kotlinx.coroutines.launch
  */
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
+
+    // A pooled connection on the previous network would fail only after a read timeout.
+    val networkMonitor = NetworkMonitor(appContext) { ApiClientFactory.baseHttpClient.connectionPool.evictAll() }
 
     val appConfig = AppConfig(
         apiBaseUrl = BuildConfig.API_BASE_URL,
@@ -75,7 +80,8 @@ class AppContainer(context: Context) {
     val platformThemeController = PlatformThemeController(appContext)
     val sessionRepository = SessionRepository(sessionManager)
     val queueMutationCoordinator = QueueMutationCoordinator()
-    val playerRepository = PlayerRepository(sessionManager, appConfig.apiBaseUrl, queueMutationCoordinator)
+    val jellyfinLinkEvents = JellyfinLinkEvents()
+    val playerRepository = PlayerRepository(sessionManager, appConfig.apiBaseUrl, queueMutationCoordinator, jellyfinLinkEvents)
     val favoritesRepository = FavoritesRepository(sessionManager, queueMutationCoordinator)
 
     private val _mediaServiceActive = MutableStateFlow(false)

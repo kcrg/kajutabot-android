@@ -1,6 +1,9 @@
 package com.tryniecki.qumi.ui.player
 
 import com.tryniecki.qumi.api.client.RealtimeClient
+import com.tryniecki.qumi.api.model.discord.VoiceChannelsUpdatedEvent
+import com.tryniecki.qumi.api.model.jellyfin.JellyfinQuickConnectEvent
+import com.tryniecki.qumi.api.model.queue.PlaybackStateResponse
 import com.tryniecki.qumi.api.model.queue.QueueSnapshotResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -43,7 +46,6 @@ enum class RealtimeConnectionState {
 data class RealtimeDiagnostics(
     val state: RealtimeConnectionState = RealtimeConnectionState.DISCONNECTED,
     val connectedAtMs: Long? = null,
-    val lastFrameAtMs: Long? = null,
     val lastQueueUpdateAtMs: Long? = null,
     val reconnectAttempts: Int = 0,
     val lastDisconnectReason: String? = null,
@@ -62,16 +64,23 @@ internal class PlayerRealtime(
     private val elapsedRealtimeMs: () -> Long = { System.nanoTime() / 1_000_000L },
     private val jitterMs: () -> Long = { Random.nextLong(0, 251) },
     private val localVolume: LocalVolumeController? = null,
+    private val onPlaybackState: (PlaybackStateResponse) -> Unit = {},
+    private val onVoiceChannels: (VoiceChannelsUpdatedEvent) -> Unit = {},
+    private val onQuickConnect: (JellyfinQuickConnectEvent) -> Unit = {},
+    private val onConnected: (isReconnect: Boolean) -> Unit = {},
+    private val network: StateFlow<Long?> = MutableStateFlow(0L),
 ) {
     private val owners = MutableStateFlow<Set<RealtimeOwner>>(emptySet())
     private val _diagnostics = MutableStateFlow(RealtimeDiagnostics())
     val diagnostics: StateFlow<RealtimeDiagnostics> = _diagnostics.asStateFlow()
+    private var hasConnected = false
 
     private val job = scope.launch {
-        combine(owners, sessionIdentity) { interested, identity ->
-            interested.isNotEmpty() && identity == expectedIdentity
-        }.distinctUntilChanged().collectLatest { active ->
-            if (active) runConnectionLoop()
+        combine(owners, sessionIdentity, network) { interested, identity, current ->
+            // A socket dies with its network, so each new default network gets a new connection.
+            current?.takeIf { interested.isNotEmpty() && identity == expectedIdentity }
+        }.distinctUntilChanged().collectLatest { current ->
+            if (current != null) runConnectionLoop()
             else _diagnostics.update { it.copy(state = RealtimeConnectionState.DISCONNECTED, connectedAtMs = null) }
         }
     }
@@ -115,23 +124,41 @@ internal class PlayerRealtime(
                     client = connect(token)
                     localVolume?.bind(client)
                     coroutineScope {
+                        // REST fills the screen while a slow hub keeps connecting.
+                        val startRecovery = launch {
+                            delay(HUB_START_RECOVERY_MS)
+                            guildId.value?.let { recoverOnce(it) }
+                        }
                         // One serial consumer preserves hub snapshot ordering.
                         val snapshots = launch(start = CoroutineStart.UNDISPATCHED) {
                             client.updates.collect { snapshot ->
                                 if (sessionIdentity.value == expectedIdentity) {
                                     onSnapshot(snapshot)
+                                    startRecovery.cancel()
                                     if (snapshot.guildId == guildId.value) recoveryAttemptedGuild = null
                                     val now = elapsedRealtimeMs()
-                                    _diagnostics.update { it.copy(lastFrameAtMs = now, lastQueueUpdateAtMs = now) }
+                                    _diagnostics.update { it.copy(lastQueueUpdateAtMs = now) }
                                 }
                             }
                         }
-                        val heartbeats = launch(start = CoroutineStart.UNDISPATCHED) {
-                            client.heartbeats.collect {
+                        val playbackStates = launch(start = CoroutineStart.UNDISPATCHED) {
+                            client.playbackStates.collect { state ->
                                 if (sessionIdentity.value == expectedIdentity) {
+                                    onPlaybackState(state)
+                                    if (state.guildId == guildId.value) recoveryAttemptedGuild = null
                                     val now = elapsedRealtimeMs()
-                                    _diagnostics.update { it.copy(lastFrameAtMs = now) }
+                                    _diagnostics.update { it.copy(lastQueueUpdateAtMs = now) }
                                 }
+                            }
+                        }
+                        val voiceChannels = launch(start = CoroutineStart.UNDISPATCHED) {
+                            client.voiceChannels.collect { update ->
+                                if (sessionIdentity.value == expectedIdentity) onVoiceChannels(update)
+                            }
+                        }
+                        val quickConnect = launch(start = CoroutineStart.UNDISPATCHED) {
+                            client.quickConnectUpdates.collect { update ->
+                                if (sessionIdentity.value == expectedIdentity) onQuickConnect(update)
                             }
                         }
                         val closed = async(start = CoroutineStart.UNDISPATCHED) { client.closed.first() }
@@ -146,6 +173,8 @@ internal class PlayerRealtime(
                                     return@collectLatest
                                 }
                                 localVolume?.connected()
+                                onConnected(hasConnected)
+                                hasConnected = true
                                 connectedAt = elapsedRealtimeMs()
                                 _diagnostics.update {
                                     it.copy(
@@ -202,9 +231,12 @@ internal class PlayerRealtime(
                             localVolume?.disconnect()
                             _diagnostics.update { it.copy(lastDisconnectReason = disconnect.reason) }
                         } finally {
+                            startRecovery.cancelAndJoin()
                             availability.cancelAndJoin()
                             snapshots.cancelAndJoin()
-                            heartbeats.cancelAndJoin()
+                            playbackStates.cancelAndJoin()
+                            voiceChannels.cancelAndJoin()
+                            quickConnect.cancelAndJoin()
                         }
                     }
                 } catch (cancelled: CancellationException) {
@@ -246,6 +278,7 @@ internal class PlayerRealtime(
     }
 
     companion object {
+        private const val HUB_START_RECOVERY_MS = 5_000L
         private const val INITIAL_SNAPSHOT_TIMEOUT_MS = 3_000L
         private const val STOP_TIMEOUT_MS = 5_000L
         private const val STABLE_CONNECTION_MS = 30_000L

@@ -143,7 +143,6 @@
     <string name="realtime_subscribing">Subskrybowanie serwera…</string>
     <string name="realtime_connected">Połączono</string>
     <string name="realtime_reconnecting">Ponowne łączenie…</string>
-    <string name="realtime_last_frame">Ostatnia ramka: %1$s</string>
     <string name="realtime_last_update">Ostatnia aktualizacja danych: %1$s</string>
     <string name="realtime_no_data">brak danych</string>
     <string name="realtime_seconds_ago">%1$d s temu</string>
@@ -179,6 +178,7 @@
     <string name="onboarding_discord_connection">Połączenie z Discordem</string>
     <string name="search_title">Wyszukaj</string>
     <string name="search_hint">Wklej link lub wyszukaj utwór</string>
+    <string name="search_sources_unavailable">%1$s nie odpowiada. Wyniki mogą być niepełne.</string>
     <string name="search_no_results_title">Brak wyników</string>
     <string name="search_no_results_body">Spróbuj innej frazy lub wklej bezpośredni link.</string>
     <string name="shared_track_title">Udostępniony link</string>
@@ -255,4 +255,5 @@
     <string name="error_jellyfin_unavailable">Biblioteka Jellyfin jest teraz niedostępna.</string>
     <string name="error_jellyfin_authorization">Jellyfin odrzucił zapisane połączenie. Połącz się ponownie.</string>
     <string name="error_jellyfin_not_connected">Jellyfin nie jest połączony.</string>
+    <string name="error_jellyfin_owner_required">Utwory z Jellyfina wymagają konta Discord.</string>
 </resources>
