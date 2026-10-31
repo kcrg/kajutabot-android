@@ -2,6 +2,7 @@ package com.tryniecki.qumi.ui.theme
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.view.WindowInsetsController
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -135,6 +136,8 @@ fun AppTheme(
  * dark, and Android 15 onwards reads the caption bar appearance.
  */
 private fun Activity.matchWindowControlsToTheme(useDarkTheme: Boolean, background: Int) {
+    // The Activity is not recreated for a theme change, so the XML window background stays stale.
+    window.setBackgroundDrawable(ColorDrawable(background))
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         setTaskDescription(
             ActivityManager.TaskDescription.Builder()

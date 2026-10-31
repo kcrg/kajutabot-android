@@ -19,11 +19,12 @@ import com.tryniecki.qumi.data.repository.SessionRepository
 import com.tryniecki.qumi.ui.text.UiText
 import com.tryniecki.qumi.ui.theme.PlatformThemeController
 import com.tryniecki.qumi.ui.theme.ThemeMode
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -49,6 +50,7 @@ class AppViewModel(
     val sessionIdentity: StateFlow<Long?> = sessionRepository.sessionIdentity
 
     private val _ui = MutableStateFlow(AppUiState())
+    private val onboardingStates = mutableMapOf<String, StateFlow<Boolean?>>()
     private val feedback = UserFeedback()
     val feedbackEvents = feedback.events
     val ui: StateFlow<AppUiState> = _ui.asStateFlow()
@@ -59,10 +61,10 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
-            preferencesRepository.themeMode.collectLatest { mode ->
-                platformThemeController.apply(mode)
-                _ui.update { it.copy(themeMode = mode, isThemeInitialized = true) }
-            }
+            // Later values are this ViewModel's own writes, and a late one would undo a newer choice.
+            val mode = preferencesRepository.themeMode.first()
+            platformThemeController.apply(mode)
+            _ui.update { it.copy(themeMode = mode, isThemeInitialized = true) }
         }
         viewModelScope.launch {
             var previousIdentity: Long? = null
@@ -201,8 +203,12 @@ class AppViewModel(
         viewModelScope.launch { sessionRepository.retryRestore() }
     }
 
-    fun onboardingCompleted(sessionType: SessionType, discordUserId: String): Flow<Boolean> =
-        preferencesRepository.onboardingCompleted(sessionType, discordUserId)
+    /** Kept here so the answer survives the Activity recreation that a theme change causes. */
+    fun onboardingCompleted(sessionType: SessionType, discordUserId: String): StateFlow<Boolean?> =
+        onboardingStates.getOrPut("$sessionType:$discordUserId") {
+            preferencesRepository.onboardingCompleted(sessionType, discordUserId)
+                .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        }
 
     fun completeOnboarding(sessionType: SessionType, discordUserId: String) {
         viewModelScope.launch {
