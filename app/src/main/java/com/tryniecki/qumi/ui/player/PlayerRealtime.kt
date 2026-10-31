@@ -45,10 +45,7 @@ enum class RealtimeConnectionState {
 /** Timestamps use the same monotonic clock as Android elapsedRealtime. */
 data class RealtimeDiagnostics(
     val state: RealtimeConnectionState = RealtimeConnectionState.DISCONNECTED,
-    val connectedAtMs: Long? = null,
     val lastQueueUpdateAtMs: Long? = null,
-    val reconnectAttempts: Int = 0,
-    val lastDisconnectReason: String? = null,
 )
 
 /** One connection shared by UI/MediaSession; native recovery owns transport retries. */
@@ -81,7 +78,7 @@ internal class PlayerRealtime(
             current?.takeIf { interested.isNotEmpty() && identity == expectedIdentity }
         }.distinctUntilChanged().collectLatest { current ->
             if (current != null) runConnectionLoop()
-            else _diagnostics.update { it.copy(state = RealtimeConnectionState.DISCONNECTED, connectedAtMs = null) }
+            else _diagnostics.update { it.copy(state = RealtimeConnectionState.DISCONNECTED) }
         }
     }
 
@@ -116,7 +113,6 @@ internal class PlayerRealtime(
                         it.copy(
                             state = if (attempts == 0) RealtimeConnectionState.CONNECTING
                             else RealtimeConnectionState.RECONNECTING,
-                            reconnectAttempts = attempts,
                         )
                     }
                     // The provider checks this login's identity and refreshes credentials
@@ -168,7 +164,7 @@ internal class PlayerRealtime(
                                 if (!connected) {
                                     // Rebind immediately so events during the next handshake are observed.
                                     localVolume?.bind(client)
-                                    _diagnostics.update { it.copy(state = RealtimeConnectionState.RECONNECTING, connectedAtMs = null) }
+                                    _diagnostics.update { it.copy(state = RealtimeConnectionState.RECONNECTING) }
                                     guildId.value?.let { recoverOnce(it) }
                                     return@collectLatest
                                 }
@@ -180,7 +176,6 @@ internal class PlayerRealtime(
                                     it.copy(
                                         state = if (guildId.value == null) RealtimeConnectionState.CONNECTED_NO_GUILD
                                         else RealtimeConnectionState.SUBSCRIBING,
-                                        connectedAtMs = connectedAt,
                                     )
                                 }
                                 var recoveryJob: Job? = null
@@ -227,9 +222,8 @@ internal class PlayerRealtime(
                             }
                         }
                         try {
-                            val disconnect = closed.await()
+                            closed.await()
                             localVolume?.disconnect()
-                            _diagnostics.update { it.copy(lastDisconnectReason = disconnect.reason) }
                         } finally {
                             startRecovery.cancelAndJoin()
                             availability.cancelAndJoin()
@@ -241,11 +235,7 @@ internal class PlayerRealtime(
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
-                } catch (error: Exception) {
-                    val reason = generateSequence(error as Throwable) { it.cause }
-                        .take(4)
-                        .joinToString(" > ") { it.javaClass.simpleName }
-                    _diagnostics.update { it.copy(lastDisconnectReason = reason) }
+                } catch (_: Exception) {
                     guildId.value?.let { recoverOnce(it) }
                 } finally {
                     localVolume?.disconnect()
@@ -265,7 +255,7 @@ internal class PlayerRealtime(
                 if (subscribed && connectedAt != null &&
                     elapsedRealtimeMs() - connectedAt >= STABLE_CONNECTION_MS
                 ) backoffStep = 0
-                _diagnostics.update { it.copy(state = RealtimeConnectionState.RECONNECTING, connectedAtMs = null) }
+                _diagnostics.update { it.copy(state = RealtimeConnectionState.RECONNECTING) }
                 val waitMs = BACKOFF_MS[backoffStep.coerceAtMost(BACKOFF_MS.lastIndex)]
                 backoffStep++
                 attempts++
@@ -273,7 +263,7 @@ internal class PlayerRealtime(
             }
         } finally {
             localVolume?.disconnect()
-            _diagnostics.update { it.copy(state = RealtimeConnectionState.DISCONNECTED, connectedAtMs = null) }
+            _diagnostics.update { it.copy(state = RealtimeConnectionState.DISCONNECTED) }
         }
     }
 

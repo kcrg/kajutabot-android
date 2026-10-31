@@ -45,18 +45,8 @@ object ApiErrors {
 
     fun errorCodeOf(throwable: Throwable?): String? = problemDetailsOf(throwable)?.errorCode
 
-    fun currentQueueVersionOf(throwable: Throwable?): Long? {
-        return problemDetailsOf(throwable)?.currentQueueVersion
-    }
-
-    fun httpStatusOf(throwable: Throwable?): Int? =
-        (throwable as? HttpException)?.code()
-
     fun isInvalidSessionCode(errorCode: String?): Boolean =
         errorCode != null && invalidSessionCodes.contains(errorCode)
-
-    fun isInvalidSession(throwable: Throwable?): Boolean =
-        isInvalidSessionCode(errorCodeOf(throwable))
 
     fun retryAfterSeconds(throwable: Throwable?): Long? {
         val http = throwable as? HttpException ?: return null

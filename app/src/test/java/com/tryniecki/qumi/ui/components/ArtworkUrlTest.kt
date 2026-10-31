@@ -1,7 +1,8 @@
 package com.tryniecki.qumi.ui.components
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -37,7 +38,7 @@ class ArtworkUrlTest {
 
     @Test
     fun `valid http url is loadable`() {
-        assertTrue(isSupportedArtworkUrl("http://cdn.example.com/a.png"))
+        assertNotNull(resolveArtworkUrl("http://cdn.example.com/a.png"))
     }
 
     @Test
@@ -49,7 +50,7 @@ class ArtworkUrlTest {
     fun `blank url is missing`() {
         assertEquals(ArtworkSource.Missing, resolveArtworkSource(""))
         assertEquals(ArtworkSource.Missing, resolveArtworkSource("   "))
-        assertFalse(isSupportedArtworkUrl("   "))
+        assertNull(resolveArtworkUrl("   "))
     }
 
     @Test
@@ -62,7 +63,7 @@ class ArtworkUrlTest {
     fun `non-http scheme is missing`() {
         assertEquals(ArtworkSource.Missing, resolveArtworkSource("ftp://cdn.example.com/a.jpg"))
         assertEquals(ArtworkSource.Missing, resolveArtworkSource("data:image/png;base64,AAA"))
-        assertFalse(isSupportedArtworkUrl("content://media/1"))
+        assertNull(resolveArtworkUrl("content://media/1"))
     }
 
     @Test

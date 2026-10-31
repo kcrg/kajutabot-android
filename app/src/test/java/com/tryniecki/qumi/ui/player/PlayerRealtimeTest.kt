@@ -317,7 +317,6 @@ class PlayerRealtimeTest {
         realtime.setOwner(RealtimeOwner.UI, true)
         runCurrent()
         assertEquals(RealtimeConnectionState.CONNECTED_AND_SUBSCRIBED, realtime.diagnostics.value.state)
-        assertEquals(1_000L, realtime.diagnostics.value.connectedAtMs)
         assertEquals(1_000L, realtime.diagnostics.value.lastQueueUpdateAtMs)
 
         received.clear()

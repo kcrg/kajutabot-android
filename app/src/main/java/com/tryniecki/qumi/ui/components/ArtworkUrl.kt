@@ -46,7 +46,5 @@ fun resolveArtworkUrl(
     return apiRoot.resolve(value)?.toString()
 }
 
-fun isSupportedArtworkUrl(url: String?): Boolean = resolveArtworkUrl(url) != null
-
 fun resolveArtworkSource(imageUrl: String?): ArtworkSource =
     resolveArtworkUrl(imageUrl)?.let(ArtworkSource::Remote) ?: ArtworkSource.Missing

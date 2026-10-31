@@ -130,7 +130,6 @@ data class PlayerUiState(
 ) {
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
-    val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
     val effectiveNowPlaying: NowPlayingPresentation?
         get() = queue?.nowPlayingPresentationOrNull() ?: transitionNowPlaying
 }
@@ -165,7 +164,6 @@ data class PlayerScreenState(
 ) {
     val selectedGuild: DiscordGuildResponse? = guilds.firstOrNull { it.id == selectedGuildId }
     val selectedChannel: DiscordVoiceChannelResponse? = voiceChannels.firstOrNull { it.id == selectedVoiceChannelId }
-    val hasSelection: Boolean = selectedGuildId != null && selectedVoiceChannelId != null
     val needsVoiceChannelSelection: Boolean
         get() = selectedGuildId != null && selectedVoiceChannelId == null &&
             !isLoadingGuilds && !isLoadingVoiceChannels
@@ -362,11 +360,6 @@ class PlayerViewModel(
         .map { it.queue?.nowPlaying != null }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.queue?.nowPlaying != null)
-
-    val playerError: StateFlow<UiText?> = _ui
-        .map { it.error ?: it.queueLoadError }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, _ui.value.error ?: _ui.value.queueLoadError)
 
 
     private var searchJob: Job? = null
